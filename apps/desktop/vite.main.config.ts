@@ -22,6 +22,9 @@ export default defineConfig({
   build: {
     rollupOptions: {
       external: ["electron", "electron-store", ...builtinModules],
+      output: {
+        entryFileNames: "main.js",
+      },
     },
   },
 });

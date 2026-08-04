@@ -6,6 +6,34 @@
  *  - 仅暴露最小必要 API（ElectronAPI）
  *  - 无 setApiKey -- API Key 通过主进程原生 dialog 输入
  */
-// TODO: 实现 contextBridge.exposeInMainWorld("electronAPI", api)
-// TODO: api 形状见 @everybuddy/ipc-contract 的 ElectronAPI
-export {}; // 占位
+import { contextBridge, ipcRenderer } from "electron";
+import type { ElectronAPI } from "@everybuddy/ipc-contract";
+
+/**
+ * 当前为 UI 开发阶段的最小 stub。
+ * TODO: 接入 ipcRouter 后替换为真实 invoke/on 调用。
+ */
+const api: ElectronAPI = {
+  agent: {
+    prompt: async () => ({ streamId: "" }),
+    abort: async () => undefined,
+    onEvent: () => {
+      // TODO: ipcRenderer.on("agent:event", cb)
+      return () => undefined;
+    },
+  },
+  session: {
+    list: async () => [],
+    load: async () => ({ id: "" }),
+    save: async () => undefined,
+  },
+  config: {
+    getModelConfig: async () => ({ provider: "", model: "" }),
+    openApiKeyDialog: async () => undefined,
+  },
+};
+
+contextBridge.exposeInMainWorld("electronAPI", api);
+
+// 也提供 ipcRenderer 底层通道给未来使用（暂不暴露）
+void ipcRenderer;

@@ -1,5 +1,21 @@
+import { BrowserWindow, app } from "electron";
+import { createMainWindow } from "./windowManager";
+
 /**
- * 应用生命周期、单实例锁、托盘菜单（见 docs/architecture.md §5.2）。
+ * 应用生命周期（见 docs/architecture.md §5.2）。
  */
-// TODO: 实现 app 生命周期管理（ready / window-all-closed / before-quit）
-// TODO: 单实例锁、系统托盘、全局快捷键
+app.whenReady().then(() => {
+  createMainWindow();
+
+  app.on("activate", () => {
+    if (BrowserWindow.getAllWindows().length === 0) {
+      createMainWindow();
+    }
+  });
+});
+
+app.on("window-all-closed", () => {
+  if (process.platform !== "darwin") {
+    app.quit();
+  }
+});

@@ -16,7 +16,7 @@ const config: ForgeConfig = {
         { entry: "src/main/index.ts", config: "vite.main.config.ts" },
         { entry: "src/preload/index.ts", config: "vite.preload.config.ts" },
       ],
-      renderer: [{ config: "vite.renderer.config.ts" }],
+      renderer: [{ name: "main_window", config: "vite.renderer.config.ts" }],
     }),
   ],
 };

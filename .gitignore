@@ -1,3 +1,6 @@
+# Claude session files
+.claude/
+
 # Dependencies
 node_modules/
 

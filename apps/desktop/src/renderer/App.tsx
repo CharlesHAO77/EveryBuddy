@@ -1,4 +1,11 @@
-/**
- * 应用根组件（见 docs/architecture.md §5.3）。
- */
-// TODO: 路由（Onboarding / ChatView + SessionSidebar / SettingsPanel）与布局
+import { Sidebar } from "./components/Sidebar";
+import { MainView } from "./components/MainView";
+
+export function App() {
+  return (
+    <div className="flex h-screen w-full overflow-hidden bg-[var(--bg-main)]">
+      <Sidebar />
+      <MainView />
+    </div>
+  );
+}
