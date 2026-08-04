@@ -1,17 +1,17 @@
 # everyBuddy 桌面 Agent 应用技术架构设计文档
 
-> 版本：v0.1  
-> 日期：2026-07-19  
+> 版本：v0.2  
+> 日期：2026-08-03  
 > 对应 PRD：`docs/requirements.md`
 
 ---
 
 ## 1. 设计目标
 
-1. **安全优先**：将高权限的 agent 运行时与不可信的渲染进程隔离，API Key 不出主进程。
-2. **可扩展**：MVP 交付桌面端，但同一套 agent 运行时可被未来 WebUI、TUI、IM 客户端复用。
+1. **安全优先**：API Key 仅存在于主进程中，渲染进程不接触原始密钥。
+2. **务实可扩展**：MVP 交付桌面端，架构预留 IM Bot 接入点，不追求一次性支持所有客户端形态。
 3. **可维护**：TypeScript 全栈、类型安全的 IPC 契约、清晰的包边界。
-4. **高性能**：复杂工具执行不阻塞 UI，流式事件低延迟。
+4. **高性能**：agent 全异步操作，不阻塞主进程事件循环，流式事件低延迟。
 
 ---
 
@@ -20,59 +20,61 @@
 ### 2.1 分层架构
 
 ```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│  客户端表现层（Presentation Layer）                                           │
-│  ┌─────────────────┐  ┌─────────────┐  ┌─────────────────────────────────┐  │
-│  │  Electron App   │  │   WebUI     │  │  TUI / IM Bot                   │  │
-│  │  (MVP 桌面端)    │  │  (未来)     │  │  (未来)                         │  │
-│  │  React + Tailwind│  │  React/Vue  │  │  Terminal / Bot Adapter         │  │
-│  └────────┬────────┘  └──────┬──────┘  └──────────────┬──────────────────┘  │
-└───────────┼──────────────────┼────────────────────────┼─────────────────────┘
-            │                  │                        │
-            └──────────────────┴────────────────────────┘
-                                │
-            ┌───────────────────┴────────────────────┐
-            │      客户端共享层（Client Shared）        │
-            │  packages/ipc-contract                 │
-            │  packages/client-core                  │
-            │  - 类型定义 / Zod schema               │
-            │  - React hooks / Zustand store         │
-            │  - 通用 UI 组件（消息、工具卡片）        │
-            └───────────────────┬────────────────────┘
-                                │
-┌───────────────────────────────┴─────────────────────────────────────────────┐
-│  传输适配层（Transport Adapter）                                              │
-│  Electron 主进程：将 IPC 转换为 JSON-RPC / stdio / WebSocket                 │
-│  未来 Web 服务器：HTTP / WebSocket / SSE 网关                                  │
-└───────────────────────────────┬─────────────────────────────────────────────┘
-                                │
-┌───────────────────────────────┴─────────────────────────────────────────────┐
-│  AgentHost 运行时（Agent Runtime）                                            │
-│  独立 Node.js 子进程                                                          │
-│  - @earendil-works/pi-coding-agent                                           │
-│  - AgentSession / ModelRuntime / SessionManager                              │
-│  - 工具注册、工具门控（Tool Gatekeeper）、审计日志                             │
-│  - 会话持久化（JSONL tree）                                                   │
-└───────────────────────────────┬─────────────────────────────────────────────┘
-                                │
-┌───────────────────────────────┴─────────────────────────────────────────────┐
-│  本地环境集成（Local Environment）                                            │
-│  - 文件系统（受限于工作区）                                                   │
-│  - Shell / Git / 子进程                                                      │
-│  - LLM Provider APIs                                                         │
-└─────────────────────────────────────────────────────────────────────────────┘
+┌───────────────────────────────────────────────────────────────┐
+│               Electron 桌面端 (Desktop App)                    │
+│  ┌─────────────────────────────────────────────────────────┐  │
+│  │  渲染进程 (Renderer Process)                            │  │
+│  │  React 19 + Tailwind CSS 4 + shadcn/ui                  │  │
+│  │  Zustand 状态管理                                        │  │
+│  │  职责：纯 UI 展示与用户交互                                │  │
+│  │  无 sandbox，contextIsolation: true                       │  │
+│  └────────────────────┬────────────────────────────────────┘  │
+│                       │ contextBridge (最小 API)               │
+│  ┌────────────────────▼────────────────────────────────────┐  │
+│  │  主进程 (Main Process)                                  │  │
+│  │                                                         │  │
+│  │  ┌──────────────┐  ┌────────────────────────────────┐   │  │
+│  │  │ 应用生命周期  │  │  API Gateway (本地路由)          │   │  │
+│  │  │ 窗口/托盘    │  │  统一请求入口，未来 IM Bot 接入点 │   │  │
+│  │  │ 快捷键       │  └────────┬───────────────────────┘   │  │
+│  │  └──────────────┘           │                           │  │
+│  │                     ┌───────▼───────────────────────┐   │  │
+│  │                     │  AgentRuntime (pi-coding-agent) │   │  │
+│  │                     │  - AgentSession / 工具执行     │   │  │
+│  │                     │  - Tool Gatekeeper             │   │  │
+│  │                     │  - 会话持久化 (JSONL tree)     │   │  │
+│  │                     │  - 审计日志                     │   │  │
+│  │                     └───────────────────────────────┘   │  │
+│  │                                                         │  │
+│  │  ┌──────────────┐  ┌────────────────────────────────┐   │  │
+│  │  │ 系统钥匙串    │  │  配置管理 / 工作区管理          │   │  │
+│  │  │ AuthStorage   │  │  electron-store                │   │  │
+│  │  └──────────────┘  └────────────────────────────────┘   │  │
+│  └─────────────────────────────────────────────────────────┘  │
+└───────────────────────────────────────────────────────────────┘
+                               │
+            ┌──────────────────┴──────────────────┐
+            │                                     │
+    ┌───────▼───────┐                    ┌────────▼────────┐
+    │  LLM Provider  │                    │  IM Bot (未来)   │
+    │  APIs          │                    │  ─ 通过 API     │
+    │  (Anthropic/   │                    │    Gateway 接入  │
+    │   OpenAI/...)  │                    └─────────────────┘
+    └───────────────┘
 ```
 
 ### 2.2 关键设计决策
 
 | 决策 | 选择 | 理由 |
 |------|------|------|
-| Agent 运行位置 | AgentHost 子进程 | 避免阻塞 Electron 主进程；崩溃隔离；天然支持未来多端 |
-| 包组织 | npm workspaces | 多端共享代码，避免未来拆包痛苦 |
-| 构建工具 | Electron Forge + Vite | 官方工具链，支持打包、签名、更新；开发体验好 |
-| IPC 协议 | 命名空间 channel + streamId | 类型安全、事件流清晰、便于调试 |
-| 凭证存储 | 系统钥匙串 | 符合平台安全规范，密钥不落地 |
+| Agent 运行位置 | Electron 主进程 | agent 全异步，不阻塞；消除子进程 IPC 死锁；简化会话管理 |
+| 包组织 | npm workspaces | 类型定义、工具、UI 组件共享 |
+| 构建工具 | Electron Forge + Vite | 官方工具链，支持打包、签名、更新 |
+| IPC 协议 | contextBridge + invoke/on | Electron 原生 IPC，无需额外序列化层 |
+| API Key 输入 | 主进程原生 dialog | 渲染进程全程不接触原始密钥 |
+| 凭证存储 | pi-coding-agent 内置 AuthStorage（系统钥匙串 + 加密文件） | 符合平台安全规范，密钥不落地 |
 | 工具权限 | 主进程门控 + 用户确认 | 防止提示注入导致的非授权操作 |
+| 多端扩展 | API Gateway 抽象层 | 桌面端内部函数路由，未来 IM Bot 可通过同一接口接入 |
 
 ---
 
@@ -86,10 +88,8 @@
 | 样式方案 | Tailwind CSS 4 + Radix UI / shadcn/ui |
 | 状态管理 | Zustand 5 |
 | 本地配置 | electron-store |
-| 凭证存储 | 系统钥匙串封装（keytar 继任库或 `@electron/fuses` + `safeStorage`） |
-| Agent 运行时 | `@earendil-works/pi-coding-agent` |
-| 模型接入 | `@earendil-works/pi-ai` |
-| 自定义工具 | `@earendil-works/pi-agent-core` |
+| 凭证存储 | pi-coding-agent 内置 AuthStorage（系统钥匙串 + 加密文件） |
+| Agent 运行时 | `@earendil-works/pi-coding-agent`（自带 TUI） |
 | 校验 | Zod |
 | 测试 | Vitest + Playwright |
 | 代码规范 | Biome |
@@ -109,35 +109,20 @@ everyBuddy/
 │   ├── requirements.md          # PRD
 │   └── architecture.md          # 本文档
 ├── packages/
-│   ├── ipc-contract/            # 共享 IPC / API 类型与校验 schema
+│   ├── ipc-contract/            # IPC 类型契约（单文件）
 │   │   ├── src/
-│   │   │   ├── agent.ts         # agent 事件、prompt、abort 类型
-│   │   │   ├── session.ts       # 会话相关类型
-│   │   │   ├── config.ts        # 配置相关类型
-│   │   │   └── index.ts
+│   │   │   └── index.ts         # 所有 IPC 类型定义与 Zod schema
 │   │   ├── package.json
 │   │   └── vitest.config.ts
-│   ├── client-core/             # 共享客户端逻辑
-│   │   ├── src/
-│   │   │   ├── hooks/
-│   │   │   │   └── useAgentStream.ts
-│   │   │   ├── stores/
-│   │   │   │   └── sessionStore.ts
-│   │   │   ├── components/
-│   │   │   │   ├── MessageBubble.tsx
-│   │   │   │   └── ToolCallCard.tsx
-│   │   │   └── index.ts
-│   │   ├── package.json
-│   │   └── vitest.config.ts
-│   └── agent-host/              # AgentHost 运行时
+│   └── api-gateway/             # API Gateway 抽象层
 │       ├── src/
-│       │   ├── index.ts         # 启动入口
-│       │   ├── host.ts          # AgentHost 类
-│       │   ├── transport/
-│       │   │   ├── jsonRpc.ts   # JSON-RPC 协议实现
-│       │   │   └── stdio.ts     # stdio 传输（MVP）
-│       │   ├── security/
-│       │   │   └── toolGatekeeper.ts  # 工具确认拦截
+│       │   ├── index.ts         # 路由入口
+│       │   ├── gateway.ts       # Gateway 类
+│       │   ├── handlers/
+│       │   │   ├── agent.ts     # agent 操作路由
+│       │   │   ├── session.ts   # 会话操作路由
+│       │   │   └── config.ts    # 配置操作路由
+│       │   ├── types.ts         # 请求/响应类型
 │       │   └── index.ts
 │       ├── package.json
 │       └── vitest.config.ts
@@ -151,12 +136,13 @@ everyBuddy/
         ├── src/
         │   ├── main/
         │   │   ├── index.ts              # Electron 入口
-        │   │   ├── app.ts                # 应用生命周期
+        │   │   ├── app.ts                # 应用生命周期、单实例锁
         │   │   ├── windowManager.ts      # BrowserWindow 工厂
         │   │   ├── ipcRouter.ts          # IPC 路由与校验
-        │   │   ├── agentHostBridge.ts    # 主进程 ↔ AgentHost 桥接
+        │   │   ├── agentRuntime.ts       # pi-coding-agent 运行时集成
+        │   │   ├── apiGatewayBridge.ts   # 主进程 ↔ API Gateway 桥接
         │   │   ├── configStore.ts        # 非敏感配置
-        │   │   ├── credentialService.ts  # 系统钥匙串封装
+        │   │   ├── apiKeyDialog.ts       # 原生 API Key 输入对话框
         │   │   └── toolConfirmDialog.ts  # 工具确认弹窗
         │   ├── preload/
         │   │   └── index.ts              # contextBridge 暴露 API
@@ -164,11 +150,17 @@ everyBuddy/
         │   │   ├── main.tsx
         │   │   ├── App.tsx
         │   │   ├── routes/
+        │   │   ├── hooks/
+        │   │   │   └── useAgentStream.ts
+        │   │   ├── stores/
+        │   │   │   └── sessionStore.ts
         │   │   ├── components/
         │   │   │   ├── ChatView.tsx
         │   │   │   ├── SessionSidebar.tsx
         │   │   │   ├── SettingsPanel.tsx
-        │   │   │   └── Onboarding.tsx
+        │   │   │   ├── Onboarding.tsx
+        │   │   │   ├── MessageBubble.tsx
+        │   │   │   └── ToolCallCard.tsx
         │   │   └── styles/
         │   └── shared/
         │       └── vite-env.d.ts
@@ -181,51 +173,72 @@ everyBuddy/
 
 ## 5. 核心组件设计
 
-### 5.1 AgentHost 子进程
+### 5.1 AgentRuntime 主进程集成
 
-AgentHost 是 pi-coding-agent 的封装进程，职责：
+AgentRuntime 是对 `@earendil-works/pi-coding-agent` SDK 的封装层，职责：
 
-1. 监听传输层消息（MVP 为 stdio JSON-RPC）。
-2. 维护 `AgentSession` 生命周期。
-3. 将 pi-coding-agent 事件转换为统一 `AgentEvent`。
-4. 拦截破坏性工具，向 Electron 主进程请求用户确认。
-5. 会话持久化到 JSONL tree。
+1. 初始化并管理 pi-coding-agent 实例，复用其内置的 TUI、SessionManager、AuthStorage。
+2. 将 pi-coding-agent 事件转换为统一 `AgentEvent` 供渲染进程消费。
+3. 拦截破坏性工具，调用 `toolConfirmDialog` 请求用户确认。
+4. 会话持久化（pi-coding-agent 的 JSONL tree 格式）。
+5. 通过 API Gateway 暴露统一接口，供主进程内部及未来 IM Bot 调用。
 
-**入口伪代码：**
-
-```ts
-// packages/agent-host/src/index.ts
-import { AgentHost } from "./host";
-import { StdioTransport } from "./transport/stdio";
-
-const transport = new StdioTransport();
-const host = new AgentHost(transport);
-await host.start();
-```
-
-**事件转换示例：**
+**集成方式：**
 
 ```ts
-// pi-coding-agent 原始事件 → IPC AgentEvent
-{
-  streamId: "uuid",
-  type: "message_delta",
-  payload: {
-    role: "assistant",
-    content: "正在查看..."
+// apps/desktop/src/main/agentRuntime.ts
+import { CodingAgent } from “@earendil-works/pi-coding-agent”;
+
+export class AgentRuntime {
+  private agent: CodingAgent;
+
+  constructor() {
+    this.agent = new CodingAgent({
+      // 凭证由 pi-coding-agent 内置 AuthStorage 管理
+      // 主进程通过 IPC 触发 AuthStorage 的配置流程
+      // 渲染进程不接触密钥
+    });
+  }
+
+  async prompt(request: PromptRequest): Promise<EventSource> {
+    return this.agent.prompt(request);
+  }
+
+  async abort(streamId: string): Promise<void> {
+    return this.agent.abort(streamId);
+  }
+
+  async listSessions(): Promise<SessionSummary[]> {
+    return this.agent.listSessions();
   }
 }
 ```
 
-### 5.2 Electron 主进程桥接
+**事件流：**
 
-Electron 主进程是渲染进程与 AgentHost 之间的“适配器”：
+```ts
+// pi-coding-agent 原始事件 → IPC AgentEvent
+{
+  streamId: “uuid”,
+  type: “message_delta”,
+  payload: {
+    role: “assistant”,
+    content: “正在查看...”
+  }
+}
+```
 
-- 启动/守护 AgentHost 子进程。
-- 将渲染进程的 IPC 调用转发给 AgentHost。
-- 将 AgentHost 事件广播给渲染进程。
-- 管理系统钥匙串、窗口状态、全局快捷键。
-- 弹出工具确认对话框。
+> **关于 TUI**：pi-coding-agent 内置 TUI 界面。桌面端 React UI 是默认界面，TUI 可作为备选或调试工具使用，不参与桌面端主交互流程。
+
+### 5.2 Electron 主进程
+
+Electron 主进程职责：
+
+- 创建和管理 BrowserWindow、系统托盘、全局快捷键。
+- 通过 `ipcRouter` 处理渲染进程的 IPC 请求。
+- 直接调用 `AgentRuntime` 处理 agent 操作（无中间传输层）。
+- 管理系统钥匙串、窗口状态。
+- 弹出工具确认对话框和 API Key 输入对话框。
 
 **关键模块：**
 
@@ -234,19 +247,20 @@ Electron 主进程是渲染进程与 AgentHost 之间的“适配器”：
 | `app.ts` | 应用生命周期、单实例锁、托盘菜单 |
 | `windowManager.ts` | BrowserWindow 创建、显示/隐藏、平台适配 |
 | `ipcRouter.ts` | IPC channel 注册、Zod 校验、错误统一处理 |
-| `agentHostBridge.ts` | fork AgentHost、心跳检测、自动重启 |
-| `credentialService.ts` | OS keychain 读写封装 |
+| `agentRuntime.ts` | pi-coding-agent 运行时封装，直接调用 |
+| `apiGatewayBridge.ts` | 将 API Gateway 请求路由到 AgentRuntime |
+| `apiKeyDialog.ts` | 调用 Electron 原生 dialog 输入 API Key，委托 AuthStorage 存储 |
 | `toolConfirmDialog.ts` | 调用 Electron dialog 展示工具确认 |
 
 ### 5.3 渲染进程 React UI
 
-渲染进程职责单一：展示 UI、响应用户输入、通过 IPC 与主进程通信。
+渲染进程职责单一：展示 UI、响应用户输入、通过 IPC 与主进程通信。**不持有 API Key**。
 
 **核心页面：**
 
 | 页面 | 说明 |
 |------|------|
-| `Onboarding` | 首次启动：选择工作区、配置 API Key |
+| `Onboarding` | 首次启动：选择工作区、触发 API Key 原生 dialog |
 | `ChatView` | 主对话界面 |
 | `SessionSidebar` | 会话列表与操作 |
 | `SettingsPanel` | 模型、主题、快捷键设置 |
@@ -255,11 +269,16 @@ Electron 主进程是渲染进程与 AgentHost 之间的“适配器”：
 
 ## 6. IPC 契约
 
+渲染进程与主进程之间通过 Electron 原生 IPC 通信。agent 运行时的操作不再经过 IPC（主进程内部直接调用），IPC 仅用于：
+
+- 渲染进程触发操作（发送消息、中止、切换会话）
+- 主进程推送事件（流式更新、工具确认请求、日志）
+
 ### 6.1 命名空间
 
-- `agent:*` — agent 运行时操作
+- `agent:*` — agent 操作触发与事件推送
 - `session:*` — 会话管理
-- `config:*` — 配置与凭证
+- `config:*` — 配置与凭证（**不传递 API Key**）
 - `system:*` — 应用级事件
 
 ### 6.2 核心通道定义
@@ -272,10 +291,12 @@ Electron 主进程是渲染进程与 AgentHost 之间的“适配器”：
 | `session:list` | R → M | — | `SessionSummary[]` | 列出会话 |
 | `session:load` | R → M | `{ id: string }` | `SessionTree` | 加载会话 |
 | `session:save` | R → M | `SessionTree` | `void` | 保存会话 |
-| `config:getModelConfig` | R → M | — | `ModelConfig` | 获取模型配置 |
-| `config:setApiKey` | R → M | `{ provider, key }` | `void` | 存密钥到钥匙串 |
+| `config:getModelConfig` | R → M | — | `ModelConfig` | 获取模型配置（不含 API Key） |
+| `config:openApiKeyDialog` | R → M | `{ provider: string }` | `void` | 触发主进程弹出原生 API Key 输入框 |
 | `system:log` | M → R | — | `LogEntry` | 结构化日志 |
 | `system:toolConfirm` | M → R | `ToolConfirmRequest` | `ToolConfirmResponse` | 工具确认弹窗 |
+
+> **安全关键**：没有 `config:setApiKey` 通道。渲染进程无法传递 API Key。用户通过主进程的原生 dialog 输入密钥。
 
 ### 6.3 Preload API 形状
 
@@ -301,7 +322,8 @@ const api: ElectronAPI = {
   },
   config: {
     getModelConfig: () => ipcRenderer.invoke("config:getModelConfig"),
-    setApiKey: (provider, key) => ipcRenderer.invoke("config:setApiKey", { provider, key }),
+    openApiKeyDialog: (provider) => ipcRenderer.invoke("config:openApiKeyDialog", provider),
+    // ⚠️ 无 setApiKey —— API Key 通过主进程原生 dialog 输入
   },
 };
 
@@ -326,9 +348,11 @@ contextBridge.exposeInMainWorld("electronAPI", api);
 
 ### 7.3 凭证安全
 
-- API Key 仅存在于主进程与 AgentHost 子进程。
-- 存储使用系统钥匙串，配置文件中仅存 provider 名称等非敏感信息。
-- 渲染进程无法读取原始密钥。
+- **API Key 由 pi-coding-agent 内置 AuthStorage 管理**，底层使用系统钥匙串 + 加密文件。
+- **API Key 输入流程**：用户点击"配置 API Key" → 渲染进程触发 `config:openApiKeyDialog` IPC → 主进程弹出原生输入框 → 用户输入密钥 → 主进程调用 `AuthStorage.set()` 存储 → 原生对话框关闭。渲染进程全程不接触原始密钥字符串。
+- AgentRuntime 通过 AuthStorage 直接获取密钥，不经由 IPC。
+- 配置文件中仅存 provider 名称、模型名称等非敏感信息。
+- 主进程不再维护独立的 `credentialService.ts`，凭证操作委托给 pi-coding-agent 的 AuthStorage。
 
 ### 7.4 工具执行安全
 
@@ -349,25 +373,66 @@ contextBridge.exposeInMainWorld("electronAPI", api);
 
 ## 8. 未来扩展设计
 
-### 8.1 WebUI 客户端
+### 8.1 API Gateway 抽象层
 
-1. 将 AgentHost 的传输从 `stdio` 替换为 `WebSocket` 或 `HTTP + SSE`。
-2. `packages/client-core` 中的 hooks/store/components 可直接复用。
-3. 新增 `apps/web` 作为浏览器客户端。
-4. 云端部署时在 AgentHost 前增加 OAuth/JWT 网关。
+`packages/api-gateway` 是桌面端内部与未来外部客户端的统一接口抽象层。它定义了标准化的请求/响应格式，使得：
 
-### 8.2 TUI 客户端
+- 桌面端（Electron 主进程）通过函数调用路由到 AgentRuntime
+- 未来 IM Bot 通过 HTTP/WebSocket 连接到同一 Gateway
 
-1. TUI 通过 JSON-RPC 直接连接 AgentHost。
-2. 不复用 `pi-tui` 的 React-incompatible 组件，仅参考其交互模式。
-3. 新增 `apps/tui` 包，使用如 `ink` 或 `blessed` 构建终端界面。
+**API Gateway 接口定义：**
 
-### 8.3 即时聊天工具客户端
+```ts
+// packages/api-gateway/src/types.ts
 
-1. 新增 `packages/im-adapter`。
-2. 将 IM 消息（如 Slack、Discord、企业微信）映射为 `agent:prompt`。
-3. 将 agent 事件流转换为 IM 消息回复。
-4. 通过独立传输接入同一 AgentHost。
+export type GatewayRequest = {
+  type: "prompt" | "abort" | "list_sessions" | "load_session" | "save_session";
+  payload: unknown;
+  meta?: {
+    clientId: string;     // "desktop" | "im-bot" | ...
+    timestamp: string;
+  };
+};
+
+export type GatewayResponse = {
+  success: boolean;
+  data?: unknown;
+  error?: { code: string; message: string };
+};
+```
+
+**本地模式（桌面端）：**
+
+```ts
+// 主进程内部直接调用，无网络开销
+const gateway = new Gateway(agentRuntime);
+const result = await gateway.handle({
+  type: "prompt",
+  payload: { text: "你好" },
+  meta: { clientId: "desktop", timestamp: new Date().toISOString() },
+});
+```
+
+### 8.2 IM Bot 客户端（未来）
+
+1. 新增 `packages/im-adapter`，将 IM 消息（Slack、Discord、企业微信）映射为 Gateway 请求。
+2. 新增 `apps/bot-server` 轻量 HTTP 服务，监听 IM Webhook。
+3. `bot-server` 通过 HTTP 调用 API Gateway（未来可在独立进程中启动 Gateway + AgentRuntime）。
+4. 未来需要 WebUI 时，可直接从 `apps/desktop/src/renderer/` 中提取 hooks/stores/components 到共享包。
+
+```
+IM Bot Webhook → apps/bot-server → HTTP → API Gateway → AgentRuntime
+```
+
+### 8.3 部署演进路径
+
+| 阶段 | 架构 | 说明 |
+|------|------|------|
+| MVP | 桌面端 + 内部 Gateway 函数调用 | 单一进程，零网络开销 |
+| 添加 IM Bot | 桌面端 + Gateway + bot-server | bot-server 与桌面端共享进程 |
+| 独立部署 | Gateway + AgentRuntime 独立进程 | 桌面端和 IM Bot 通过 IPC/HTTP 连接 |
+
+MVP 阶段所有 UI 逻辑集中在 `apps/desktop/src/renderer/` 中，未来新增 WebUI 时再从中提取共享包。
 
 ---
 
@@ -377,25 +442,27 @@ contextBridge.exposeInMainWorld("electronAPI", api);
 
 ```
 用户输入 → 渲染进程 input → IPC agent:prompt
-  → 主进程校验 → 转发给 AgentHost
-    → AgentSession.prompt()
-      → LLM 流式生成
-      → 触发 tool_execution_start
-        → Tool Gatekeeper 确认
-          → 用户确认（dialog）
-        → 执行工具
-      → tool_execution_end
-      → 继续生成
-    → AgentEvent 流
-  → 主进程转发 agent:event
+  → 主进程 ipcRouter 校验 → AgentRuntime.prompt()
+    → pi-coding-agent LLM 流式生成
+    → 触发 tool_execution_start
+      → Tool Gatekeeper 拦截
+        → 主进程 toolConfirmDialog（原生弹窗）
+        → 用户确认 → 放行
+      → 执行工具
+    → tool_execution_end
+    → 继续生成
+  → AgentEvent 流
+  → 主进程广播 agent:event
 → 渲染进程更新消息 / 工具卡片
 ```
+
+**关键简化**：主进程直接调用 AgentRuntime，无子进程 IPC、无 JSON-RPC 序列化、无心跳检测。
 
 ### 9.2 会话持久化
 
 - 会话数据由 pi-coding-agent 的 `SessionManager` 管理。
 - 保存格式为 JSONL tree，支持未来分支与回滚。
-- Electron 主进程不直接解析会话内容，仅做文件路径管理。
+- 主进程通过 API Gateway 的会话操作直接读写文件，职责清晰。
 
 ---
 
@@ -403,12 +470,12 @@ contextBridge.exposeInMainWorld("electronAPI", api);
 
 | 排名 | 风险 | 影响 | 缓解措施 |
 |------|------|------|----------|
-| 1 | AgentHost 子进程崩溃或卡死 | 会话中断 | 主进程心跳检测、自动重启、会话自动保存 |
+| 1 | AgentRuntime 崩溃或内存泄漏导致整个应用不可用 | 会话中断 | 使用 `try/catch` 包裹 agent 操作，主进程捕获未处理异常后自动重启应用 |
 | 2 | 工具调用导致数据损坏或信息泄露 | 严重 | 工具确认门控、工作区沙箱、审计日志 |
-| 3 | API Key 泄露 | 严重 | 系统钥匙串、IPC 不透传 |
-| 4 | Electron / Node 22 / pi-agent 版本兼容 | 构建失败 | 子进程隔离原生依赖、CI 自动化构建、版本锁定 |
-| 5 | MVP 后拆分为多端成本过高 | 进度风险 | 第一天采用 workspaces + AgentHost 边界 |
-| 6 | pi-agent 包 API 变动 | 维护成本 | 封装适配层，不直接在各客户端引用 pi-coding-agent 细节 |
+| 3 | API Key 泄露 | 严重 | 原生 dialog 输入、AuthStorage 加密存储、渲染进程不接触密钥 |
+| 4 | Electron / Node / pi-coding-agent 版本兼容 | 构建失败 | 版本锁定、CI 自动化构建、子进程隔离原生依赖（必要时） |
+| 5 | 渲染进程沙箱限制导致部分 Electron API 不可用 | 功能受限 | contextIsolation + preload 白名单，不启用 sandbox |
+| 6 | pi-coding-agent 包 API 变动 | 维护成本 | AgentRuntime 封装适配层，不直接暴露 pi-coding-agent 细节 |
 
 ---
 
@@ -450,7 +517,7 @@ npm run make
 
 ## 12. 参考
 
-- [pi-agent monorepo](https://github.com/earendil-works/pi)
+- [pi monorepo](https://github.com/earendil-works/pi)（含 pi-coding-agent）
 - [pi.dev docs](https://pi.dev/docs/latest)
 - [Electron Forge Vite plugin](https://www.electronforge.io/config/plugins/vite)
 - [Electron security best practices](https://www.electronjs.org/docs/latest/tutorial/security)
