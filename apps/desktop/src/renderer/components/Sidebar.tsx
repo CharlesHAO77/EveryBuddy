@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useSessionStore } from "../stores/sessionStore";
+import { UserMenu } from "./UserMenu";
 
 const PlusIcon = () => (
   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -77,30 +78,35 @@ const mockWorkspaces: Workspace[] = [
 export function Sidebar() {
   const [tasksOpen, setTasksOpen] = useState(true);
   const [workspacesOpen, setWorkspacesOpen] = useState(true);
-  const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
-  const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null);
   const [openWorkspaceId, setOpenWorkspaceId] = useState<string | null>("w1");
 
-  const createSession = useSessionStore((s) => s.createSession);
+  const { currentSessionId, createSession, selectSession, clearCurrentSession } = useSessionStore();
 
   const handleNewTask = () => {
-    const id = createSession("新任务");
-    setSelectedSessionId(id);
+    createSession("新任务");
+  };
+
+  const handleBackToWelcome = () => {
+    clearCurrentSession();
   };
 
   return (
     <aside className="flex h-full w-[var(--sidebar-width)] flex-col border-r border-[var(--border)] bg-[var(--bg-sidebar)]">
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-3">
-        <div className="flex items-center gap-2">
-          <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-500 text-white font-bold text-sm">
+        <button
+          type="button"
+          onClick={handleBackToWelcome}
+          className="flex items-center gap-2 rounded-lg outline-none transition hover:bg-[var(--primary-bg)]"
+        >
+          <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-[var(--primary)] text-sm font-bold text-white">
             e
           </div>
-          <div className="flex flex-col">
+          <div className="flex flex-col text-left">
             <span className="text-sm font-semibold leading-tight">everyBuddy</span>
             <span className="text-[10px] text-[var(--text-muted)]">v0.1.0</span>
           </div>
-        </div>
+        </button>
       </div>
 
       {/* New Task Button */}
@@ -108,7 +114,7 @@ export function Sidebar() {
         <button
           type="button"
           onClick={handleNewTask}
-          className="flex w-full items-center justify-center gap-1.5 rounded-lg bg-emerald-500 px-3 py-2 text-sm font-medium text-white transition hover:bg-emerald-600"
+          className="flex w-full items-center justify-center gap-1.5 rounded-full bg-gradient-to-r from-[var(--accent)] to-[var(--accent-dark)] px-3 py-2 text-sm font-semibold text-gray-900 shadow-[var(--shadow-accent-glow)] transition hover:brightness-105 active:scale-[0.97]"
         >
           <PlusIcon />
           新建任务
@@ -120,24 +126,26 @@ export function Sidebar() {
         <button
           type="button"
           onClick={() => setTasksOpen((v) => !v)}
-          className="flex w-full items-center justify-between rounded-md px-2 py-1.5 text-xs font-semibold text-[var(--text-muted)] hover:bg-gray-100"
+          className="flex w-full items-center justify-between rounded-md px-2 py-1.5 text-xs font-semibold text-[var(--text-muted)] hover:bg-[var(--primary-bg)] hover:text-[var(--primary-dark)]"
         >
           <span>任务 ({mockTasks.length})</span>
           <ChevronDownIcon open={tasksOpen} />
         </button>
 
         {tasksOpen && (
-          <div className="mt-1 space-y-0.5">
+          <div className="mt-1 space-y-1 px-1">
             {mockTasks.map((task) => (
               <button
                 key={task.id}
                 type="button"
-                onClick={() => setSelectedTaskId(task.id)}
-                className={`flex w-full items-start gap-2 rounded-md px-2 py-2 text-left text-sm transition ${
-                  selectedTaskId === task.id ? "bg-emerald-50 text-emerald-700" : "text-[var(--text-main)] hover:bg-gray-100"
+                onClick={() => selectSession(task.id)}
+                className={`flex w-full items-start gap-2 rounded-lg border-l-4 bg-[var(--surface-card)] px-3 py-2 text-left text-sm shadow-sm transition ${
+                  currentSessionId === task.id
+                    ? "border-[var(--accent)] text-[var(--primary-dark)] shadow-[var(--shadow-card)]"
+                    : "border-[var(--primary-light)] text-[var(--text-main)] hover:shadow-[var(--shadow-card)]"
                 }`}
               >
-                <span className="mt-0.5 text-[var(--text-muted)]">
+                <span className="mt-0.5 text-[var(--primary)]">
                   <TaskIcon />
                 </span>
                 <div className="flex min-w-0 flex-1 flex-col">
@@ -155,7 +163,7 @@ export function Sidebar() {
         <button
           type="button"
           onClick={() => setWorkspacesOpen((v) => !v)}
-          className="flex w-full items-center justify-between rounded-md px-2 py-1.5 text-xs font-semibold text-[var(--text-muted)] hover:bg-gray-100"
+          className="flex w-full items-center justify-between rounded-md px-2 py-1.5 text-xs font-semibold text-[var(--text-muted)] hover:bg-[var(--primary-bg)] hover:text-[var(--primary-dark)]"
         >
           <span>空间 ({mockWorkspaces.length})</span>
           <ChevronDownIcon open={workspacesOpen} />
@@ -168,7 +176,7 @@ export function Sidebar() {
                 <button
                   type="button"
                   onClick={() => setOpenWorkspaceId((id) => (id === ws.id ? null : ws.id))}
-                  className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm font-medium text-[var(--text-main)] hover:bg-gray-100"
+                  className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm font-medium text-[var(--text-main)] hover:bg-[var(--primary-bg)]"
                 >
                   <WorkspaceIcon />
                   <span className="flex-1 truncate">{ws.name}</span>
@@ -176,16 +184,16 @@ export function Sidebar() {
                 </button>
 
                 {openWorkspaceId === ws.id && (
-                  <div className="ml-5 space-y-0.5 border-l border-[var(--border)] pl-2">
+                  <div className="ml-5 space-y-0.5 border-l border-[var(--primary-light)] pl-2">
                     {ws.sessions.map((session) => (
                       <button
                         key={session.id}
                         type="button"
-                        onClick={() => setSelectedSessionId(session.id)}
+                        onClick={() => selectSession(session.id)}
                         className={`flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm transition ${
-                          selectedSessionId === session.id
-                            ? "bg-emerald-50 text-emerald-700"
-                            : "text-[var(--text-muted)] hover:bg-gray-100 hover:text-[var(--text-main)]"
+                          currentSessionId === session.id
+                            ? "bg-[var(--primary-bg)] text-[var(--primary-dark)]"
+                            : "text-[var(--text-muted)] hover:bg-[var(--primary-bg)] hover:text-[var(--text-main)]"
                         }`}
                       >
                         <ChatIcon />
@@ -198,6 +206,23 @@ export function Sidebar() {
             ))}
           </div>
         )}
+      </div>
+
+      {/* User Menu - bottom left */}
+      <div className="border-t border-[var(--border)] p-3">
+        <UserMenu
+          trigger={
+            <div className="flex items-center gap-2 rounded-lg px-2 py-2 transition hover:bg-[var(--primary-bg)]">
+              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-[var(--primary)] to-[var(--primary-dark)] text-sm font-semibold text-white">
+                CH
+              </div>
+              <div className="flex flex-col text-left">
+                <span className="text-sm font-medium text-[var(--text-main)]">Charles.Hao</span>
+                <span className="text-[10px] text-[var(--text-muted)]">点击打开菜单</span>
+              </div>
+            </div>
+          }
+        />
       </div>
     </aside>
   );

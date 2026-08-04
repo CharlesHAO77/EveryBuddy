@@ -2,6 +2,7 @@ import type React from "react";
 import { useSessionStore } from "../stores/sessionStore";
 import { useUIStore, type CategoryId } from "../stores/uiStore";
 import { ChatInput } from "./ChatInput";
+import { MessageBubble } from "./MessageBubble";
 
 const categories: { id: CategoryId; label: string }[] = [
   { id: "daily", label: "日常办公" },
@@ -84,58 +85,135 @@ const iconMap: Record<string, React.FC> = {
   "generate-code": CodeIcon,
 };
 
+type Capability = (typeof capabilities)[CategoryId][number];
+
 export function MainView() {
-  const { activeCategory, setActiveCategory } = useUIStore();
+  const currentSessionId = useSessionStore((s) => s.currentSessionId);
 
   return (
-    <main className="relative flex flex-1 flex-col overflow-hidden">
-      {/* Center content */}
-      <div className="flex flex-1 flex-col items-center justify-center px-6 pb-32">
-        <h1 className="text-3xl font-bold tracking-tight text-[var(--text-main)]">
-          everyBuddy，我帮你
-        </h1>
-        <p className="mt-2 text-sm text-[var(--text-muted)]">选择场景，开始你的下一段任务</p>
-
-        {/* Category tabs */}
-        <div className="mt-8 flex gap-2 rounded-full bg-white p-1 shadow-sm">
-          {categories.map((cat) => (
-            <button
-              key={cat.id}
-              type="button"
-              onClick={() => setActiveCategory(cat.id)}
-              className={`rounded-full px-5 py-2 text-sm font-medium transition ${
-                activeCategory === cat.id
-                  ? "bg-gray-900 text-white shadow"
-                  : "text-[var(--text-muted)] hover:bg-gray-100"
-              }`}
-            >
-              {cat.label}
-            </button>
-          ))}
-        </div>
-
-        {/* Capability cards */}
-        <div className="mt-8 grid max-w-2xl grid-cols-1 gap-3 sm:grid-cols-2">
-          {capabilities[activeCategory].map((cap) => {
-            const Icon = iconMap[cap.id] ?? DocumentIcon;
-            return (
-              <CapabilityCard
-                key={cap.id}
-                icon={<Icon />}
-                title={cap.title}
-                desc={cap.desc}
-                prompt={cap.prompt}
-              />
-            );
-          })}
-        </div>
+    <main className="flex flex-1 flex-col overflow-hidden">
+      {/* Content area */}
+      <div className="flex-1 overflow-y-auto">
+        {currentSessionId ? <ChatView sessionId={currentSessionId} /> : <WelcomeView />}
       </div>
 
-      {/* Input anchored at bottom */}
-      <ChatInput />
+      {/* Input area - always fixed at bottom */}
+      <ChatInput quickCards={currentSessionId ? <QuickCards /> : undefined} />
     </main>
   );
 }
+
+/* ── Welcome state ─────────────────────────── */
+
+function WelcomeView() {
+  const { activeCategory, setActiveCategory } = useUIStore();
+
+  return (
+    <div className="flex min-h-full flex-col items-center justify-center px-6 py-10">
+      <h1 className="text-3xl font-bold tracking-tight text-[var(--text-main)]">
+        everyBuddy，我帮你
+      </h1>
+      <p className="mt-2 text-sm text-[var(--text-muted)]">选择场景，开始你的下一段任务</p>
+
+      {/* Category tabs */}
+      <div className="mt-8 flex gap-2 rounded-full bg-white p-1 shadow-sm">
+        {categories.map((cat) => (
+          <button
+            key={cat.id}
+            type="button"
+            onClick={() => setActiveCategory(cat.id)}
+            className={`rounded-full px-5 py-2 text-sm font-medium transition active:scale-[0.97] ${
+              activeCategory === cat.id
+                ? "bg-[var(--primary-dark)] text-white shadow"
+                : "text-[var(--text-muted)] hover:bg-[var(--primary-bg)] hover:text-[var(--primary-dark)]"
+            }`}
+          >
+            {cat.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Capability cards */}
+      <div className="mt-8 grid max-w-2xl grid-cols-1 gap-3 sm:grid-cols-2">
+        {capabilities[activeCategory].map((cap) => {
+          const Icon = iconMap[cap.id] ?? DocumentIcon;
+          return (
+            <CapabilityCard
+              key={cap.id}
+              icon={<Icon />}
+              title={cap.title}
+              desc={cap.desc}
+              prompt={cap.prompt}
+            />
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+/* ── Chat state ────────────────────────────── */
+
+function ChatView({ sessionId }: { sessionId: string }) {
+  const messages = useSessionStore((s) => {
+    const session = s.sessions.find((item) => item.id === sessionId);
+    return session?.messages ?? [];
+  });
+
+  if (messages.length === 0) {
+    return (
+      <div className="flex min-h-full flex-col items-center justify-center px-6">
+        <p className="text-sm text-[var(--text-muted)]">新会话，发送消息开始对话</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="mx-auto flex min-h-full max-w-3xl flex-col gap-4 px-6 py-6">
+      {messages.map((msg) => (
+        <MessageBubble key={msg.id} message={msg} />
+      ))}
+    </div>
+  );
+}
+
+/* ── Quick cards above input (chat state) ──── */
+
+function QuickCards() {
+  const activeCategory = useUIStore((s) => s.activeCategory);
+  const { currentSessionId, addMessage } = useSessionStore();
+
+  const handleClick = (cap: Capability) => {
+    if (!currentSessionId) return;
+    addMessage(currentSessionId, {
+      id: crypto.randomUUID(),
+      role: "user",
+      content: cap.prompt,
+      timestamp: Date.now(),
+    });
+  };
+
+  return (
+    <div className="mb-3 flex flex-wrap gap-2">
+      {capabilities[activeCategory].map((cap) => {
+        const Icon = iconMap[cap.id] ?? DocumentIcon;
+        return (
+          <button
+            key={cap.id}
+            type="button"
+            onClick={() => handleClick(cap)}
+            className="flex items-center gap-1.5 rounded-full border border-[var(--border)] bg-white px-3 py-1.5 text-xs text-[var(--text-main)] shadow-sm transition hover:border-[var(--primary-light)] hover:bg-[var(--primary-bg)] hover:text-[var(--primary-dark)]"
+          >
+            <Icon />
+            {cap.title}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+/* ── Capability card (welcome state) ───────── */
 
 interface CapabilityCardProps {
   icon: React.ReactNode;
@@ -162,9 +240,9 @@ function CapabilityCard({ icon, title, desc, prompt }: CapabilityCardProps) {
     <button
       type="button"
       onClick={handleClick}
-      className="flex items-start gap-3 rounded-xl border border-[var(--border)] bg-white p-4 text-left shadow-sm transition hover:border-emerald-300 hover:shadow-md"
+      className="flex items-start gap-3 rounded-xl border-l-4 border-[var(--primary-light)] bg-[var(--surface-card)] p-4 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-[var(--primary)] hover:shadow-[var(--shadow-card)] active:scale-[0.98]"
     >
-      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600">
+      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[var(--primary-bg)] text-[var(--primary)]">
         {icon}
       </div>
       <div>

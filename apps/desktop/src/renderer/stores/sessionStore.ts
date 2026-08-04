@@ -22,6 +22,7 @@ interface SessionState {
   selectSession: (id: string) => void;
   renameSession: (id: string, title: string) => void;
   deleteSession: (id: string) => void;
+  clearCurrentSession: () => void;
 }
 
 export const useSessionStore = create<SessionState>((set) => ({
@@ -64,4 +65,6 @@ export const useSessionStore = create<SessionState>((set) => ({
       sessions: state.sessions.filter((s) => s.id !== id),
       currentSessionId: state.currentSessionId === id ? null : state.currentSessionId,
     })),
+
+  clearCurrentSession: () => set({ currentSessionId: null }),
 }));

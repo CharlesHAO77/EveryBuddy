@@ -1,14 +1,39 @@
 @import "tailwindcss";
 
+/*
+ * everyBuddy 设计变量 — 基于 DESIGN.md (Flip7) 提取色板，保持商务简洁。
+ */
 :root {
-  --sidebar-width: 260px;
-  --primary: #10b981;
-  --primary-hover: #059669;
-  --bg-main: #f8f9fb;
+  /* 品牌主色（Teal） */
+  --primary: #2ba8a2;
+  --primary-light: #3cc4bd;
+  --primary-dark: #1e8c86;
+  --primary-bg: #e8f6f5;
+
+  /* 强调色（Gold）— 仅用于关键 CTA */
+  --accent: #ffd23f;
+  --accent-light: #ffe47a;
+  --accent-dark: #e6b800;
+
+  /* 警示色（Coral）— 少量使用 */
+  --coral: #ef6c4a;
+  --coral-light: #ff8a6a;
+
+  /* 中性面 */
+  --cream: #fff8e7;
+  --bg-main: #eff8f7;
   --bg-sidebar: #ffffff;
+  --surface-card: #ffffff;
   --text-main: #1f2937;
   --text-muted: #6b7280;
   --border: #e5e7eb;
+
+  /* 发光阴影 */
+  --shadow-card: 0 2px 12px rgba(43, 168, 162, 0.1);
+  --shadow-teal-glow: 0 4px 20px rgba(43, 168, 162, 0.18);
+  --shadow-accent-glow: 0 4px 20px rgba(255, 210, 63, 0.3);
+
+  --sidebar-width: 260px;
 }
 
 * {

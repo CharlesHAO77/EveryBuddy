@@ -85,7 +85,7 @@ export function ModelSettings({ onClose }: ModelSettingsProps) {
           <button
             type="button"
             onClick={onClose}
-            className="rounded-lg p-1 text-[var(--text-muted)] transition hover:bg-gray-100"
+            className="rounded-lg p-1 text-[var(--text-muted)] transition hover:bg-[var(--primary-bg)]"
           >
             <CloseIcon />
           </button>
@@ -99,8 +99,8 @@ export function ModelSettings({ onClose }: ModelSettingsProps) {
                 key={model.id}
                 className={`rounded-xl border p-4 transition ${
                   currentModelId === model.id
-                    ? "border-emerald-500 bg-emerald-50/50"
-                    : "border-[var(--border)] bg-white hover:border-gray-300"
+                    ? "border-[var(--primary)] bg-[var(--primary-bg)] shadow-[var(--shadow-card)]"
+                    : "border-[var(--border)] bg-[var(--surface-card)] hover:border-[var(--primary-light)]"
                 }`}
               >
                 {editingId === model.id ? (
@@ -120,12 +120,12 @@ export function ModelSettings({ onClose }: ModelSettingsProps) {
                       <div className="flex items-center gap-2">
                         <span className="font-medium text-[var(--text-main)]">{model.name}</span>
                         {currentModelId === model.id && (
-                          <span className="rounded-full bg-emerald-500 px-2 py-0.5 text-[10px] font-medium text-white">
+                          <span className="rounded-full bg-[var(--primary)] px-2 py-0.5 text-[10px] font-medium text-white">
                             当前
                           </span>
                         )}
                         {model.isOpenAiCompatible && (
-                          <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[10px] text-[var(--text-muted)]">
+                          <span className="rounded-full bg-[var(--primary-bg)] px-2 py-0.5 text-[10px] text-[var(--primary-dark)]">
                             OpenAI 兼容
                           </span>
                         )}
@@ -139,7 +139,7 @@ export function ModelSettings({ onClose }: ModelSettingsProps) {
                       <button
                         type="button"
                         onClick={() => startEdit(model)}
-                        className="rounded-lg px-2 py-1 text-xs text-[var(--text-muted)] transition hover:bg-gray-100"
+                        className="rounded-lg px-2 py-1 text-xs text-[var(--text-muted)] transition hover:bg-[var(--primary-bg)]"
                       >
                         编辑
                       </button>
@@ -159,7 +159,7 @@ export function ModelSettings({ onClose }: ModelSettingsProps) {
             ))}
 
             {editingId && !models.some((m) => m.id === editingId) && (
-              <div className="rounded-xl border border-emerald-200 bg-emerald-50/30 p-4">
+              <div className="rounded-xl border border-[var(--primary-light)] bg-[var(--primary-bg)] p-4">
                 <ModelForm
                   draft={draft}
                   onChange={setDraft}
@@ -177,7 +177,7 @@ export function ModelSettings({ onClose }: ModelSettingsProps) {
             type="button"
             onClick={startAdd}
             disabled={editingId !== null}
-            className="w-full rounded-lg border border-dashed border-emerald-400 py-2 text-sm font-medium text-emerald-600 transition hover:bg-emerald-50 disabled:cursor-not-allowed disabled:opacity-50"
+            className="w-full rounded-full border border-dashed border-[var(--primary-light)] py-2 text-sm font-medium text-[var(--primary)] transition hover:bg-[var(--primary-bg)] disabled:cursor-not-allowed disabled:opacity-50"
           >
             + 添加 OpenAI 兼容模型
           </button>
@@ -204,7 +204,7 @@ function ModelForm({ draft, onChange, onSave, onCancel }: ModelFormProps) {
           value={draft.name ?? ""}
           onChange={(e) => onChange({ ...draft, name: e.target.value })}
           placeholder="例如：SiliconFlow"
-          className="w-full rounded-lg border border-[var(--border)] px-3 py-2 text-sm outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
+          className="w-full rounded-lg border border-[var(--border)] bg-[var(--surface-card)] px-3 py-2 text-sm outline-none transition focus:border-[var(--primary-light)] focus:ring-2 focus:ring-[var(--primary-bg)]"
         />
       </div>
 
@@ -215,7 +215,7 @@ function ModelForm({ draft, onChange, onSave, onCancel }: ModelFormProps) {
           value={draft.baseUrl ?? ""}
           onChange={(e) => onChange({ ...draft, baseUrl: e.target.value })}
           placeholder="https://api.openai.com/v1"
-          className="w-full rounded-lg border border-[var(--border)] px-3 py-2 text-sm outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
+          className="w-full rounded-lg border border-[var(--border)] bg-[var(--surface-card)] px-3 py-2 text-sm outline-none transition focus:border-[var(--primary-light)] focus:ring-2 focus:ring-[var(--primary-bg)]"
         />
       </div>
 
@@ -226,7 +226,7 @@ function ModelForm({ draft, onChange, onSave, onCancel }: ModelFormProps) {
           value={draft.apiKey ?? ""}
           onChange={(e) => onChange({ ...draft, apiKey: e.target.value })}
           placeholder="sk-..."
-          className="w-full rounded-lg border border-[var(--border)] px-3 py-2 text-sm outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
+          className="w-full rounded-lg border border-[var(--border)] bg-[var(--surface-card)] px-3 py-2 text-sm outline-none transition focus:border-[var(--primary-light)] focus:ring-2 focus:ring-[var(--primary-bg)]"
         />
         <p className="mt-1 text-[10px] text-[var(--text-muted)]">
           仅保存在当前会话内存中，后续将委托主进程安全存储
@@ -240,7 +240,7 @@ function ModelForm({ draft, onChange, onSave, onCancel }: ModelFormProps) {
           value={draft.model ?? ""}
           onChange={(e) => onChange({ ...draft, model: e.target.value })}
           placeholder="gpt-4o"
-          className="w-full rounded-lg border border-[var(--border)] px-3 py-2 text-sm outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
+          className="w-full rounded-lg border border-[var(--border)] bg-[var(--surface-card)] px-3 py-2 text-sm outline-none transition focus:border-[var(--primary-light)] focus:ring-2 focus:ring-[var(--primary-bg)]"
         />
       </div>
 
@@ -249,7 +249,7 @@ function ModelForm({ draft, onChange, onSave, onCancel }: ModelFormProps) {
           type="checkbox"
           checked={draft.isOpenAiCompatible ?? true}
           onChange={(e) => onChange({ ...draft, isOpenAiCompatible: e.target.checked })}
-          className="h-4 w-4 rounded border-gray-300 text-emerald-500 focus:ring-emerald-500"
+          className="h-4 w-4 rounded border-gray-300 text-[var(--primary)] focus:ring-[var(--primary-light)]"
         />
         OpenAI 兼容格式
       </label>
@@ -258,14 +258,14 @@ function ModelForm({ draft, onChange, onSave, onCancel }: ModelFormProps) {
         <button
           type="button"
           onClick={onCancel}
-          className="rounded-lg px-4 py-2 text-sm text-[var(--text-muted)] transition hover:bg-gray-100"
+          className="rounded-lg px-4 py-2 text-sm text-[var(--text-muted)] transition hover:bg-[var(--primary-bg)]"
         >
           取消
         </button>
         <button
           type="button"
           onClick={onSave}
-          className="rounded-lg bg-emerald-500 px-4 py-2 text-sm font-medium text-white transition hover:bg-emerald-600"
+          className="rounded-full bg-[var(--primary)] px-4 py-2 text-sm font-medium text-white shadow-[var(--shadow-teal-glow)] transition hover:bg-[var(--primary-dark)] active:scale-95"
         >
           保存
         </button>

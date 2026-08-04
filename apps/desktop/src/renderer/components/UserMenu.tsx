@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { ModelSettings } from "./ModelSettings";
 
 const SettingsIcon = () => (
@@ -16,7 +16,11 @@ const LogoutIcon = () => (
   </svg>
 );
 
-export function UserMenu() {
+interface UserMenuProps {
+  trigger: ReactNode;
+}
+
+export function UserMenu({ trigger }: UserMenuProps) {
   const [open, setOpen] = useState(false);
   const [showModelSettings, setShowModelSettings] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -33,17 +37,17 @@ export function UserMenu() {
 
   return (
     <>
-      <div ref={ref} className="fixed bottom-4 right-4 z-50">
+      <div ref={ref} className="relative">
         <button
           type="button"
           onClick={() => setOpen((v) => !v)}
-          className="flex h-11 w-11 items-center justify-center rounded-full bg-emerald-500 text-white shadow-lg transition hover:bg-emerald-600 focus:outline-none focus:ring-2 focus:ring-emerald-400"
+          className="flex w-full items-center outline-none"
         >
-          <span className="text-sm font-semibold">CH</span>
+          {trigger}
         </button>
 
         {open && (
-          <div className="absolute bottom-14 right-0 w-48 rounded-xl border border-[var(--border)] bg-white p-1 shadow-xl">
+          <div className="absolute bottom-full left-0 mb-2 w-48 rounded-xl border border-[var(--border)] bg-white p-1 shadow-xl">
             <div className="border-b border-[var(--border)] px-3 py-2">
               <p className="text-sm font-medium text-[var(--text-main)]">Charles.Hao</p>
               <p className="text-xs text-[var(--text-muted)]">charles@example.com</p>
@@ -55,7 +59,7 @@ export function UserMenu() {
                 setOpen(false);
                 setShowModelSettings(true);
               }}
-              className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-[var(--text-main)] transition hover:bg-gray-100"
+              className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-[var(--text-main)] transition hover:bg-[var(--primary-bg)]"
             >
               <SettingsIcon />
               模型设置
@@ -64,7 +68,7 @@ export function UserMenu() {
             <button
               type="button"
               onClick={() => window.close()}
-              className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-[var(--text-main)] transition hover:bg-gray-100"
+              className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-[var(--text-main)] transition hover:bg-[var(--primary-bg)]"
             >
               <LogoutIcon />
               退出

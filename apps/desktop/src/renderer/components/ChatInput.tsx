@@ -1,6 +1,5 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { useSessionStore } from "../stores/sessionStore";
-import { UserMenu } from "./UserMenu";
 
 const SendIcon = () => (
   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -37,7 +36,12 @@ const MicIcon = () => (
   </svg>
 );
 
-export function ChatInput() {
+interface ChatInputProps {
+  /** 输入框上方的快捷卡片区域（仅在 ChatView 使用） */
+  quickCards?: ReactNode;
+}
+
+export function ChatInput({ quickCards }: ChatInputProps) {
   const [text, setText] = useState("");
   const { currentSessionId, createSession, addMessage } = useSessionStore();
 
@@ -63,9 +67,11 @@ export function ChatInput() {
   };
 
   return (
-    <div className="absolute bottom-0 left-0 right-0 border-t border-[var(--border)] bg-white px-6 py-4">
+    <div className="border-t border-[var(--border)] bg-white px-6 py-4">
       <div className="mx-auto max-w-3xl">
-        <div className="rounded-2xl border border-[var(--border)] bg-white p-3 shadow-sm transition focus-within:border-emerald-400 focus-within:ring-2 focus-within:ring-emerald-100">
+        {quickCards}
+
+        <div className="rounded-2xl border border-[var(--border)] bg-[var(--cream)] p-3 shadow-sm transition focus-within:border-[var(--primary-light)] focus-within:ring-2 focus-within:ring-[var(--primary-bg)]">
           <textarea
             value={text}
             onChange={(e) => setText(e.target.value)}
@@ -79,7 +85,7 @@ export function ChatInput() {
             <div className="flex items-center gap-2">
               <button
                 type="button"
-                className="flex h-8 w-8 items-center justify-center rounded-lg text-[var(--text-muted)] transition hover:bg-gray-100"
+                className="flex h-8 w-8 items-center justify-center rounded-lg text-[var(--text-muted)] transition hover:bg-[var(--primary-bg)]"
                 title="上传文件"
               >
                 <PlusIcon />
@@ -87,7 +93,7 @@ export function ChatInput() {
 
               <button
                 type="button"
-                className="flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-xs text-[var(--text-muted)] transition hover:bg-gray-100"
+                className="flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-xs text-[var(--text-muted)] transition hover:bg-[var(--primary-bg)]"
               >
                 <FolderIcon />
                 选择工作区
@@ -95,7 +101,7 @@ export function ChatInput() {
 
               <button
                 type="button"
-                className="flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-xs text-[var(--text-muted)] transition hover:bg-gray-100"
+                className="flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-xs text-[var(--text-muted)] transition hover:bg-[var(--primary-bg)]"
               >
                 <ShieldIcon />
                 默认权限
@@ -105,7 +111,7 @@ export function ChatInput() {
             <div className="flex items-center gap-2">
               <button
                 type="button"
-                className="flex h-8 w-8 items-center justify-center rounded-lg text-[var(--text-muted)] transition hover:bg-gray-100"
+                className="flex h-8 w-8 items-center justify-center rounded-lg text-[var(--text-muted)] transition hover:bg-[var(--primary-bg)]"
                 title="语音输入"
               >
                 <MicIcon />
@@ -115,7 +121,7 @@ export function ChatInput() {
                 type="button"
                 onClick={handleSend}
                 disabled={!text.trim()}
-                className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-500 text-white shadow-sm transition hover:bg-emerald-600 disabled:cursor-not-allowed disabled:opacity-40"
+                className="flex h-8 w-8 items-center justify-center rounded-full bg-[var(--primary)] text-white shadow-[var(--shadow-teal-glow)] transition hover:bg-[var(--primary-dark)] active:scale-95 disabled:cursor-not-allowed disabled:opacity-40 disabled:shadow-none"
               >
                 <SendIcon />
               </button>
@@ -123,8 +129,6 @@ export function ChatInput() {
           </div>
         </div>
       </div>
-
-      <UserMenu />
     </div>
   );
 }
