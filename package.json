@@ -1,0 +1,33 @@
+{
+  "name": "everybuddy",
+  "version": "0.1.0",
+  "private": true,
+  "description": "everyBuddy — 面向开发者的本地桌面 AI 助手（Electron + React）",
+  "license": "MIT",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "dev": "npm run start --workspace @everybuddy/desktop",
+    "build": "npm run typecheck --workspaces --if-present",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:e2e": "npm run test:e2e --workspace @everybuddy/desktop --if-present",
+    "lint": "biome check .",
+    "lint:fix": "biome check --write .",
+    "format": "biome format --write .",
+    "make": "npm run make --workspace @everybuddy/desktop",
+    "package": "npm run package --workspace @everybuddy/desktop"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.0.0",
+    "typescript": "^5.7.0",
+    "vitest": "^2.1.0"
+  },
+  "engines": {
+    "node": ">=20",
+    "npm": ">=10"
+  }
+}

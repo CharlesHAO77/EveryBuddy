@@ -1,0 +1,25 @@
+{
+  "name": "@everybuddy/ipc-contract",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "渲染进程与主进程之间的类型安全 IPC 契约 + Zod schema",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    }
+  },
+  "scripts": {
+    "build": "tsc --noEmit -p tsconfig.json",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "zod": "^3.23.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.0",
+    "vitest": "^2.1.0"
+  }
+}

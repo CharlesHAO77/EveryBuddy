@@ -1,0 +1,47 @@
+# Dependencies
+node_modules/
+
+# Build outputs
+dist/
+out/
+build/
+*.tsbuildinfo
+
+# Vite / Electron Forge
+.vite/
+apps/desktop/.vite/
+apps/desktop/out/
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Editor
+.vscode/*
+!.vscode/extensions.json
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Env & secrets
+.env
+.env.local
+.env.*.local
+
+# Test coverage & Playwright
+coverage/
+test-results/
+playwright-report/
+playwright/.cache/
+
+# Credentials (safety net — should never be committed)
+*.key
+*.pem
+credentials.json
