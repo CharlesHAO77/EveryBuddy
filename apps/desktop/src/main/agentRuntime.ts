@@ -20,11 +20,14 @@ import { getTaskCwd } from "./workspaceManager";
 // 类型导入（编译期擦除）；运行时通过动态 import() 加载 ESM 包
 type CodingAgentSDK = typeof import("@earendil-works/pi-coding-agent");
 
-type AgentSession = CodingAgentSDK["AgentSession"] extends new (
+type AgentSession = (CodingAgentSDK["AgentSession"] extends new (
   ...args: never[]
 ) => infer T
   ? T
-  : never;
+  : never) & {
+  /** SDK AgentSession 支持运行时切换模型 */
+  setModel?: (model: PiModel) => Promise<void> | void;
+};
 type ModelRuntime = Awaited<ReturnType<CodingAgentSDK["ModelRuntime"]["create"]>>;
 type SessionManagerInstance = ReturnType<CodingAgentSDK["SessionManager"]["create"]>;
 type PiModel = NonNullable<ReturnType<ModelRuntime["getModel"]>>;
@@ -192,10 +195,26 @@ class AgentRuntime {
     this.sessions.set(task.id, { session, unsubscribe });
   }
 
-  /** 发送消息 */
-  async prompt(taskId: string, text: string): Promise<void> {
+  /** 发送消息，支持按任务切换模型 */
+  async prompt(taskId: string, text: string, providerId?: string): Promise<void> {
     const state = this.sessions.get(taskId);
     if (!state) throw new Error(`任务会话不存在: ${taskId}`);
+
+    if (providerId) {
+      const model = this.resolveModel(providerId);
+      if (model && typeof state.session.setModel === "function") {
+        try {
+          await state.session.setModel(model);
+        } catch (err) {
+          this.emitError(
+            taskId,
+            `切换模型失败: ${err instanceof Error ? err.message : String(err)}`,
+          );
+          return;
+        }
+      }
+    }
+
     await state.session.prompt(text);
   }
 

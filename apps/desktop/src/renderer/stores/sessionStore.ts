@@ -50,6 +50,7 @@ export interface Task {
   type: "temp" | "workspace";
   workspaceId?: string;
   workspacePath?: string;
+  providerId?: string;
   sessionDir: string;
   messages: ChatMessage[];
   createdAt: string;
@@ -83,6 +84,7 @@ interface SessionState {
   selectWorkspaceDir: () => Promise<string | null>;
 
   sendMessage: (taskId: string, text: string) => Promise<void>;
+  setTaskProvider: (taskId: string, providerId: string) => Promise<void>;
 
   // 流式块操作
   startAssistantMessage: (taskId: string) => void;
@@ -154,6 +156,15 @@ export const useSessionStore = create<SessionState>((set, _get) => ({
       loaded: true,
     }),
 
+  setTaskProvider: async (taskId, providerId) => {
+    set((state) => ({
+      tasks: state.tasks.map((t) =>
+        t.id === taskId ? { ...t, providerId, updatedAt: new Date().toISOString() } : t,
+      ),
+    }));
+    await window.electronAPI.task.setProvider(taskId, providerId);
+  },
+
   upsertTask: (task) =>
     set((state) => {
       const idx = state.tasks.findIndex((t) => t.id === task.id);
@@ -170,6 +181,7 @@ export const useSessionStore = create<SessionState>((set, _get) => ({
       type: meta.type,
       workspaceId: meta.workspaceId,
       workspacePath: meta.workspacePath,
+      providerId: meta.providerId,
       sessionDir: meta.sessionDir,
       messages: [],
       createdAt: meta.createdAt,
@@ -216,14 +228,19 @@ export const useSessionStore = create<SessionState>((set, _get) => ({
       blocks: [{ id: "0", kind: "text", content: text, done: true }],
       timestamp: Date.now(),
     };
-    set((state) => ({
-      tasks: state.tasks.map((t) =>
-        t.id === taskId
-          ? { ...t, messages: [...t.messages, userMsg], updatedAt: new Date().toISOString() }
-          : t,
-      ),
-    }));
-    await window.electronAPI.agent.prompt({ sessionId: taskId, text });
+    let providerId: string | undefined;
+    set((state) => {
+      const task = state.tasks.find((t) => t.id === taskId);
+      providerId = task?.providerId;
+      return {
+        tasks: state.tasks.map((t) =>
+          t.id === taskId
+            ? { ...t, messages: [...t.messages, userMsg], updatedAt: new Date().toISOString() }
+            : t,
+        ),
+      };
+    });
+    await window.electronAPI.agent.prompt({ sessionId: taskId, text, providerId });
   },
 
   // ── 流式块操作 ────────────────────────────

@@ -26,6 +26,7 @@ const api: ElectronAPI = {
     resume: (id) => ipcRenderer.invoke("task:resume", { id }),
     delete: (id) => ipcRenderer.invoke("task:delete", { id }),
     rename: (id, title) => ipcRenderer.invoke("task:rename", { id, title }),
+    setProvider: (taskId, providerId) => ipcRenderer.invoke("task:setProvider", { taskId, providerId }),
     openDir: (id) => ipcRenderer.invoke("task:openDir", { id }),
   },
   workspace: {

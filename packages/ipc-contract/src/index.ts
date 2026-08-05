@@ -128,6 +128,8 @@ export interface TaskMeta {
   type: TaskType;
   workspaceId?: string;
   workspacePath?: string;
+  /** 当前任务使用的模型 provider ID */
+  providerId?: string;
   /** 会话 jsonl 落盘目录 */
   sessionDir: string;
   createdAt: string;
@@ -138,6 +140,8 @@ export interface CreateTaskRequest {
   title?: string;
   type: TaskType;
   workspaceId?: string;
+  /** 创建任务时指定的模型 provider ID */
+  providerId?: string;
 }
 
 // ────────────────────────────────────────────────
@@ -195,6 +199,12 @@ export const createTaskRequestSchema = z.object({
   title: z.string().optional(),
   type: z.enum(["temp", "workspace"]),
   workspaceId: z.string().optional(),
+  providerId: z.string().optional(),
+});
+
+export const setTaskProviderRequestSchema = z.object({
+  taskId: z.string().min(1),
+  providerId: z.string().min(1),
 });
 
 export const saveModelRequestSchema = z.object({
@@ -228,6 +238,7 @@ export interface ElectronAPI {
     resume: (id: string) => Promise<void>;
     delete: (id: string) => Promise<void>;
     rename: (id: string, title: string) => Promise<void>;
+    setProvider: (taskId: string, providerId: string) => Promise<void>;
     openDir: (id: string) => Promise<void>;
   };
   workspace: {

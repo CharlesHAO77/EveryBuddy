@@ -14,6 +14,7 @@ import {
   promptRequestSchema,
   saveModelRequestSchema,
   setApiKeyRequestSchema,
+  setTaskProviderRequestSchema,
 } from "@everybuddy/ipc-contract";
 import { type BrowserWindow, ipcMain } from "electron";
 import { agentRuntime } from "./agentRuntime";
@@ -42,7 +43,7 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
   // ── agent:* ───────────────────────────────
   ipcMain.handle("agent:prompt", async (_evt, raw) => {
     const req = validate(promptRequestSchema, raw);
-    await agentRuntime.prompt(req.sessionId, req.text);
+    await agentRuntime.prompt(req.sessionId, req.text, req.providerId);
     return { streamId: req.sessionId };
   });
 
@@ -65,6 +66,7 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
     // 默认使用第一个已配置的模型
     const models = configStore.getModels();
     const defaultProvider = models[0]?.id;
+    const providerId = req.providerId ?? defaultProvider;
 
     const now = new Date().toISOString();
     const task: TaskMeta = {
@@ -73,6 +75,7 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
       type: req.type,
       workspaceId: workspace?.id,
       workspacePath: workspace?.path,
+      providerId,
       sessionDir,
       createdAt: now,
       updatedAt: now,
@@ -80,7 +83,7 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
     configStore.addTask(task);
 
     // 创建 AgentSession（异步，不阻塞返回；失败时通过事件流报错）
-    agentRuntime.createTaskSession(task, defaultProvider).catch((err) => {
+    agentRuntime.createTaskSession(task, providerId).catch((err) => {
       console.error(`[ipcRouter] createTaskSession 失败:`, err);
       agentRuntime.emitError(
         task.id,
@@ -105,13 +108,18 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
     if (agentRuntime.hasSession(id)) return;
     const models = configStore.getModels();
     const defaultProvider = models[0]?.id;
-    await agentRuntime.createTaskSession(task, defaultProvider);
+    await agentRuntime.createTaskSession(task, task.providerId ?? defaultProvider);
   });
 
   ipcMain.handle("task:rename", (_evt, raw) => {
     const parsed = raw as { id?: string; title?: string };
     if (!parsed.id || !parsed.title) throw new Error("参数缺失");
     configStore.updateTask(parsed.id, { title: parsed.title, updatedAt: new Date().toISOString() });
+  });
+
+  ipcMain.handle("task:setProvider", (_evt, raw) => {
+    const req = validate(setTaskProviderRequestSchema, raw);
+    configStore.updateTask(req.taskId, { providerId: req.providerId });
   });
 
   ipcMain.handle("task:openDir", async (_evt, raw) => {

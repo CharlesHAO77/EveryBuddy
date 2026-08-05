@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { useSessionStore } from "../stores/sessionStore";
-import { useUIStore, type CategoryId } from "../stores/uiStore";
+import { type CategoryId, useUIStore } from "../stores/uiStore";
 import { MessageBubble } from "./MessageBubble";
+import { ModelSelector } from "./ModelSelector";
 
 /* ── Inline SVG Icons ─────────────────────────── */
 
@@ -33,6 +34,15 @@ const ChevronDownSmall = () => (
     <polyline points="6 9 12 15 18 9" />
   </svg>
 );
+
+/* ── Model Selector Helpers ───────────────────── */
+
+function useDefaultProviderId() {
+  return useUIStore((s) => {
+    if (s.currentModelId) return s.currentModelId;
+    return s.models[0]?.id ?? null;
+  });
+}
 
 /* ── Data ────────────────────────────────────── */
 
@@ -78,6 +88,12 @@ function WelcomeView() {
   const currentTaskId = useSessionStore((s) => s.currentTaskId);
   const createTask = useSessionStore((s) => s.createTask);
   const sendMessage = useSessionStore((s) => s.sendMessage);
+  const setModelSettingsOpen = useUIStore((s) => s.setModelSettingsOpen);
+  const defaultProviderId = useDefaultProviderId();
+  const [welcomeProviderId, setWelcomeProviderId] = useState<string | null>(defaultProviderId);
+
+  // 当默认模型变化（如删除模型）时同步欢迎页选择
+  const effectiveProviderId = welcomeProviderId ?? defaultProviderId;
 
   const currentTags = activeCategory === "daily" ? dailyTags : codingTags;
 
@@ -86,7 +102,11 @@ function WelcomeView() {
     if (!trimmed) return;
     let taskId = currentTaskId;
     if (!taskId) {
-      const task = await createTask({ type: "temp", title: trimmed.slice(0, 30) });
+      const task = await createTask({
+        type: "temp",
+        title: trimmed.slice(0, 30),
+        providerId: effectiveProviderId ?? undefined,
+      });
       taskId = task.id;
     }
     setText("");
@@ -175,13 +195,15 @@ function WelcomeView() {
 
               <div className="flex items-center gap-[8px]">
                 {/* Model selector */}
-                <button
-                  type="button"
-                  className="flex items-center gap-[4px] rounded-[6px] px-[8px] py-[4px] text-[12px] text-[#999] transition hover:bg-[#f0f0f0]"
-                >
-                  MiniMax-M3
-                  <ChevronDownSmall />
-                </button>
+                <ModelSelector
+                  selectedId={effectiveProviderId}
+                  onSelect={(id) => {
+                    setWelcomeProviderId(id);
+                    // 同步 uiStore 的默认值，使新建任务默认使用该模型
+                    useUIStore.getState().setCurrentModel(id);
+                  }}
+                  onOpenSettings={() => setModelSettingsOpen(true)}
+                />
 
                 {/* Mic */}
                 <button
@@ -230,13 +252,18 @@ function WelcomeView() {
 /* ── Chat View ───────────────────────────────── */
 
 function ChatView({ taskId }: { taskId: string }) {
-  const messages = useSessionStore((s) => {
-    const task = s.tasks.find((item) => item.id === taskId);
-    return task?.messages ?? [];
+  const { task, messages } = useSessionStore((s) => {
+    const t = s.tasks.find((item) => item.id === taskId);
+    return { task: t, messages: t?.messages ?? [] };
   });
 
   const [text, setText] = useState("");
   const sendMessage = useSessionStore((s) => s.sendMessage);
+  const setTaskProvider = useSessionStore((s) => s.setTaskProvider);
+  const setModelSettingsOpen = useUIStore((s) => s.setModelSettingsOpen);
+  const defaultProviderId = useDefaultProviderId();
+
+  const taskProviderId = task?.providerId ?? defaultProviderId;
 
   const handleSend = async () => {
     const trimmed = text.trim();
@@ -289,13 +316,11 @@ function ChatView({ taskId }: { taskId: string }) {
                 <PlusIcon />
               </button>
               <div className="flex items-center gap-[8px]">
-                <button
-                  type="button"
-                  className="flex items-center gap-[4px] rounded-[6px] px-[8px] py-[4px] text-[12px] text-[#999] transition hover:bg-[#f0f0f0]"
-                >
-                  MiniMax-M3
-                  <ChevronDownSmall />
-                </button>
+                <ModelSelector
+                  selectedId={taskProviderId}
+                  onSelect={(id) => setTaskProvider(taskId, id)}
+                  onOpenSettings={() => setModelSettingsOpen(true)}
+                />
                 <button
                   type="button"
                   className="flex h-[28px] w-[28px] items-center justify-center rounded-md text-[#999] transition hover:bg-[#f0f0f0]"
