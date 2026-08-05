@@ -1,158 +1,232 @@
-import type React from "react";
+import { useState } from "react";
 import { useSessionStore } from "../stores/sessionStore";
 import { useUIStore, type CategoryId } from "../stores/uiStore";
-import { ChatInput } from "./ChatInput";
 import { MessageBubble } from "./MessageBubble";
 
-const categories: { id: CategoryId; label: string }[] = [
-  { id: "daily", label: "日常办公" },
-  { id: "coding", label: "编码开发" },
+/* ── Inline SVG Icons ─────────────────────────── */
+
+const PlusIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#999" strokeWidth="1.5" strokeLinecap="round">
+    <line x1="12" y1="5" x2="12" y2="19" />
+    <line x1="5" y1="12" x2="19" y2="12" />
+  </svg>
+);
+
+const MicIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#999" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="9" y="2" width="6" height="11" rx="3" />
+    <path d="M5 10v1a7 7 0 0014 0v-1" />
+    <line x1="12" y1="19" x2="12" y2="23" />
+    <line x1="8" y1="23" x2="16" y2="23" />
+  </svg>
+);
+
+const SendIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <line x1="12" y1="19" x2="12" y2="5" />
+    <polyline points="5 12 12 5 19 12" />
+  </svg>
+);
+
+const ChevronDownSmall = () => (
+  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#999" strokeWidth="2" strokeLinecap="round">
+    <polyline points="6 9 12 15 18 9" />
+  </svg>
+);
+
+/* ── Data ────────────────────────────────────── */
+
+const modes = [
+  { id: "daily" as CategoryId, label: "日常办公" },
+  { id: "coding" as CategoryId, label: "代码开发" },
 ];
 
-const capabilities: Record<CategoryId, { id: string; title: string; desc: string; prompt: string }[]> = {
-  daily: [
-    {
-      id: "ppt",
-      title: "PPT 生成",
-      desc: "输入主题，自动生成演示文稿大纲与内容",
-      prompt: "帮我生成一份关于「主题」的 PPT 大纲",
-    },
-    {
-      id: "doc",
-      title: "文档处理",
-      desc: "总结、润色、翻译各类文档",
-      prompt: "请帮我总结这份文档的核心观点",
-    },
-  ],
-  coding: [
-    {
-      id: "code-review",
-      title: "代码审查",
-      desc: "检查代码中的潜在问题与优化点",
-      prompt: "请审查以下代码",
-    },
-    {
-      id: "generate-code",
-      title: "生成代码",
-      desc: "根据需求生成可运行的代码片段",
-      prompt: "帮我写一段代码",
-    },
-  ],
-  design: [],
-};
+const dailyTags = [
+  { id: "ppt", label: "PPT生成" },
+];
 
-const PresentationIcon = () => (
-  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-    <path d="M3 3h18v14H3z" />
-    <path d="M8 21h8" />
-    <path d="M12 17v4" />
-  </svg>
-);
+const codingTags = [
+  { id: "daily-dev", label: "日常开发" },
+  { id: "website", label: "网站开发" },
+  { id: "agent", label: "Agent应用" },
+  { id: "skill", label: "Skill开发" },
+  { id: "cicd", label: "CI/CD" },
+  { id: "docs", label: "文档" },
+];
 
-const DocumentIcon = () => (
-  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-    <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" />
-    <polyline points="14 2 14 8 20 8" />
-    <line x1="16" y1="13" x2="8" y2="13" />
-    <line x1="16" y1="17" x2="8" y2="17" />
-    <polyline points="10 9 9 9 8 9" />
-  </svg>
-);
-
-const CodeIcon = () => (
-  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-    <polyline points="16 18 22 12 16 6" />
-    <polyline points="8 6 2 12 8 18" />
-  </svg>
-);
-
-const BugIcon = () => (
-  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-    <rect x="8" y="6" width="8" height="12" rx="4" />
-    <path d="M12 18v4" />
-    <path d="M8 22h8" />
-    <path d="M4 10h4" />
-    <path d="M16 10h4" />
-    <path d="M4 14h4" />
-    <path d="M16 14h4" />
-  </svg>
-);
-
-const iconMap: Record<string, React.FC> = {
-  ppt: PresentationIcon,
-  doc: DocumentIcon,
-  "code-review": BugIcon,
-  "generate-code": CodeIcon,
-};
-
-type Capability = (typeof capabilities)[CategoryId][number];
+/* ── MainView Component ──────────────────────── */
 
 export function MainView() {
   const currentSessionId = useSessionStore((s) => s.currentSessionId);
 
   return (
-    <main className="flex flex-1 flex-col overflow-hidden">
-      {/* Content area */}
-      <div className="flex-1 overflow-y-auto">
-        {currentSessionId ? <ChatView sessionId={currentSessionId} /> : <WelcomeView />}
-      </div>
-
-      {/* Input area - always fixed at bottom */}
-      <ChatInput quickCards={currentSessionId ? <QuickCards /> : undefined} />
+    <main className="relative flex flex-1 flex-col overflow-hidden bg-white">
+      {currentSessionId ? (
+        <ChatView sessionId={currentSessionId} />
+      ) : (
+        <WelcomeView />
+      )}
     </main>
   );
 }
 
-/* ── Welcome state ─────────────────────────── */
+/* ── Welcome View ────────────────────────────── */
 
 function WelcomeView() {
   const { activeCategory, setActiveCategory } = useUIStore();
+  const [text, setText] = useState("");
+  const { currentSessionId, createSession, addMessage } = useSessionStore();
+
+  const currentTags = activeCategory === "daily" ? dailyTags : codingTags;
+
+  const handleSend = () => {
+    const trimmed = text.trim();
+    if (!trimmed) return;
+    const sessionId = currentSessionId ?? createSession("新任务");
+    addMessage(sessionId, {
+      id: crypto.randomUUID(),
+      role: "user",
+      content: trimmed,
+      timestamp: Date.now(),
+    });
+    setText("");
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      handleSend();
+    }
+  };
 
   return (
-    <div className="flex min-h-full flex-col items-center justify-center px-6 py-10">
-      <h1 className="text-3xl font-bold tracking-tight text-[var(--text-main)]">
-        everyBuddy，我帮你
-      </h1>
-      <p className="mt-2 text-sm text-[var(--text-muted)]">选择场景，开始你的下一段任务</p>
+    <div className="flex min-h-full flex-col items-center">
+      {/* ── Centered Content ── */}
+      <div className="flex w-full max-w-[600px] flex-col items-center pt-[130px]">
+        {/* Title */}
+        <h1 className="text-[32px] font-semibold tracking-tight text-[#111]">
+          EveryBuddy, 我帮你
+        </h1>
 
-      {/* Category tabs */}
-      <div className="mt-8 flex gap-2 rounded-full bg-white p-1 shadow-sm">
-        {categories.map((cat) => (
-          <button
-            key={cat.id}
-            type="button"
-            onClick={() => setActiveCategory(cat.id)}
-            className={`rounded-full px-5 py-2 text-sm font-medium transition active:scale-[0.97] ${
-              activeCategory === cat.id
-                ? "bg-[var(--primary-dark)] text-white shadow"
-                : "text-[var(--text-muted)] hover:bg-[var(--primary-bg)] hover:text-[var(--primary-dark)]"
-            }`}
-          >
-            {cat.label}
-          </button>
-        ))}
-      </div>
+        {/* Mode Tabs */}
+        <div className="mt-[24px] flex gap-[8px]">
+          {modes.map((mode) => {
+            const isActive = activeCategory === mode.id;
+            return (
+              <button
+                key={mode.id}
+                type="button"
+                onClick={() => setActiveCategory(mode.id)}
+                className={`h-[36px] rounded-[20px] px-[20px] text-[14px] font-medium transition active:scale-[0.97] ${
+                  isActive
+                    ? "bg-[#111] text-white"
+                    : "bg-[#f5f5f5] text-[#666] hover:bg-[#ebebeb]"
+                }`}
+              >
+                {mode.label}
+              </button>
+            );
+          })}
+        </div>
 
-      {/* Capability cards */}
-      <div className="mt-8 grid max-w-2xl grid-cols-1 gap-3 sm:grid-cols-2">
-        {capabilities[activeCategory].map((cap) => {
-          const Icon = iconMap[cap.id] ?? DocumentIcon;
-          return (
-            <CapabilityCard
-              key={cap.id}
-              icon={<Icon />}
-              title={cap.title}
-              desc={cap.desc}
-              prompt={cap.prompt}
+        {/* ── Input Area ── */}
+        <div className="mt-[24px] w-[700px]">
+          {/* Quick Tags - above input, left-aligned, same width */}
+          {currentTags.length > 0 && (
+            <div className="mb-[10px] flex justify-start gap-[12px]">
+              {currentTags.map((tag) => (
+                <button
+                  key={tag.id}
+                  type="button"
+                  className="flex h-[32px] items-center gap-[6px] rounded-[16px] border border-[#e8e8e8] bg-white px-[14px] text-[13px] text-[#666] transition hover:bg-[#f5f5f5]"
+                >
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#999" strokeWidth="1.5" strokeLinecap="round">
+                    <circle cx="12" cy="12" r="10" />
+                    <polyline points="12 6 12 12 16 14" />
+                  </svg>
+                  {tag.label}
+                </button>
+              ))}
+            </div>
+          )}
+
+          <div className="relative h-[160px] rounded-[18px] border border-[#eee] bg-white shadow-[0_1px_6px_rgba(0,0,0,0.04)] transition focus-within:border-[#ddd]">
+            <textarea
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder="今天帮你做些什么？"
+              rows={3}
+              className="h-full w-full resize-none border-0 bg-transparent px-[20px] pt-[20px] text-[16px] text-[#333] placeholder:text-[#999] focus:outline-none"
             />
-          );
-        })}
+
+            {/* Bottom toolbar */}
+            <div className="absolute bottom-0 left-0 right-0 flex items-center justify-between px-[14px] pb-[10px]">
+              <div className="flex items-center gap-[16px]">
+                <button
+                  type="button"
+                  className="flex h-[28px] w-[28px] items-center justify-center rounded-md text-[#999] transition hover:bg-[#f0f0f0]"
+                >
+                  <PlusIcon />
+                </button>
+                <span className="text-[13px] text-[#999]">@引用对话文件，/调用技能与指令</span>
+              </div>
+
+              <div className="flex items-center gap-[8px]">
+                {/* Model selector */}
+                <button
+                  type="button"
+                  className="flex items-center gap-[4px] rounded-[6px] px-[8px] py-[4px] text-[12px] text-[#999] transition hover:bg-[#f0f0f0]"
+                >
+                  MiniMax-M3
+                  <ChevronDownSmall />
+                </button>
+
+                {/* Mic */}
+                <button
+                  type="button"
+                  className="flex h-[28px] w-[28px] items-center justify-center rounded-md text-[#999] transition hover:bg-[#f0f0f0]"
+                >
+                  <MicIcon />
+                </button>
+
+                {/* Send */}
+                <button
+                  type="button"
+                  onClick={handleSend}
+                  disabled={!text.trim()}
+                  className="flex h-[30px] w-[30px] items-center justify-center rounded-full bg-[#555] text-white transition hover:bg-[#333] active:scale-95 disabled:opacity-30 disabled:cursor-not-allowed"
+                >
+                  <SendIcon />
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Bottom bar */}
+        <div className="mt-[14px] flex w-[700px] items-center justify-between">
+          <button
+            type="button"
+            className="flex items-center gap-[4px] text-[12px] text-[#999] transition hover:text-[#666]"
+          >
+            选择工作空间
+            <ChevronDownSmall />
+          </button>
+          <button
+            type="button"
+            className="flex items-center gap-[4px] text-[12px] text-[#999] transition hover:text-[#666]"
+          >
+            默认权限
+            <ChevronDownSmall />
+          </button>
+        </div>
       </div>
     </div>
   );
 }
 
-/* ── Chat state ────────────────────────────── */
+/* ── Chat View ───────────────────────────────── */
 
 function ChatView({ sessionId }: { sessionId: string }) {
   const messages = useSessionStore((s) => {
@@ -160,95 +234,91 @@ function ChatView({ sessionId }: { sessionId: string }) {
     return session?.messages ?? [];
   });
 
-  if (messages.length === 0) {
-    return (
-      <div className="flex min-h-full flex-col items-center justify-center px-6">
-        <p className="text-sm text-[var(--text-muted)]">新会话，发送消息开始对话</p>
-      </div>
-    );
-  }
+  const [text, setText] = useState("");
+  const { addMessage } = useSessionStore();
 
-  return (
-    <div className="mx-auto flex min-h-full max-w-3xl flex-col gap-4 px-6 py-6">
-      {messages.map((msg) => (
-        <MessageBubble key={msg.id} message={msg} />
-      ))}
-    </div>
-  );
-}
-
-/* ── Quick cards above input (chat state) ──── */
-
-function QuickCards() {
-  const activeCategory = useUIStore((s) => s.activeCategory);
-  const { currentSessionId, addMessage } = useSessionStore();
-
-  const handleClick = (cap: Capability) => {
-    if (!currentSessionId) return;
-    addMessage(currentSessionId, {
-      id: crypto.randomUUID(),
-      role: "user",
-      content: cap.prompt,
-      timestamp: Date.now(),
-    });
-  };
-
-  return (
-    <div className="mb-3 flex flex-wrap gap-2">
-      {capabilities[activeCategory].map((cap) => {
-        const Icon = iconMap[cap.id] ?? DocumentIcon;
-        return (
-          <button
-            key={cap.id}
-            type="button"
-            onClick={() => handleClick(cap)}
-            className="flex items-center gap-1.5 rounded-full border border-[var(--border)] bg-white px-3 py-1.5 text-xs text-[var(--text-main)] shadow-sm transition hover:border-[var(--primary-light)] hover:bg-[var(--primary-bg)] hover:text-[var(--primary-dark)]"
-          >
-            <Icon />
-            {cap.title}
-          </button>
-        );
-      })}
-    </div>
-  );
-}
-
-/* ── Capability card (welcome state) ───────── */
-
-interface CapabilityCardProps {
-  icon: React.ReactNode;
-  title: string;
-  desc: string;
-  prompt: string;
-}
-
-function CapabilityCard({ icon, title, desc, prompt }: CapabilityCardProps) {
-  const createSession = useSessionStore((s) => s.createSession);
-  const addMessage = useSessionStore((s) => s.addMessage);
-
-  const handleClick = () => {
-    const sessionId = createSession(title);
+  const handleSend = () => {
+    const trimmed = text.trim();
+    if (!trimmed) return;
     addMessage(sessionId, {
       id: crypto.randomUUID(),
       role: "user",
-      content: prompt,
+      content: trimmed,
       timestamp: Date.now(),
     });
+    setText("");
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      handleSend();
+    }
   };
 
   return (
-    <button
-      type="button"
-      onClick={handleClick}
-      className="flex items-start gap-3 rounded-xl border-l-4 border-[var(--primary-light)] bg-[var(--surface-card)] p-4 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-[var(--primary)] hover:shadow-[var(--shadow-card)] active:scale-[0.98]"
-    >
-      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[var(--primary-bg)] text-[var(--primary)]">
-        {icon}
+    <div className="flex h-full flex-col">
+      {/* Messages */}
+      <div className="flex-1 overflow-y-auto px-6 py-6">
+        {messages.length === 0 ? (
+          <div className="flex min-h-full flex-col items-center justify-center">
+            <p className="text-sm text-[#999]">新会话，发送消息开始对话</p>
+          </div>
+        ) : (
+          <div className="mx-auto flex max-w-3xl flex-col gap-4">
+            {messages.map((msg) => (
+              <MessageBubble key={msg.id} message={msg} />
+            ))}
+          </div>
+        )}
       </div>
-      <div>
-        <h3 className="font-medium text-[var(--text-main)]">{title}</h3>
-        <p className="mt-0.5 text-xs text-[var(--text-muted)]">{desc}</p>
+
+      {/* Chat input */}
+      <div className="border-t border-[#eee] bg-white px-6 py-4">
+        <div className="mx-auto max-w-3xl">
+          <div className="relative h-[120px] rounded-[18px] border border-[#eee] bg-white shadow-[0_1px_6px_rgba(0,0,0,0.04)] transition focus-within:border-[#ddd]">
+            <textarea
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder="今天帮你做些什么？ @引用对话文件，/调用技能与指令"
+              rows={2}
+              className="h-full w-full resize-none border-0 bg-transparent px-[20px] pt-[16px] text-[16px] text-[#333] placeholder:text-[#999] focus:outline-none"
+            />
+            <div className="absolute bottom-0 left-0 right-0 flex items-center justify-between px-[14px] pb-[10px]">
+              <button
+                type="button"
+                className="flex h-[28px] w-[28px] items-center justify-center rounded-md text-[#999] transition hover:bg-[#f0f0f0]"
+              >
+                <PlusIcon />
+              </button>
+              <div className="flex items-center gap-[8px]">
+                <button
+                  type="button"
+                  className="flex items-center gap-[4px] rounded-[6px] px-[8px] py-[4px] text-[12px] text-[#999] transition hover:bg-[#f0f0f0]"
+                >
+                  MiniMax-M3
+                  <ChevronDownSmall />
+                </button>
+                <button
+                  type="button"
+                  className="flex h-[28px] w-[28px] items-center justify-center rounded-md text-[#999] transition hover:bg-[#f0f0f0]"
+                >
+                  <MicIcon />
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSend}
+                  disabled={!text.trim()}
+                  className="flex h-[30px] w-[30px] items-center justify-center rounded-full bg-[#555] text-white transition hover:bg-[#333] active:scale-95 disabled:opacity-30 disabled:cursor-not-allowed"
+                >
+                  <SendIcon />
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
-    </button>
+    </div>
   );
 }

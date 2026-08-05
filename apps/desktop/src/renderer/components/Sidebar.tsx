@@ -1,229 +1,344 @@
 import { useState } from "react";
-import { useSessionStore } from "../stores/sessionStore";
-import { UserMenu } from "./UserMenu";
+
+/* ── Inline SVG Icons ─────────────────────────── */
+
+const CollapseIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#999" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="3" y="3" width="18" height="18" rx="2" />
+    <line x1="9" y1="3" x2="9" y2="21" />
+  </svg>
+);
+
+const ExpandIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#999" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="3" y="3" width="18" height="18" rx="2" />
+    <line x1="15" y1="3" x2="15" y2="21" />
+  </svg>
+);
 
 const PlusIcon = () => (
-  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#999" strokeWidth="1.5" strokeLinecap="round">
     <line x1="12" y1="5" x2="12" y2="19" />
     <line x1="5" y1="12" x2="19" y2="12" />
   </svg>
 );
 
+const SearchIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#999" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="11" cy="11" r="8" />
+    <line x1="21" y1="21" x2="16.65" y2="16.65" />
+  </svg>
+);
+
 const ChevronDownIcon = ({ open }: { open?: boolean }) => (
   <svg
-    width="14"
-    height="14"
+    width="12"
+    height="12"
     viewBox="0 0 24 24"
     fill="none"
-    stroke="currentColor"
+    stroke="#999"
     strokeWidth="2"
+    strokeLinecap="round"
     className={`transition-transform ${open ? "rotate-180" : ""}`}
   >
     <polyline points="6 9 12 15 18 9" />
   </svg>
 );
 
-const TaskIcon = () => (
-  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-    <path d="M9 11l3 3L22 4" />
-    <path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11" />
+const NotificationIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#999" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9" />
+    <path d="M13.73 21a2 2 0 01-3.46 0" />
   </svg>
 );
 
-const WorkspaceIcon = () => (
-  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+const SettingsIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#999" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="12" cy="12" r="3" />
+    <path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-2 2 2 2 0 01-2-2v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 01-2-2 2 2 0 012-2h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 012-2 2 2 0 012 2v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 012 2 2 2 0 01-2 2h-.09a1.65 1.65 0 00-1.51 1z" />
+  </svg>
+);
+
+/* ── Navigation Icons ─────────────────────────── */
+
+const ExpertIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#999" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+  </svg>
+);
+
+const AutoIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#999" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+    <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
+  </svg>
+);
+
+const FolderIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#999" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
     <path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z" />
   </svg>
 );
 
-const ChatIcon = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-    <path d="M21 11.5a8.38 8.38 0 01-.9 3.8 8.5 8.5 0 01-7.6 4.7 8.38 8.38 0 01-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 01-.9-3.8 8.5 8.5 0 014.7-7.6 8.38 8.38 0 013.8-.9h.5a8.48 8.48 0 018 8v.5z" />
-  </svg>
-);
+/* ── Data ────────────────────────────────────── */
 
-interface TaskItem {
-  id: string;
-  title: string;
-  time: string;
-}
-
-interface Workspace {
-  id: string;
-  name: string;
-  sessions: { id: string; title: string }[];
-}
-
-const mockTasks: TaskItem[] = [
-  { id: "t1", title: "设计 iPhone 20 ProMAX 原型", time: "23小时前" },
-  { id: "t2", title: "总结 AI 服务器配置表文档", time: "29天前" },
+const navItems = [
+  { id: "expert", label: "专家·技能·连接器", icon: ExpertIcon },
+  { id: "auto", label: "自动化", icon: AutoIcon },
 ];
 
-const mockWorkspaces: Workspace[] = [
+const tasks = [
+  { id: "t1", title: "设计iPhone 20 ProMAX发...", time: "2天前" },
+  { id: "t2", title: "总结AI服务器配置文档", time: "30天前" },
+];
+
+const workspaces = [
   {
     id: "w1",
     name: "test",
-    sessions: [
-      { id: "s1", title: "会话 1" },
-      { id: "s2", title: "会话 2" },
-    ],
-  },
-  {
-    id: "w2",
-    name: "项目新手指引",
-    sessions: [{ id: "s3", title: "欢迎引导" }],
+    sessions: [{ id: "s1", title: "创建Agent原理harness...", time: "6天前" }],
   },
 ];
 
+/* ── Component ───────────────────────────────── */
+
 export function Sidebar() {
+  const [collapsed, setCollapsed] = useState(false);
   const [tasksOpen, setTasksOpen] = useState(true);
   const [workspacesOpen, setWorkspacesOpen] = useState(true);
   const [openWorkspaceId, setOpenWorkspaceId] = useState<string | null>("w1");
-
-  const { currentSessionId, createSession, selectSession, clearCurrentSession } = useSessionStore();
+  const [activeNav, setActiveNav] = useState("");
+  const [showSearch, setShowSearch] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
 
   const handleNewTask = () => {
-    createSession("新任务");
+    setActiveNav("");
+    // TODO: create new task
   };
 
-  const handleBackToWelcome = () => {
-    clearCurrentSession();
-  };
+  const filteredTasks = searchQuery
+    ? tasks.filter((t) => t.title.includes(searchQuery))
+    : tasks;
+
+  const filteredWorkspaces = searchQuery
+    ? workspaces
+        .map((ws) => ({
+          ...ws,
+          sessions: ws.sessions.filter((s) => s.title.includes(searchQuery)),
+        }))
+        .filter((ws) => ws.sessions.length > 0)
+    : workspaces;
 
   return (
-    <aside className="flex h-full w-[var(--sidebar-width)] flex-col border-r border-[var(--border)] bg-[var(--bg-sidebar)]">
-      {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3">
+    <aside
+      className={`flex h-full flex-col border-r border-[#e8e8e8] bg-[#fafafa] transition-all duration-200 ${
+        collapsed ? "w-[50px]" : "w-[260px]"
+      }`}
+    >
+      {/* ── Fixed Top Bar: collapse button + new task icon ── */}
+      <div className="flex h-[50px] shrink-0 items-center justify-between px-[10px]">
+        {/* Collapse button */}
         <button
           type="button"
-          onClick={handleBackToWelcome}
-          className="flex items-center gap-2 rounded-lg outline-none transition hover:bg-[var(--primary-bg)]"
+          onClick={() => setCollapsed((v) => !v)}
+          className="flex h-[30px] w-[30px] items-center justify-center rounded-md hover:bg-[#e8e8e8]"
+          title={collapsed ? "展开侧栏" : "折叠侧栏"}
         >
-          <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-[var(--primary)] text-sm font-bold text-white">
-            e
-          </div>
-          <div className="flex flex-col text-left">
-            <span className="text-sm font-semibold leading-tight">everyBuddy</span>
-            <span className="text-[10px] text-[var(--text-muted)]">v0.1.0</span>
-          </div>
-        </button>
-      </div>
-
-      {/* New Task Button */}
-      <div className="px-3 pb-2">
-        <button
-          type="button"
-          onClick={handleNewTask}
-          className="flex w-full items-center justify-center gap-1.5 rounded-full bg-gradient-to-r from-[var(--accent)] to-[var(--accent-dark)] px-3 py-2 text-sm font-semibold text-gray-900 shadow-[var(--shadow-accent-glow)] transition hover:brightness-105 active:scale-[0.97]"
-        >
-          <PlusIcon />
-          新建任务
-        </button>
-      </div>
-
-      {/* Tasks */}
-      <div className="px-2">
-        <button
-          type="button"
-          onClick={() => setTasksOpen((v) => !v)}
-          className="flex w-full items-center justify-between rounded-md px-2 py-1.5 text-xs font-semibold text-[var(--text-muted)] hover:bg-[var(--primary-bg)] hover:text-[var(--primary-dark)]"
-        >
-          <span>任务 ({mockTasks.length})</span>
-          <ChevronDownIcon open={tasksOpen} />
+          {collapsed ? <ExpandIcon /> : <CollapseIcon />}
         </button>
 
-        {tasksOpen && (
-          <div className="mt-1 space-y-1 px-1">
-            {mockTasks.map((task) => (
-              <button
-                key={task.id}
-                type="button"
-                onClick={() => selectSession(task.id)}
-                className={`flex w-full items-start gap-2 rounded-lg border-l-4 bg-[var(--surface-card)] px-3 py-2 text-left text-sm shadow-sm transition ${
-                  currentSessionId === task.id
-                    ? "border-[var(--accent)] text-[var(--primary-dark)] shadow-[var(--shadow-card)]"
-                    : "border-[var(--primary-light)] text-[var(--text-main)] hover:shadow-[var(--shadow-card)]"
-                }`}
-              >
-                <span className="mt-0.5 text-[var(--primary)]">
-                  <TaskIcon />
-                </span>
-                <div className="flex min-w-0 flex-1 flex-col">
-                  <span className="truncate">{task.title}</span>
-                  <span className="text-[10px] text-[var(--text-muted)]">{task.time}</span>
-                </div>
-              </button>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {/* Workspaces */}
-      <div className="mt-2 flex-1 overflow-y-auto px-2">
-        <button
-          type="button"
-          onClick={() => setWorkspacesOpen((v) => !v)}
-          className="flex w-full items-center justify-between rounded-md px-2 py-1.5 text-xs font-semibold text-[var(--text-muted)] hover:bg-[var(--primary-bg)] hover:text-[var(--primary-dark)]"
-        >
-          <span>空间 ({mockWorkspaces.length})</span>
-          <ChevronDownIcon open={workspacesOpen} />
-        </button>
-
-        {workspacesOpen && (
-          <div className="mt-1 space-y-1">
-            {mockWorkspaces.map((ws) => (
-              <div key={ws.id}>
-                <button
-                  type="button"
-                  onClick={() => setOpenWorkspaceId((id) => (id === ws.id ? null : ws.id))}
-                  className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm font-medium text-[var(--text-main)] hover:bg-[var(--primary-bg)]"
-                >
-                  <WorkspaceIcon />
-                  <span className="flex-1 truncate">{ws.name}</span>
-                  <ChevronDownIcon open={openWorkspaceId === ws.id} />
-                </button>
-
-                {openWorkspaceId === ws.id && (
-                  <div className="ml-5 space-y-0.5 border-l border-[var(--primary-light)] pl-2">
-                    {ws.sessions.map((session) => (
-                      <button
-                        key={session.id}
-                        type="button"
-                        onClick={() => selectSession(session.id)}
-                        className={`flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm transition ${
-                          currentSessionId === session.id
-                            ? "bg-[var(--primary-bg)] text-[var(--primary-dark)]"
-                            : "text-[var(--text-muted)] hover:bg-[var(--primary-bg)] hover:text-[var(--text-main)]"
-                        }`}
-                      >
-                        <ChatIcon />
-                        <span className="truncate">{session.title}</span>
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {/* User Menu - bottom left */}
-      <div className="border-t border-[var(--border)] p-3">
-        <UserMenu
-          trigger={
-            <div className="flex items-center gap-2 rounded-lg px-2 py-2 transition hover:bg-[var(--primary-bg)]">
-              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-[var(--primary)] to-[var(--primary-dark)] text-sm font-semibold text-white">
-                CH
-              </div>
-              <div className="flex flex-col text-left">
-                <span className="text-sm font-medium text-[var(--text-main)]">Charles.Hao</span>
-                <span className="text-[10px] text-[var(--text-muted)]">点击打开菜单</span>
-              </div>
+        {/* Search icon / input (expanded only) */}
+        {!collapsed && (
+          showSearch ? (
+            <div className="flex flex-1 items-center gap-[6px] pl-[8px]">
+              <SearchIcon />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="搜索任务或会话..."
+                className="w-full border-0 bg-transparent text-[13px] text-[#333] placeholder:text-[#999] focus:outline-none"
+                autoFocus
+                onBlur={() => {
+                  if (!searchQuery) {
+                    setShowSearch(false);
+                  }
+                }}
+              />
             </div>
-          }
-        />
+          ) : (
+            <button
+              type="button"
+              onClick={() => setShowSearch(true)}
+              className="flex h-[30px] w-[30px] items-center justify-center rounded-md text-[#999] transition hover:bg-[#e8e8e8]"
+              title="搜索任务"
+            >
+              <SearchIcon />
+            </button>
+          )
+        )}
       </div>
+
+      {collapsed ? (
+        /* ── Collapsed State: new task icon + bottom settings ── */
+        <div className="flex flex-1 flex-col items-center pt-[4px]">
+          <button
+            type="button"
+            onClick={handleNewTask}
+            className="flex h-[30px] w-[30px] items-center justify-center rounded-md text-[#666] hover:bg-[#e8e8e8]"
+            title="新建任务"
+          >
+            <PlusIcon />
+          </button>
+
+          {/* Spacer */}
+          <div className="flex-1" />
+
+          {/* Settings icon at bottom */}
+          <div className="pb-[12px]">
+            <button
+              type="button"
+              className="flex h-[30px] w-[30px] items-center justify-center rounded-md text-[#999] hover:bg-[#e8e8e8]"
+              title="设置"
+            >
+              <SettingsIcon />
+            </button>
+          </div>
+        </div>
+      ) : (
+        /* ── Expanded State ── */
+        <div className="flex flex-1 flex-col overflow-hidden">
+          {/* ── New Task Button ── */}
+          <div className="px-[10px]">
+            <button
+              type="button"
+              onClick={handleNewTask}
+              className="flex h-[40px] w-full items-center gap-[10px] rounded-[6px] px-[12px] text-[14px] text-[#333] transition hover:bg-[#f0f0f0] active:scale-[0.98]"
+            >
+              <PlusIcon />
+              新建任务
+            </button>
+          </div>
+
+          {/* ── Navigation ── */}
+          <nav className="flex flex-col px-[10px]">
+            {navItems.map((item) => {
+              const Icon = item.icon;
+              const isActive = activeNav === item.id;
+              return (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => setActiveNav(item.id)}
+                  className={`flex h-[40px] items-center gap-[10px] rounded-[6px] px-[12px] text-[14px] transition ${
+                    isActive
+                      ? "bg-[#e8e8e8] font-medium text-[#333]"
+                      : "text-[#333] hover:bg-[#f0f0f0]"
+                  }`}
+                >
+                  <Icon />
+                  <span>{item.label}</span>
+                </button>
+              );
+            })}
+          </nav>
+
+          {/* Divider */}
+          <div className="mx-[14px] my-[6px] border-t border-[#e8e8e8]" />
+
+          {/* ── Task List ── */}
+          <div className="px-[10px]">
+            <button
+              type="button"
+              onClick={() => setTasksOpen((v) => !v)}
+              className="flex h-[30px] w-full items-center justify-between rounded-[4px] px-[10px] text-[13px] text-[#666] hover:bg-[#f0f0f0]"
+            >
+              <span>任务 ({showSearch ? filteredTasks.length : 2})</span>
+              <ChevronDownIcon open={tasksOpen} />
+            </button>
+
+            {tasksOpen && (
+              <div className="mt-[2px] space-y-[2px]">
+                {filteredTasks.map((task) => (
+                  <button
+                    key={task.id}
+                    type="button"
+                    className="flex w-full items-center justify-between rounded-[4px] px-[10px] py-[6px] text-left transition hover:bg-[#f0f0f0]"
+                  >
+                    <span className="truncate text-[13px] text-[#333]">{task.title}</span>
+                    <span className="shrink-0 text-[12px] text-[#999]">{task.time}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* ── Workspace ── */}
+          <div className="mt-[4px] flex-1 px-[10px] overflow-y-auto">
+            <button
+              type="button"
+              onClick={() => setWorkspacesOpen((v) => !v)}
+              className="flex h-[30px] w-full items-center justify-between rounded-[4px] px-[10px] text-[13px] text-[#666] hover:bg-[#f0f0f0]"
+            >
+              <span>空间 ({showSearch ? filteredWorkspaces.length : 2})</span>
+              <ChevronDownIcon open={workspacesOpen} />
+            </button>
+
+            {workspacesOpen && (
+              <div className="mt-[2px] space-y-[2px]">
+                {filteredWorkspaces.map((ws) => (
+                  <div key={ws.id}>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setOpenWorkspaceId((id) => (id === ws.id ? null : ws.id))
+                      }
+                      className="flex h-[30px] w-full items-center gap-[8px] rounded-[4px] px-[10px] text-[13px] text-[#333] transition hover:bg-[#f0f0f0]"
+                    >
+                      <FolderIcon />
+                      <span className="flex-1 text-left">{ws.name}</span>
+                      <ChevronDownIcon open={openWorkspaceId === ws.id} />
+                    </button>
+
+                    {openWorkspaceId === ws.id &&
+                      ws.sessions.map((session) => (
+                        <button
+                          key={session.id}
+                          type="button"
+                          className="flex w-full items-center justify-between rounded-[4px] px-[10px] py-[6px] pl-[32px] text-left transition hover:bg-[#f0f0f0]"
+                        >
+                          <span className="truncate text-[13px] text-[#333]">
+                            {session.title}
+                          </span>
+                          <span className="shrink-0 text-[12px] text-[#999]">
+                            {session.time}
+                          </span>
+                        </button>
+                      ))}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* ── Bottom User Area ── */}
+          <div className="flex shrink-0 items-center justify-between border-t border-[#e8e8e8] px-[14px] py-[10px]">
+            <div className="flex items-center gap-[8px]">
+              <div className="h-[28px] w-[28px] rounded-full bg-gradient-to-br from-[#6c8eb2] to-[#4a6a8a] text-[11px] font-medium text-white flex items-center justify-center">
+                C
+              </div>
+              <span className="text-[13px] text-[#333]">Charles.Hao</span>
+            </div>
+            <div className="flex items-center gap-[6px]">
+              <button type="button" className="flex h-[28px] w-[28px] items-center justify-center rounded-md hover:bg-[#e8e8e8]">
+                <NotificationIcon />
+              </button>
+              <button type="button" className="flex h-[28px] w-[28px] items-center justify-center rounded-md hover:bg-[#e8e8e8]">
+                <SettingsIcon />
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </aside>
   );
 }
