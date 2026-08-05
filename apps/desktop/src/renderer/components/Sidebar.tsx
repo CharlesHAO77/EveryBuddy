@@ -1,4 +1,6 @@
 import { useState } from "react";
+import { useSessionStore } from "../stores/sessionStore";
+import { useUIStore } from "../stores/uiStore";
 
 /* ── Inline SVG Icons ─────────────────────────── */
 
@@ -86,18 +88,18 @@ const navItems = [
   { id: "auto", label: "自动化", icon: AutoIcon },
 ];
 
-const tasks = [
-  { id: "t1", title: "设计iPhone 20 ProMAX发...", time: "2天前" },
-  { id: "t2", title: "总结AI服务器配置文档", time: "30天前" },
-];
-
-const workspaces = [
-  {
-    id: "w1",
-    name: "test",
-    sessions: [{ id: "s1", title: "创建Agent原理harness...", time: "6天前" }],
-  },
-];
+/** 相对时间格式化 */
+function relativeTime(iso: string): string {
+  const diff = Date.now() - new Date(iso).getTime();
+  const min = Math.floor(diff / 60000);
+  if (min < 1) return "刚刚";
+  if (min < 60) return `${min}分钟前`;
+  const hr = Math.floor(min / 60);
+  if (hr < 24) return `${hr}小时前`;
+  const day = Math.floor(hr / 24);
+  if (day < 30) return `${day}天前`;
+  return new Date(iso).toLocaleDateString("zh-CN");
+}
 
 /* ── Component ───────────────────────────────── */
 
@@ -105,28 +107,61 @@ export function Sidebar() {
   const [collapsed, setCollapsed] = useState(false);
   const [tasksOpen, setTasksOpen] = useState(true);
   const [workspacesOpen, setWorkspacesOpen] = useState(true);
-  const [openWorkspaceId, setOpenWorkspaceId] = useState<string | null>("w1");
+  const [openWorkspaceId, setOpenWorkspaceId] = useState<string | null>(null);
   const [activeNav, setActiveNav] = useState("");
   const [showSearch, setShowSearch] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
 
+  // 真实数据（替换原 mock）
+  const allTasks = useSessionStore((s) => s.tasks);
+  const workspaces = useSessionStore((s) => s.workspaces);
+  const currentTaskId = useSessionStore((s) => s.currentTaskId);
+  const selectTask = useSessionStore((s) => s.selectTask);
+  const createTask = useSessionStore((s) => s.createTask);
+  const selectWorkspaceDir = useSessionStore((s) => s.selectWorkspaceDir);
+  const addWorkspace = useSessionStore((s) => s.addWorkspace);
+
+  // 临时任务（任务区）
+  const tempTasks = allTasks
+    .filter((t) => t.type === "temp")
+    .map((t) => ({ id: t.id, title: t.title, time: relativeTime(t.updatedAt) }));
+
   const handleNewTask = () => {
     setActiveNav("");
-    // TODO: create new task
+    selectTask(""); // 回到欢迎页
+  };
+
+  const handleNewWorkspace = async () => {
+    const dir = await selectWorkspaceDir();
+    if (!dir) return;
+    const name = dir.split("/").pop() || dir;
+    const ws = await window.electronAPI.workspace.create(name, dir);
+    addWorkspace(ws);
+  };
+
+  const handleCreateWorkspaceTask = async (workspaceId: string) => {
+    await createTask({ type: "workspace", workspaceId });
   };
 
   const filteredTasks = searchQuery
-    ? tasks.filter((t) => t.title.includes(searchQuery))
-    : tasks;
+    ? tempTasks.filter((t) => t.title.includes(searchQuery))
+    : tempTasks;
 
-  const filteredWorkspaces = searchQuery
-    ? workspaces
-        .map((ws) => ({
-          ...ws,
-          sessions: ws.sessions.filter((s) => s.title.includes(searchQuery)),
-        }))
-        .filter((ws) => ws.sessions.length > 0)
-    : workspaces;
+  // 工作空间 + 其下的任务（保持原 ws.sessions 结构）
+  const filteredWorkspaces = workspaces
+    .map((ws) => {
+      const wsTasks = allTasks
+        .filter((t) => t.type === "workspace" && t.workspaceId === ws.id)
+        .map((t) => ({ id: t.id, title: t.title, time: relativeTime(t.updatedAt) }));
+      return {
+        id: ws.id,
+        name: ws.name,
+        sessions: searchQuery
+          ? wsTasks.filter((s) => s.title.includes(searchQuery))
+          : wsTasks,
+      };
+    })
+    .filter((ws) => !searchQuery || ws.sessions.length > 0);
 
   return (
     <aside
@@ -197,6 +232,7 @@ export function Sidebar() {
           <div className="pb-[12px]">
             <button
               type="button"
+              onClick={() => useUIStore.getState().setModelSettingsOpen(true)}
               className="flex h-[30px] w-[30px] items-center justify-center rounded-md text-[#999] hover:bg-[#e8e8e8]"
               title="设置"
             >
@@ -252,7 +288,7 @@ export function Sidebar() {
               onClick={() => setTasksOpen((v) => !v)}
               className="flex h-[30px] w-full items-center justify-between rounded-[4px] px-[10px] text-[13px] text-[#666] hover:bg-[#f0f0f0]"
             >
-              <span>任务 ({showSearch ? filteredTasks.length : 2})</span>
+              <span>任务 ({filteredTasks.length})</span>
               <ChevronDownIcon open={tasksOpen} />
             </button>
 
@@ -262,7 +298,10 @@ export function Sidebar() {
                   <button
                     key={task.id}
                     type="button"
-                    className="flex w-full items-center justify-between rounded-[4px] px-[10px] py-[6px] text-left transition hover:bg-[#f0f0f0]"
+                    onClick={() => selectTask(task.id)}
+                    className={`flex w-full items-center justify-between rounded-[4px] px-[10px] py-[6px] text-left transition ${
+                      task.id === currentTaskId ? "bg-[#e8e8e8]" : "hover:bg-[#f0f0f0]"
+                    }`}
                   >
                     <span className="truncate text-[13px] text-[#333]">{task.title}</span>
                     <span className="shrink-0 text-[12px] text-[#999]">{task.time}</span>
@@ -279,7 +318,7 @@ export function Sidebar() {
               onClick={() => setWorkspacesOpen((v) => !v)}
               className="flex h-[30px] w-full items-center justify-between rounded-[4px] px-[10px] text-[13px] text-[#666] hover:bg-[#f0f0f0]"
             >
-              <span>空间 ({showSearch ? filteredWorkspaces.length : 2})</span>
+              <span>空间 ({filteredWorkspaces.length})</span>
               <ChevronDownIcon open={workspacesOpen} />
             </button>
 
@@ -287,24 +326,37 @@ export function Sidebar() {
               <div className="mt-[2px] space-y-[2px]">
                 {filteredWorkspaces.map((ws) => (
                   <div key={ws.id}>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setOpenWorkspaceId((id) => (id === ws.id ? null : ws.id))
-                      }
-                      className="flex h-[30px] w-full items-center gap-[8px] rounded-[4px] px-[10px] text-[13px] text-[#333] transition hover:bg-[#f0f0f0]"
-                    >
-                      <FolderIcon />
-                      <span className="flex-1 text-left">{ws.name}</span>
-                      <ChevronDownIcon open={openWorkspaceId === ws.id} />
-                    </button>
+                    <div className="flex items-center">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setOpenWorkspaceId((id) => (id === ws.id ? null : ws.id))
+                        }
+                        className="flex h-[30px] flex-1 items-center gap-[8px] rounded-[4px] px-[10px] text-[13px] text-[#333] transition hover:bg-[#f0f0f0]"
+                      >
+                        <FolderIcon />
+                        <span className="flex-1 text-left">{ws.name}</span>
+                        <ChevronDownIcon open={openWorkspaceId === ws.id} />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleCreateWorkspaceTask(ws.id)}
+                        className="flex h-[24px] w-[24px] items-center justify-center rounded text-[#999] transition hover:bg-[#e8e8e8]"
+                        title="在此空间新建任务"
+                      >
+                        <PlusIcon />
+                      </button>
+                    </div>
 
                     {openWorkspaceId === ws.id &&
                       ws.sessions.map((session) => (
                         <button
                           key={session.id}
                           type="button"
-                          className="flex w-full items-center justify-between rounded-[4px] px-[10px] py-[6px] pl-[32px] text-left transition hover:bg-[#f0f0f0]"
+                          onClick={() => selectTask(session.id)}
+                          className={`flex w-full items-center justify-between rounded-[4px] px-[10px] py-[6px] pl-[32px] text-left transition ${
+                            session.id === currentTaskId ? "bg-[#e8e8e8]" : "hover:bg-[#f0f0f0]"
+                          }`}
                         >
                           <span className="truncate text-[13px] text-[#333]">
                             {session.title}
@@ -316,6 +368,15 @@ export function Sidebar() {
                       ))}
                   </div>
                 ))}
+                {/* 新建空间 */}
+                <button
+                  type="button"
+                  onClick={handleNewWorkspace}
+                  className="mt-[4px] flex h-[30px] w-full items-center gap-[8px] rounded-[4px] px-[10px] text-[12px] text-[#999] transition hover:bg-[#f0f0f0]"
+                >
+                  <PlusIcon />
+                  新建空间
+                </button>
               </div>
             )}
           </div>
@@ -332,7 +393,12 @@ export function Sidebar() {
               <button type="button" className="flex h-[28px] w-[28px] items-center justify-center rounded-md hover:bg-[#e8e8e8]">
                 <NotificationIcon />
               </button>
-              <button type="button" className="flex h-[28px] w-[28px] items-center justify-center rounded-md hover:bg-[#e8e8e8]">
+              <button
+                type="button"
+                onClick={() => useUIStore.getState().setModelSettingsOpen(true)}
+                className="flex h-[28px] w-[28px] items-center justify-center rounded-md hover:bg-[#e8e8e8]"
+                title="模型设置"
+              >
                 <SettingsIcon />
               </button>
             </div>

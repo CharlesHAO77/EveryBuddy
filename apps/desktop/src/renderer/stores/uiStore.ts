@@ -1,15 +1,7 @@
+import type { ModelProviderConfig, SaveModelRequest } from "@everybuddy/ipc-contract";
 import { create } from "zustand";
 
-export type CategoryId = "daily" | "coding" | "design";
-
-export interface ModelConfig {
-  id: string;
-  name: string;
-  baseUrl: string;
-  apiKey: string;
-  model: string;
-  isOpenAiCompatible: boolean;
-}
+export type CategoryId = "daily" | "coding";
 
 interface UIState {
   activeCategory: CategoryId;
@@ -18,45 +10,59 @@ interface UIState {
   isModelSettingsOpen: boolean;
   setModelSettingsOpen: (open: boolean) => void;
 
-  models: ModelConfig[];
+  models: ModelProviderConfig[];
   currentModelId: string | null;
-  addModel: (model: ModelConfig) => void;
-  removeModel: (id: string) => void;
+  loaded: boolean;
+
+  loadModels: () => Promise<void>;
+  saveModel: (req: SaveModelRequest) => Promise<ModelProviderConfig>;
+  removeModel: (id: string) => Promise<void>;
+  setApiKey: (providerId: string, apiKey: string) => Promise<void>;
   setCurrentModel: (id: string) => void;
-  updateModel: (id: string, patch: Partial<ModelConfig>) => void;
 }
 
-const defaultModel: ModelConfig = {
-  id: "default",
-  name: "OpenAI Compatible",
-  baseUrl: "https://api.openai.com/v1",
-  apiKey: "",
-  model: "gpt-4o",
-  isOpenAiCompatible: true,
-};
-
-export const useUIStore = create<UIState>((set) => ({
+export const useUIStore = create<UIState>((set, get) => ({
   activeCategory: "daily",
   setActiveCategory: (category) => set({ activeCategory: category }),
 
   isModelSettingsOpen: false,
   setModelSettingsOpen: (open) => set({ isModelSettingsOpen: open }),
 
-  models: [defaultModel],
-  currentModelId: defaultModel.id,
+  models: [],
+  currentModelId: null,
+  loaded: false,
 
-  addModel: (model) => set((state) => ({ models: [...state.models, model] })),
+  loadModels: async () => {
+    const models = await window.electronAPI.config.getModels();
+    const currentModelId = get().currentModelId ?? models[0]?.id ?? null;
+    set({
+      models,
+      currentModelId,
+      loaded: true,
+    });
+  },
 
-  removeModel: (id) =>
+  saveModel: async (req) => {
+    const saved = await window.electronAPI.config.saveModel(req);
+    const models = await window.electronAPI.config.getModels();
+    set({ models, currentModelId: saved.id });
+    return saved;
+  },
+
+  removeModel: async (id) => {
+    await window.electronAPI.config.removeModel(id);
+    const models = await window.electronAPI.config.getModels();
     set((state) => ({
-      models: state.models.filter((m) => m.id !== id),
-      currentModelId: state.currentModelId === id ? null : state.currentModelId,
-    })),
+      models,
+      currentModelId: state.currentModelId === id ? (models[0]?.id ?? null) : state.currentModelId,
+    }));
+  },
+
+  setApiKey: async (providerId, apiKey) => {
+    await window.electronAPI.config.setApiKey({ providerId, apiKey });
+    const models = await window.electronAPI.config.getModels();
+    set({ models });
+  },
 
   setCurrentModel: (id) => set({ currentModelId: id }),
-
-  updateModel: (id, patch) =>
-    set((state) => ({
-      models: state.models.map((m) => (m.id === id ? { ...m, ...patch } : m)),
-    })),
 }));

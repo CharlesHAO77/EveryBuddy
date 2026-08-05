@@ -21,7 +21,14 @@ export default defineConfig({
   },
   build: {
     rollupOptions: {
-      external: ["electron", "electron-store", ...builtinModules],
+      // pi-coding-agent / pi-ai 是 ESM-only 且带 WASM 依赖，不做 bundle，
+      // 运行时在 agentRuntime.ts 中通过动态 import() 加载（Node 22 原生支持 CJS 中 import ESM）。
+      external: [
+        "electron",
+        "electron-store",
+        ...builtinModules,
+        /^@earendil-works\//,
+      ],
       output: {
         entryFileNames: "main.js",
       },

@@ -57,12 +57,12 @@ const codingTags = [
 /* ── MainView Component ──────────────────────── */
 
 export function MainView() {
-  const currentSessionId = useSessionStore((s) => s.currentSessionId);
+  const currentTaskId = useSessionStore((s) => s.currentTaskId);
 
   return (
     <main className="relative flex flex-1 flex-col overflow-hidden bg-white">
-      {currentSessionId ? (
-        <ChatView sessionId={currentSessionId} />
+      {currentTaskId ? (
+        <ChatView taskId={currentTaskId} />
       ) : (
         <WelcomeView />
       )}
@@ -75,21 +75,22 @@ export function MainView() {
 function WelcomeView() {
   const { activeCategory, setActiveCategory } = useUIStore();
   const [text, setText] = useState("");
-  const { currentSessionId, createSession, addMessage } = useSessionStore();
+  const currentTaskId = useSessionStore((s) => s.currentTaskId);
+  const createTask = useSessionStore((s) => s.createTask);
+  const sendMessage = useSessionStore((s) => s.sendMessage);
 
   const currentTags = activeCategory === "daily" ? dailyTags : codingTags;
 
-  const handleSend = () => {
+  const handleSend = async () => {
     const trimmed = text.trim();
     if (!trimmed) return;
-    const sessionId = currentSessionId ?? createSession("新任务");
-    addMessage(sessionId, {
-      id: crypto.randomUUID(),
-      role: "user",
-      content: trimmed,
-      timestamp: Date.now(),
-    });
+    let taskId = currentTaskId;
+    if (!taskId) {
+      const task = await createTask({ type: "temp", title: trimmed.slice(0, 30) });
+      taskId = task.id;
+    }
     setText("");
+    await sendMessage(taskId, trimmed);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -228,25 +229,20 @@ function WelcomeView() {
 
 /* ── Chat View ───────────────────────────────── */
 
-function ChatView({ sessionId }: { sessionId: string }) {
+function ChatView({ taskId }: { taskId: string }) {
   const messages = useSessionStore((s) => {
-    const session = s.sessions.find((item) => item.id === sessionId);
-    return session?.messages ?? [];
+    const task = s.tasks.find((item) => item.id === taskId);
+    return task?.messages ?? [];
   });
 
   const [text, setText] = useState("");
-  const { addMessage } = useSessionStore();
+  const sendMessage = useSessionStore((s) => s.sendMessage);
 
-  const handleSend = () => {
+  const handleSend = async () => {
     const trimmed = text.trim();
     if (!trimmed) return;
-    addMessage(sessionId, {
-      id: crypto.randomUUID(),
-      role: "user",
-      content: trimmed,
-      timestamp: Date.now(),
-    });
     setText("");
+    await sendMessage(taskId, trimmed);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {

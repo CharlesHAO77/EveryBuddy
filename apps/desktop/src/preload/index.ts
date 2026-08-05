@@ -4,36 +4,43 @@
  * 安全关键：
  *  - contextIsolation: true
  *  - 仅暴露最小必要 API（ElectronAPI）
- *  - 无 setApiKey -- API Key 通过主进程原生 dialog 输入
+ *  - API Key 只写不读（setApiKey），不回传明文
  */
-import { contextBridge, ipcRenderer } from "electron";
-import type { ElectronAPI } from "@everybuddy/ipc-contract";
 
-/**
- * 当前为 UI 开发阶段的最小 stub。
- * TODO: 接入 ipcRouter 后替换为真实 invoke/on 调用。
- */
+import type { ElectronAPI } from "@everybuddy/ipc-contract";
+import { contextBridge, ipcRenderer } from "electron";
+
 const api: ElectronAPI = {
   agent: {
-    prompt: async () => ({ streamId: "" }),
-    abort: async () => undefined,
-    onEvent: () => {
-      // TODO: ipcRenderer.on("agent:event", cb)
-      return () => undefined;
+    prompt: (req) => ipcRenderer.invoke("agent:prompt", req),
+    abort: (streamId) => ipcRenderer.invoke("agent:abort", { streamId }),
+    onEvent: (cb) => {
+      const handler = (_: unknown, event: unknown) => cb(event as never);
+      ipcRenderer.on("agent:event", handler);
+      return () => ipcRenderer.off("agent:event", handler);
     },
   },
-  session: {
-    list: async () => [],
-    load: async () => ({ id: "" }),
-    save: async () => undefined,
+  task: {
+    list: () => ipcRenderer.invoke("task:list"),
+    create: (req) => ipcRenderer.invoke("task:create", req),
+    resume: (id) => ipcRenderer.invoke("task:resume", { id }),
+    delete: (id) => ipcRenderer.invoke("task:delete", { id }),
+    rename: (id, title) => ipcRenderer.invoke("task:rename", { id, title }),
+    openDir: (id) => ipcRenderer.invoke("task:openDir", { id }),
+  },
+  workspace: {
+    list: () => ipcRenderer.invoke("workspace:list"),
+    create: (name, dirPath) => ipcRenderer.invoke("workspace:create", { name, dirPath }),
+    remove: (id) => ipcRenderer.invoke("workspace:remove", { id }),
+    selectDir: () => ipcRenderer.invoke("workspace:selectDir"),
+    openDir: (path) => ipcRenderer.invoke("workspace:openDir", { path }),
   },
   config: {
-    getModelConfig: async () => ({ provider: "", model: "" }),
-    openApiKeyDialog: async () => undefined,
+    getModels: () => ipcRenderer.invoke("config:getModels"),
+    saveModel: (req) => ipcRenderer.invoke("config:saveModel", req),
+    removeModel: (id) => ipcRenderer.invoke("config:removeModel", { id }),
+    setApiKey: (req) => ipcRenderer.invoke("config:setApiKey", req),
   },
 };
 
 contextBridge.exposeInMainWorld("electronAPI", api);
-
-// 也提供 ipcRenderer 底层通道给未来使用（暂不暴露）
-void ipcRenderer;

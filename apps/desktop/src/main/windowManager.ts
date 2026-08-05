@@ -1,5 +1,5 @@
-import { BrowserWindow } from "electron";
 import path from "node:path";
+import { BrowserWindow } from "electron";
 
 /**
  * Electron Forge Vite plugin 在构建主进程时会通过 vite:define 注入

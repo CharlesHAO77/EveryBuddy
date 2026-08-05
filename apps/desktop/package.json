@@ -12,6 +12,8 @@
     "test:e2e": "playwright test"
   },
   "dependencies": {
+    "@earendil-works/pi-ai": "^0.83.0",
+    "@earendil-works/pi-coding-agent": "^0.83.0",
     "@everybuddy/api-gateway": "*",
     "@everybuddy/ipc-contract": "*",
     "electron-store": "^10.0.0",

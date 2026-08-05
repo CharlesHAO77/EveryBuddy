@@ -3,11 +3,11 @@
  *
  * 命名空间（见 docs/architecture.md §6.1）：
  *  - agent:*    agent 操作触发与事件推送
- *  - session:*  会话管理
- *  - config:*   配置与凭证（不传递 API Key）
+ *  - session:*  会话管理（task 语义）
+ *  - config:*   配置与凭证（不传递 API Key 明文）
  *  - system:*   应用级事件
  *
- * 安全关键：此处不定义任何传递 API Key 的类型。
+ * 安全关键：此处不定义任何传递 API Key 明文的类型（setApiKey 只写不读）。
  *
  * @see docs/architecture.md §6
  */
@@ -19,9 +19,9 @@ import { z } from "zod";
 
 /** 发送用户消息请求（见 §6.2 agent:prompt） */
 export interface PromptRequest {
-  sessionId?: string;
+  sessionId: string;
   text: string;
-  // TODO: 补充 workspace、模型等字段
+  providerId?: string;
 }
 
 /** agent:prompt 返回 */
@@ -29,57 +29,142 @@ export interface PromptResponse {
   streamId: string;
 }
 
-export interface ToolCallInfo {
-  toolName: string;
-  args: unknown;
-}
-
-export interface ToolCallResult {
-  toolName: string;
-  ok: boolean;
-  output?: unknown;
-  error?: string;
-}
-
 /**
- * 统一事件流（见 §6.2 agent:event，§5.1 事件流）。
- * pi-coding-agent 原始事件经 AgentRuntime 转换为此类型。
+ * 统一事件流（见 §0.4 卡片化消息模型）。
+ * pi-coding-agent 的内容块粒度事件经 AgentRuntime 归一化为此类型。
+ * streamId = taskId；contentIndex 标识块在消息内的序号，用于按序渲染卡片。
  */
 export type AgentEvent =
-  | { streamId: string; type: "message_start"; payload: { role: "assistant" } }
-  | { streamId: string; type: "message_delta"; payload: { content: string } }
+  // 消息生命周期
+  | { streamId: string; type: "message_start" }
   | { streamId: string; type: "message_end"; payload: { stopReason?: string } }
-  | { streamId: string; type: "tool_execution_start"; payload: ToolCallInfo }
-  | { streamId: string; type: "tool_execution_end"; payload: ToolCallResult }
-  | { streamId: string; type: "error"; payload: { message: string } };
-// TODO: 按需扩展事件类型，对齐 pi-coding-agent 原始事件
+  | { streamId: string; type: "turn_end" }
+  | { streamId: string; type: "error"; payload: { message: string } }
+  // 思考块
+  | { streamId: string; type: "thinking_start"; payload: { contentIndex: number } }
+  | {
+      streamId: string;
+      type: "thinking_delta";
+      payload: { contentIndex: number; delta: string };
+    }
+  | {
+      streamId: string;
+      type: "thinking_end";
+      payload: { contentIndex: number; content: string };
+    }
+  // 文本块（重点）
+  | { streamId: string; type: "text_start"; payload: { contentIndex: number } }
+  | {
+      streamId: string;
+      type: "text_delta";
+      payload: { contentIndex: number; delta: string };
+    }
+  | {
+      streamId: string;
+      type: "text_end";
+      payload: { contentIndex: number; content: string };
+    }
+  // 工具调用块（LLM 决定调用）
+  | {
+      streamId: string;
+      type: "toolcall_start";
+      payload: { contentIndex: number; toolCallId: string };
+    }
+  | {
+      streamId: string;
+      type: "toolcall_delta";
+      payload: { contentIndex: number; delta: string };
+    }
+  | {
+      streamId: string;
+      type: "toolcall_end";
+      payload: {
+        contentIndex: number;
+        toolCall: { id: string; name: string; arguments: unknown };
+      };
+    }
+  // 工具执行（实际运行）
+  | {
+      streamId: string;
+      type: "tool_execution_start";
+      payload: { toolCallId: string; toolName: string; args: unknown };
+    }
+  | {
+      streamId: string;
+      type: "tool_execution_update";
+      payload: { toolCallId: string; delta: string };
+    }
+  | {
+      streamId: string;
+      type: "tool_execution_end";
+      payload: {
+        toolCallId: string;
+        ok: boolean;
+        output?: unknown;
+        error?: string;
+      };
+    };
 
 // ────────────────────────────────────────────────
-// Session
+// Workspace
 // ────────────────────────────────────────────────
 
-export interface SessionSummary {
+export interface Workspace {
+  id: string;
+  name: string;
+  path: string;
+  createdAt: string;
+}
+
+// ────────────────────────────────────────────────
+// Task（= 会话）
+// ────────────────────────────────────────────────
+
+export type TaskType = "temp" | "workspace";
+
+export interface TaskMeta {
   id: string;
   title: string;
+  type: TaskType;
+  workspaceId?: string;
+  workspacePath?: string;
+  /** 会话 jsonl 落盘目录 */
+  sessionDir: string;
+  createdAt: string;
   updatedAt: string;
-  // TODO: 补充字段
 }
 
-/** 会话 JSONL tree 结构（见 §9.2） */
-export interface SessionTree {
+export interface CreateTaskRequest {
+  title?: string;
+  type: TaskType;
+  workspaceId?: string;
+}
+
+// ────────────────────────────────────────────────
+// Config（模型配置，不含 API Key 明文）
+// ────────────────────────────────────────────────
+
+/** 模型配置（回传渲染进程时 hasApiKey 替代明文，见 §0.2） */
+export interface ModelProviderConfig {
   id: string;
-  // TODO: 定义 JSONL tree 节点结构（支持未来分支与回滚）
+  name: string;
+  baseUrl: string;
+  model: string;
+  isOpenAiCompatible: boolean;
+  hasApiKey: boolean;
 }
 
-// ────────────────────────────────────────────────
-// Config
-// ────────────────────────────────────────────────
-
-/** 模型配置（不含 API Key，见 §6.2 config:getModelConfig） */
-export interface ModelConfig {
-  provider: string;
+export interface SaveModelRequest {
+  id: string;
+  name: string;
+  baseUrl: string;
   model: string;
-  // TODO: 补充 temperature、maxTokens 等非敏感字段
+  isOpenAiCompatible: boolean;
+}
+
+export interface SetApiKeyRequest {
+  providerId: string;
+  apiKey: string;
 }
 
 // ────────────────────────────────────────────────
@@ -90,41 +175,42 @@ export interface LogEntry {
   level: "info" | "warn" | "error";
   message: string;
   timestamp: string;
-  // TODO: 补充字段
-}
-
-/** 工具确认请求（见 §6.2 system:toolConfirm，§7.4） */
-export interface ToolConfirmRequest {
-  toolName: string;
-  args: unknown;
-  impact: string;
-  // TODO: 补充工作区、风险等级等字段
-}
-
-export interface ToolConfirmResponse {
-  approved: boolean;
-  // TODO: 补充 rememberWorkspace 选项等
 }
 
 // ────────────────────────────────────────────────
 // Zod schemas（运行时校验，见 §7.2）
 // ────────────────────────────────────────────────
 
-// TODO: 为每个请求类型定义收紧的 Zod schema，并在 ipcRouter 中使用
-export const promptRequestSchema = z
-  .object({
-    text: z.string().min(1),
-    sessionId: z.string().optional(),
-  })
-  .passthrough();
+export const promptRequestSchema = z.object({
+  sessionId: z.string().min(1),
+  text: z.string().min(1),
+  providerId: z.string().optional(),
+});
 
 export const abortRequestSchema = z.object({
   streamId: z.string().min(1),
 });
 
-export const loadSessionRequestSchema = z.object({
-  id: z.string().min(1),
+export const createTaskRequestSchema = z.object({
+  title: z.string().optional(),
+  type: z.enum(["temp", "workspace"]),
+  workspaceId: z.string().optional(),
 });
+
+export const saveModelRequestSchema = z.object({
+  id: z.string().min(1),
+  name: z.string().min(1),
+  baseUrl: z.string().min(1),
+  model: z.string().min(1),
+  isOpenAiCompatible: z.boolean(),
+});
+
+export const setApiKeyRequestSchema = z.object({
+  providerId: z.string().min(1),
+  apiKey: z.string().min(1),
+});
+
+export const idRequestSchema = z.object({ id: z.string().min(1) });
 
 // ────────────────────────────────────────────────
 // Preload API 形状（见 §6.3）
@@ -136,19 +222,26 @@ export interface ElectronAPI {
     abort: (streamId: string) => Promise<void>;
     onEvent: (cb: (event: AgentEvent) => void) => () => void;
   };
-  session: {
-    list: () => Promise<SessionSummary[]>;
-    load: (id: string) => Promise<SessionTree>;
-    save: (session: SessionTree) => Promise<void>;
+  task: {
+    list: () => Promise<TaskMeta[]>;
+    create: (req: CreateTaskRequest) => Promise<TaskMeta>;
+    resume: (id: string) => Promise<void>;
+    delete: (id: string) => Promise<void>;
+    rename: (id: string, title: string) => Promise<void>;
+    openDir: (id: string) => Promise<void>;
+  };
+  workspace: {
+    list: () => Promise<Workspace[]>;
+    create: (name: string, dirPath: string) => Promise<Workspace>;
+    remove: (id: string) => Promise<void>;
+    selectDir: () => Promise<string | null>;
+    openDir: (path: string) => Promise<void>;
   };
   config: {
-    getModelConfig: () => Promise<ModelConfig>;
-    openApiKeyDialog: (provider: string) => Promise<void>;
-    // ⚠️ 无 setApiKey -- API Key 通过主进程原生 dialog 输入
-  };
-  system?: {
-    onLog?: (cb: (entry: LogEntry) => void) => () => void;
-    onToolConfirm?: (cb: (req: ToolConfirmRequest) => Promise<ToolConfirmResponse>) => void;
+    getModels: () => Promise<ModelProviderConfig[]>;
+    saveModel: (req: SaveModelRequest) => Promise<ModelProviderConfig>;
+    removeModel: (id: string) => Promise<void>;
+    setApiKey: (req: SetApiKeyRequest) => Promise<void>;
   };
 }
 
