@@ -198,7 +198,11 @@ class AgentRuntime {
   /** 发送消息，支持按任务切换模型 */
   async prompt(taskId: string, text: string, providerId?: string): Promise<void> {
     const state = this.sessions.get(taskId);
-    if (!state) throw new Error(`任务会话不存在: ${taskId}`);
+    if (!state) {
+      // 会话未就绪（竞态或初始化失败）：经事件流报错，避免 IPC reject 变成未处理异常
+      this.emitError(taskId, "任务会话未就绪，请稍后重试或重新选择任务");
+      return;
+    }
 
     if (providerId) {
       const model = this.resolveModel(providerId);
@@ -215,7 +219,14 @@ class AgentRuntime {
       }
     }
 
-    await state.session.prompt(text);
+    try {
+      await state.session.prompt(text);
+    } catch (err) {
+      this.emitError(
+        taskId,
+        `发送消息失败: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
   }
 
   /** 中止当前流 */
@@ -251,16 +262,30 @@ class AgentRuntime {
 
     switch (e.type) {
       case "message_start": {
-        emit({ type: "message_start" });
+        // SDK 对 user/assistant/toolResult 消息均发 message_start；仅 assistant 需要创建流式消息
+        const message = e.message as { role?: string } | undefined;
+        if (message?.role === "assistant") {
+          emit({ type: "message_start" });
+        }
         break;
       }
       case "message_end": {
-        const message = e.message as { stopReason?: string } | undefined;
-        emit({ type: "message_end", payload: { stopReason: message?.stopReason } });
+        const message = e.message as { role?: string; stopReason?: string } | undefined;
+        if (message?.role === "assistant") {
+          emit({ type: "message_end", payload: { stopReason: message.stopReason } });
+        }
         break;
       }
       case "turn_end": {
         emit({ type: "turn_end" });
+        break;
+      }
+      case "agent_end": {
+        emit({ type: "agent_end" });
+        break;
+      }
+      case "agent_settled": {
+        emit({ type: "agent_settled" });
         break;
       }
       case "message_update": {
@@ -299,6 +324,14 @@ class AgentRuntime {
             error: e.isError ? this.extractError(e.result) : undefined,
           },
         });
+        break;
+      }
+      case "error": {
+        // SDK 顶层错误事件（如会话级异常）
+        const msg = (e as { message?: string; error?: { message?: string } }).error?.message
+          ?? (e as { message?: string }).message
+          ?? "未知错误";
+        emit({ type: "error", payload: { message: msg } });
         break;
       }
       default:
@@ -365,6 +398,15 @@ class AgentRuntime {
         }
         break;
       }
+      case "error": {
+        // 模型调用失败（API 错误、鉴权失败等）
+        const reason = (ame as { reason?: string }).reason;
+        emit({ type: "error", payload: { message: `模型调用失败: ${reason ?? "未知错误"}` } });
+        break;
+      }
+      case "done":
+        // AssistantMessageEvent 完成，消息结束由顶层 message_end 事件处理
+        break;
       default:
         break;
     }

@@ -82,14 +82,16 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
     };
     configStore.addTask(task);
 
-    // 创建 AgentSession（异步，不阻塞返回；失败时通过事件流报错）
-    agentRuntime.createTaskSession(task, providerId).catch((err) => {
+    // 创建 AgentSession（阻塞至就绪，避免与 agent:prompt 竞态；失败经事件流报错，不阻断任务创建）
+    try {
+      await agentRuntime.createTaskSession(task, providerId);
+    } catch (err) {
       console.error(`[ipcRouter] createTaskSession 失败:`, err);
       agentRuntime.emitError(
         task.id,
         `会话初始化失败: ${err instanceof Error ? err.message : String(err)}`,
       );
-    });
+    }
 
     return task;
   });

@@ -143,7 +143,7 @@ function genId(): string {
   return crypto.randomUUID();
 }
 
-export const useSessionStore = create<SessionState>((set, _get) => ({
+export const useSessionStore = create<SessionState>((set, get) => ({
   tasks: [],
   currentTaskId: null,
   workspaces: [],
@@ -240,7 +240,15 @@ export const useSessionStore = create<SessionState>((set, _get) => ({
         ),
       };
     });
-    await window.electronAPI.agent.prompt({ sessionId: taskId, text, providerId });
+    try {
+      await window.electronAPI.agent.prompt({ sessionId: taskId, text, providerId });
+    } catch (err) {
+      // 主进程通常已通过 error 事件报错；此处兜底，避免 unhandled rejection
+      get().addErrorMessage(taskId, err instanceof Error ? err.message : String(err));
+    } finally {
+      // 兜底：确保 agent 消息结束（即便 SDK 未发 agent_end/agent_settled）
+      get().finalizeMessage(taskId);
+    }
   },
 
   // ── 流式块操作 ────────────────────────────
@@ -439,10 +447,14 @@ export const useSessionStore = create<SessionState>((set, _get) => ({
         if (t.id !== taskId) return t;
         return {
           ...t,
-          messages: t.messages.map((m) =>
-            m.id === t.streamMessageId ? { ...m, isStreaming: false } : m,
-          ),
+          // agent 消息结算（agent_end/agent_settled）：只翻转消息级 isStreaming、清流式指针、
+          // 移除空消息。不碰 block.done——块的结束状态由各类型 end 事件负责
+          // （thinking_end/text_end -> endBlock；tool -> tool_execution_end）。
+          messages: t.messages
+            .map((m) => (m.isStreaming ? { ...m, isStreaming: false } : m))
+            .filter((m) => !(m.blocks.length === 0 && !m.errorMessage && !m.isStreaming)),
           isStreaming: false,
+          streamMessageId: null,
         };
       }),
     })),
@@ -455,10 +467,19 @@ export const useSessionStore = create<SessionState>((set, _get) => ({
         if (t.streamMessageId) {
           return {
             ...t,
+            // error/abort 时 SDK 跳过 per-block *_end（只发 error），故在此把未闭合块置 done
             messages: t.messages.map((m) =>
-              m.id === t.streamMessageId ? { ...m, isStreaming: false, errorMessage: message } : m,
+              m.id === t.streamMessageId
+                ? {
+                    ...m,
+                    isStreaming: false,
+                    errorMessage: message,
+                    blocks: m.blocks.map((b) => ({ ...b, done: true })),
+                  }
+                : m,
             ),
             isStreaming: false,
+            streamMessageId: null,
           };
         }
         const errMsg: ChatMessage = {

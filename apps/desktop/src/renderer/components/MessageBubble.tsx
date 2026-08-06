@@ -1,6 +1,6 @@
 /**
- * MessageBubble - 消息渲染容器（见 §0.4 / §6.3）。
- * 用户消息：右侧单文本气泡。助手消息：左侧按 blocks 顺序渲染卡片列表。
+ * MessageBubble - 用户消息与错误消息渲染（见 §0.4 / §6.3）。
+ * 助手消息（一个 turn 内可能含多轮思考/文本/工具）由 AssistantGroup 合并渲染。
  */
 import type { ChatMessage } from "../stores/sessionStore";
 import { TextCard } from "./TextCard";
@@ -15,8 +15,9 @@ function formatTime(ts: number): string {
   return new Date(ts).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" });
 }
 
+/** 用户消息 / 错误消息 */
 export function MessageBubble({ message }: MessageBubbleProps) {
-  // 错误消息
+  const time = formatTime(message.timestamp);
   if (message.errorMessage) {
     return (
       <div className="flex justify-start">
@@ -26,35 +27,45 @@ export function MessageBubble({ message }: MessageBubbleProps) {
       </div>
     );
   }
-
-  const isUser = message.role === "user";
-  const time = formatTime(message.timestamp);
-
-  if (isUser) {
-    const text = message.blocks.find((b) => b.kind === "text")?.content ?? "";
-    return (
-      <div className="flex w-full justify-end">
-        <div className="max-w-[80%] rounded-2xl rounded-br-none bg-[var(--primary)] px-4 py-3 text-sm text-white shadow-sm">
-          <div className="whitespace-pre-wrap">{text}</div>
-          <div className="mt-1 text-right text-[10px] text-[var(--primary-bg)]">{time}</div>
-        </div>
+  // 用户消息：右侧单文本气泡
+  const text = message.blocks.find((b) => b.kind === "text")?.content ?? "";
+  return (
+    <div className="flex w-full justify-end">
+      <div className="max-w-[80%] rounded-2xl rounded-br-none bg-[var(--primary)] px-4 py-3 text-sm text-white shadow-sm">
+        <div className="whitespace-pre-wrap">{text}</div>
+        <div className="mt-1 text-right text-[10px] text-[var(--primary-bg)]">{time}</div>
       </div>
-    );
-  }
+    </div>
+  );
+}
 
-  // 助手消息：卡片列表
+interface AssistantGroupProps {
+  messages: ChatMessage[];
+}
+
+/**
+ * AssistantGroup - 助手消息组渲染。
+ * 一个 agent 消息含多个 turn（每个 turn = 一次 LLM 调用 + 工具执行，对应一条 assistant 消息），
+ * 合并为一条 AI 消息；时间戳仅在整条消息结束（最后一个 turn_end 后，非流式）时显示一次。
+ */
+export function AssistantGroup({ messages }: AssistantGroupProps) {
+  const isStreaming = messages.some((m) => m.isStreaming);
+  const lastMsg = messages[messages.length - 1];
+  const time = lastMsg ? formatTime(lastMsg.timestamp) : "";
   return (
     <div className="flex w-full justify-start">
       <div className="flex max-w-[85%] flex-col gap-1.5">
-        {message.blocks.map((block) => {
-          if (block.kind === "text") return <TextCard key={block.id} block={block} />;
-          if (block.kind === "thinking") return <ThinkingCard key={block.id} block={block} />;
-          return <ToolCallCard key={block.id} block={block} />;
-        })}
-        {message.blocks.length === 0 && !message.isStreaming && (
-          <div className="text-[12px] text-[var(--text-muted)]">（空消息）</div>
+        {messages.flatMap((m) =>
+          m.blocks.map((block) => {
+            const key = `${m.id}-${block.id}`;
+            if (block.kind === "text") return <TextCard key={key} block={block} />;
+            if (block.kind === "thinking") return <ThinkingCard key={key} block={block} />;
+            return <ToolCallCard key={key} block={block} />;
+          }),
         )}
-        <div className="mt-0.5 text-[10px] text-[var(--text-muted)]">{time}</div>
+        {!isStreaming && (
+          <div className="mt-0.5 text-[10px] text-[var(--text-muted)]">{time}</div>
+        )}
       </div>
     </div>
   );

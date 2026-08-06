@@ -39,6 +39,8 @@ export type AgentEvent =
   | { streamId: string; type: "message_start" }
   | { streamId: string; type: "message_end"; payload: { stopReason?: string } }
   | { streamId: string; type: "turn_end" }
+  | { streamId: string; type: "agent_end" }
+  | { streamId: string; type: "agent_settled" }
   | { streamId: string; type: "error"; payload: { message: string } }
   // 思考块
   | { streamId: string; type: "thinking_start"; payload: { contentIndex: number } }

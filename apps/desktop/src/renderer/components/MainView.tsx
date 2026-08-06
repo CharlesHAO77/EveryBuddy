@@ -1,7 +1,8 @@
-import { useState } from "react";
-import { useSessionStore } from "../stores/sessionStore";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useShallow } from "zustand/react/shallow";
+import { type ChatMessage, useSessionStore } from "../stores/sessionStore";
 import { type CategoryId, useUIStore } from "../stores/uiStore";
-import { MessageBubble } from "./MessageBubble";
+import { AssistantGroup, MessageBubble } from "./MessageBubble";
 import { ModelSelector } from "./ModelSelector";
 
 /* ── Inline SVG Icons ─────────────────────────── */
@@ -42,6 +43,30 @@ function useDefaultProviderId() {
     if (s.currentModelId) return s.currentModelId;
     return s.models[0]?.id ?? null;
   });
+}
+
+type MessageGroup =
+  | { kind: "user" | "error"; messages: ChatMessage[] }
+  | { kind: "assistant"; messages: ChatMessage[] };
+
+/** 将连续的 assistant 消息合并为一组（一个 agent 消息含多个 turn），user/错误消息独立成组 */
+function groupMessages(messages: ChatMessage[]): MessageGroup[] {
+  const groups: MessageGroup[] = [];
+  for (const msg of messages) {
+    if (msg.role === "user") {
+      groups.push({ kind: "user", messages: [msg] });
+    } else if (msg.errorMessage) {
+      groups.push({ kind: "error", messages: [msg] });
+    } else {
+      const last = groups[groups.length - 1];
+      if (last?.kind === "assistant") {
+        last.messages.push(msg);
+      } else {
+        groups.push({ kind: "assistant", messages: [msg] });
+      }
+    }
+  }
+  return groups;
 }
 
 /* ── Data ────────────────────────────────────── */
@@ -100,17 +125,21 @@ function WelcomeView() {
   const handleSend = async () => {
     const trimmed = text.trim();
     if (!trimmed) return;
-    let taskId = currentTaskId;
-    if (!taskId) {
-      const task = await createTask({
-        type: "temp",
-        title: trimmed.slice(0, 30),
-        providerId: effectiveProviderId ?? undefined,
-      });
-      taskId = task.id;
+    try {
+      let taskId = currentTaskId;
+      if (!taskId) {
+        const task = await createTask({
+          type: "temp",
+          title: trimmed.slice(0, 30),
+          providerId: effectiveProviderId ?? undefined,
+        });
+        taskId = task.id;
+      }
+      setText("");
+      await sendMessage(taskId, trimmed);
+    } catch (err) {
+      console.error("[WelcomeView] 发送失败:", err);
     }
-    setText("");
-    await sendMessage(taskId, trimmed);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -252,10 +281,12 @@ function WelcomeView() {
 /* ── Chat View ───────────────────────────────── */
 
 function ChatView({ taskId }: { taskId: string }) {
-  const { task, messages } = useSessionStore((s) => {
-    const t = s.tasks.find((item) => item.id === taskId);
-    return { task: t, messages: t?.messages ?? [] };
-  });
+  const { task, messages } = useSessionStore(
+    useShallow((s) => {
+      const t = s.tasks.find((item) => item.id === taskId);
+      return { task: t, messages: t?.messages ?? [] };
+    }),
+  );
 
   const [text, setText] = useState("");
   const sendMessage = useSessionStore((s) => s.sendMessage);
@@ -265,11 +296,32 @@ function ChatView({ taskId }: { taskId: string }) {
 
   const taskProviderId = task?.providerId ?? defaultProviderId;
 
+  // 自动滚动到底部：仅当用户已在底部附近时，避免打断查看历史
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const atBottomRef = useRef(true);
+  const handleScroll = () => {
+    const el = scrollRef.current;
+    if (!el) return;
+    atBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+  };
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (el && atBottomRef.current) {
+      el.scrollTop = el.scrollHeight;
+    }
+  }, [messages]);
+
+  const groups = useMemo(() => groupMessages(messages), [messages]);
+
   const handleSend = async () => {
     const trimmed = text.trim();
     if (!trimmed) return;
     setText("");
-    await sendMessage(taskId, trimmed);
+    try {
+      await sendMessage(taskId, trimmed);
+    } catch (err) {
+      console.error("[ChatView] 发送失败:", err);
+    }
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -282,16 +334,22 @@ function ChatView({ taskId }: { taskId: string }) {
   return (
     <div className="flex h-full flex-col">
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto px-6 py-6">
+      <div ref={scrollRef} onScroll={handleScroll} className="flex-1 overflow-y-auto px-6 py-6">
         {messages.length === 0 ? (
           <div className="flex min-h-full flex-col items-center justify-center">
             <p className="text-sm text-[#999]">新会话，发送消息开始对话</p>
           </div>
         ) : (
           <div className="mx-auto flex max-w-3xl flex-col gap-4">
-            {messages.map((msg) => (
-              <MessageBubble key={msg.id} message={msg} />
-            ))}
+            {groups.map((g) => {
+              const first = g.messages[0];
+              if (!first) return null;
+              return g.kind === "assistant" ? (
+                <AssistantGroup key={first.id} messages={g.messages} />
+              ) : (
+                <MessageBubble key={first.id} message={first} />
+              );
+            })}
           </div>
         )}
       </div>

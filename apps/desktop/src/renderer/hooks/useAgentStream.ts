@@ -19,12 +19,18 @@ export function useAgentStream(): void {
           store.startAssistantMessage(taskId);
           break;
         case "message_end":
-          store.finalizeMessage(taskId);
+          // 单条 LLM response 结束，不结束流式：工具可能仍在执行（tool_execution 在 message_end 之后）
           break;
         case "error":
           store.addErrorMessage(taskId, event.payload.message);
           break;
         case "turn_end":
+          // 单个 turn 结束，但 agent 消息可能还有后续 turn；不 finalize
+          break;
+        case "agent_end":
+        case "agent_settled":
+          // agent 消息真正结束（所有 turn 完成、无重试）才 finalize
+          store.finalizeMessage(taskId);
           break;
 
         // 思考块

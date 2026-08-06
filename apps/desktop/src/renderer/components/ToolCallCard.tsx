@@ -61,6 +61,17 @@ const statusColor: Record<ToolBlock["status"], string> = {
   error: "text-red-500",
 };
 
+/** 安全序列化：工具结果可能含循环引用或非 JSON 值，render 期间不能抛错 */
+function safeStringify(value: unknown): string {
+  if (value === undefined) return "";
+  if (typeof value === "string") return value;
+  try {
+    return JSON.stringify(value, null, 2);
+  } catch {
+    return String(value);
+  }
+}
+
 export function ToolCallCard({ block }: ToolCallCardProps) {
   const [expanded, setExpanded] = useState(false);
   const name = block.toolName || "工具";
@@ -105,7 +116,7 @@ export function ToolCallCard({ block }: ToolCallCardProps) {
             <div>
               <div className="text-[10px] text-[var(--text-muted)]">参数</div>
               <pre className="mt-0.5 overflow-x-auto rounded bg-[var(--surface-hover)] px-2 py-1 text-[11px] text-[var(--text-secondary)]">
-                {typeof block.args === "string" ? block.args : JSON.stringify(block.args, null, 2)}
+                {safeStringify(block.args)}
               </pre>
             </div>
           )}
@@ -129,9 +140,7 @@ export function ToolCallCard({ block }: ToolCallCardProps) {
                     : "bg-[var(--surface-hover)] text-[var(--text-secondary)]"
                 }`}
               >
-                {typeof block.output === "string"
-                  ? block.output
-                  : JSON.stringify(block.output, null, 2)}
+                {safeStringify(block.output)}
               </pre>
             </div>
           )}
