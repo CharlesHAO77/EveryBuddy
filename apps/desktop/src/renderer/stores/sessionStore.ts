@@ -85,7 +85,7 @@ interface SessionState {
   openTaskDir: (id: string) => Promise<void>;
 
   addWorkspace: (ws: Workspace) => void;
-  removeWorkspace: (id: string) => void;
+  removeWorkspace: (id: string) => Promise<void>;
   selectWorkspaceDir: () => Promise<string | null>;
   setPendingWorkspace: (id: string | null) => void;
 
@@ -242,11 +242,12 @@ export const useSessionStore = create<SessionState>((set, get) => ({
     set((state) => ({
       tasks: state.tasks.filter((t) => t.id !== id),
       currentTaskId: state.currentTaskId === id ? null : state.currentTaskId,
+      hydratingIds: state.hydratingIds.filter((x) => x !== id),
     }));
   },
 
   renameTask: (id, title) => {
-    void window.electronAPI.task.rename(id, title);
+    window.electronAPI.task.rename(id, title).catch((e) => console.error("[renameTask]", e));
     set((state) => ({
       tasks: state.tasks.map((t) =>
         t.id === id ? { ...t, title, updatedAt: new Date().toISOString() } : t,
@@ -257,8 +258,21 @@ export const useSessionStore = create<SessionState>((set, get) => ({
   openTaskDir: (id) => window.electronAPI.task.openDir(id),
 
   addWorkspace: (ws) => set((state) => ({ workspaces: [...state.workspaces, ws] })),
-  removeWorkspace: (id) =>
-    set((state) => ({ workspaces: state.workspaces.filter((w) => w.id !== id) })),
+  removeWorkspace: async (id) => {
+    // 主进程级联删除该空间下所有任务及其会话记录（空间磁盘目录保留）
+    await window.electronAPI.workspace.remove(id);
+    set((state) => {
+      const removedIds = new Set(state.tasks.filter((t) => t.workspaceId === id).map((t) => t.id));
+      return {
+        workspaces: state.workspaces.filter((w) => w.id !== id),
+        tasks: state.tasks.filter((t) => !removedIds.has(t.id)),
+        currentTaskId:
+          state.currentTaskId && removedIds.has(state.currentTaskId) ? null : state.currentTaskId,
+        pendingWorkspaceId: state.pendingWorkspaceId === id ? null : state.pendingWorkspaceId,
+        hydratingIds: state.hydratingIds.filter((x) => !removedIds.has(x)),
+      };
+    });
+  },
   selectWorkspaceDir: () => window.electronAPI.workspace.selectDir(),
   setPendingWorkspace: (id) => set({ pendingWorkspaceId: id }),
 

@@ -1,0 +1,82 @@
+import { useEffect, useRef } from "react";
+
+interface ConfirmDialogProps {
+  open: boolean;
+  title: string;
+  /** 支持 \n 多行 */
+  description: string;
+  confirmLabel?: string;
+  cancelLabel?: string;
+  /** 确认中禁用按钮 */
+  loading?: boolean;
+  /** 失败时对话框内联红字（保持打开，可重试或取消） */
+  error?: string | null;
+  onConfirm: () => void;
+  onCancel: () => void;
+}
+
+/** 通用确认弹窗（删除任务/移除空间等危险操作）。样式范式参照 ModelSettings 的 Modal。 */
+export function ConfirmDialog({
+  open,
+  title,
+  description,
+  confirmLabel = "删除",
+  cancelLabel = "取消",
+  loading = false,
+  error = null,
+  onConfirm,
+  onCancel,
+}: ConfirmDialogProps) {
+  const cancelRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    // 默认 focus 取消按钮，防误回车确认
+    cancelRef.current?.focus();
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && !loading) onCancel();
+    };
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [open, loading, onCancel]);
+
+  if (!open) return null;
+
+  return (
+    // biome-ignore lint/a11y/noStaticElementInteractions: 遮罩点击关闭是 Modal 通用模式，键盘侧由 Escape 处理
+    <div
+      className="fixed inset-0 z-[70] flex items-center justify-center bg-black/40"
+      onMouseDown={(e) => {
+        // 仅点击遮罩本身才关闭（点击卡片不穿透）
+        if (e.target === e.currentTarget && !loading) onCancel();
+      }}
+    >
+      <div className="w-[360px] rounded-2xl bg-white p-5 shadow-2xl">
+        <h3 className="text-[15px] font-medium text-[#333]">{title}</h3>
+        <p className="mt-2 whitespace-pre-line text-[13px] leading-[1.6] text-[#666]">
+          {description}
+        </p>
+        {error && <p className="mt-2 text-[12px] text-red-500">{error}</p>}
+        <div className="mt-5 flex justify-end gap-2">
+          <button
+            ref={cancelRef}
+            type="button"
+            disabled={loading}
+            onClick={onCancel}
+            className="rounded-[6px] border border-[#e0e0e0] px-3 py-[6px] text-[13px] text-[#666] transition hover:bg-[#f5f5f5] disabled:opacity-50"
+          >
+            {cancelLabel}
+          </button>
+          <button
+            type="button"
+            disabled={loading}
+            onClick={onConfirm}
+            className="rounded-[6px] bg-red-500 px-3 py-[6px] text-[13px] text-white transition hover:bg-red-600 disabled:opacity-50"
+          >
+            {loading ? "处理中…" : confirmLabel}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}

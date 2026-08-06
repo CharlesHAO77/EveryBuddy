@@ -241,13 +241,19 @@ class AgentRuntime {
     return this.sessions.has(taskId);
   }
 
-  /** 关闭并清理任务会话 */
-  disposeSession(taskId: string): void {
+  /** 关闭并清理任务会话（先中止在途流，再退订） */
+  async disposeSession(taskId: string): Promise<void> {
     const state = this.sessions.get(taskId);
-    if (state) {
-      state.unsubscribe();
-      this.sessions.delete(taskId);
+    if (!state) return;
+    // 先摘出，阻断后续 prompt 命中
+    this.sessions.delete(taskId);
+    try {
+      await state.session.abort();
+    } catch {
+      // 未在流式时 abort 可能报错，忽略
     }
+    // 退订后迟到的 SDK 事件被丢弃
+    state.unsubscribe();
   }
 
   /**

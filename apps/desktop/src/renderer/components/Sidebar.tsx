@@ -1,6 +1,9 @@
 import { useState } from "react";
 import { useSessionStore } from "../stores/sessionStore";
 import { useUIStore } from "../stores/uiStore";
+import { ConfirmDialog } from "./ConfirmDialog";
+import { TaskListItem } from "./TaskListItem";
+import { WorkspaceListItem } from "./WorkspaceListItem";
 
 /* ── Inline SVG Icons ─────────────────────────── */
 
@@ -146,21 +149,6 @@ const AutoIcon = () => (
   </svg>
 );
 
-const FolderIcon = () => (
-  <svg
-    width="14"
-    height="14"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="#999"
-    strokeWidth="1.5"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-  >
-    <path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z" />
-  </svg>
-);
-
 /* ── Data ────────────────────────────────────── */
 
 const navItems = [
@@ -183,6 +171,11 @@ function relativeTime(iso: string): string {
 
 /* ── Component ───────────────────────────────── */
 
+/** 确认弹窗状态（删除任务 / 移除空间，单例） */
+type ConfirmState =
+  | { kind: "task"; id: string; title: string }
+  | { kind: "workspace"; id: string; name: string; taskCount: number };
+
 export function Sidebar() {
   const [collapsed, setCollapsed] = useState(false);
   const [tasksOpen, setTasksOpen] = useState(true);
@@ -191,12 +184,17 @@ export function Sidebar() {
   const [activeNav, setActiveNav] = useState("");
   const [showSearch, setShowSearch] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [confirm, setConfirm] = useState<ConfirmState | null>(null);
+  const [confirmLoading, setConfirmLoading] = useState(false);
+  const [confirmError, setConfirmError] = useState<string | null>(null);
 
   // 真实数据（替换原 mock）
   const allTasks = useSessionStore((s) => s.tasks);
   const workspaces = useSessionStore((s) => s.workspaces);
   const currentTaskId = useSessionStore((s) => s.currentTaskId);
   const selectTask = useSessionStore((s) => s.selectTask);
+  const deleteTask = useSessionStore((s) => s.deleteTask);
+  const removeWorkspace = useSessionStore((s) => s.removeWorkspace);
 
   // 临时任务（任务区），按 updatedAt 倒序（最新优先）
   const tempTasks = allTasks
@@ -227,6 +225,47 @@ export function Sidebar() {
       };
     })
     .filter((ws) => !searchQuery || ws.sessions.length > 0);
+
+  /** 确认弹窗的确认动作：失败时保持弹窗打开并内联显示错误 */
+  const handleConfirm = async () => {
+    if (!confirm) return;
+    setConfirmLoading(true);
+    setConfirmError(null);
+    try {
+      if (confirm.kind === "task") {
+        await deleteTask(confirm.id);
+      } else {
+        if (openWorkspaceId === confirm.id) setOpenWorkspaceId(null);
+        await removeWorkspace(confirm.id);
+      }
+      setConfirm(null);
+    } catch (err) {
+      setConfirmError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setConfirmLoading(false);
+    }
+  };
+
+  const closeConfirm = () => {
+    if (confirmLoading) return;
+    setConfirm(null);
+    setConfirmError(null);
+  };
+
+  const confirmText =
+    confirm?.kind === "task"
+      ? {
+          title: "删除任务",
+          description: `将删除任务「${confirm.title}」及其全部会话记录。\n磁盘上的会话文件（~/EveryBuddy/sessions 下）也会被一并清除，此操作不可恢复。`,
+          confirmLabel: "删除",
+        }
+      : confirm?.kind === "workspace"
+        ? {
+            title: "移除空间",
+            description: `将移除空间「${confirm.name}」：\n· 空间下 ${confirm.taskCount} 个任务及其会话记录将被一并删除；\n· 空间目录本身保留在磁盘上，不会被删除。\n此操作不可恢复。`,
+            confirmLabel: "移除空间",
+          }
+        : null;
 
   return (
     <aside
@@ -359,17 +398,15 @@ export function Sidebar() {
             {tasksOpen && (
               <div className="mt-[2px] space-y-[2px]">
                 {filteredTasks.map((task) => (
-                  <button
+                  <TaskListItem
                     key={task.id}
-                    type="button"
-                    onClick={() => selectTask(task.id)}
-                    className={`flex w-full items-center justify-between rounded-[4px] px-[10px] py-[6px] text-left transition ${
-                      task.id === currentTaskId ? "bg-[#e8e8e8]" : "hover:bg-[#f0f0f0]"
-                    }`}
-                  >
-                    <span className="truncate text-[13px] text-[#333]">{task.title}</span>
-                    <span className="shrink-0 text-[12px] text-[#999]">{task.time}</span>
-                  </button>
+                    id={task.id}
+                    title={task.title}
+                    time={task.time}
+                    active={task.id === currentTaskId}
+                    onSelect={selectTask}
+                    onDeleteRequest={(id, title) => setConfirm({ kind: "task", id, title })}
+                  />
                 ))}
               </div>
             )}
@@ -389,32 +426,33 @@ export function Sidebar() {
             {workspacesOpen && (
               <div className="mt-[2px] space-y-[2px]">
                 {filteredWorkspaces.map((ws) => (
-                  <div key={ws.id}>
-                    <button
-                      type="button"
-                      onClick={() => setOpenWorkspaceId((id) => (id === ws.id ? null : ws.id))}
-                      className="flex h-[30px] w-full items-center gap-[8px] rounded-[4px] px-[10px] text-[13px] text-[#333] transition hover:bg-[#f0f0f0]"
-                    >
-                      <FolderIcon />
-                      <span className="flex-1 text-left">{ws.name}</span>
-                      <ChevronDownIcon open={openWorkspaceId === ws.id} />
-                    </button>
-
-                    {openWorkspaceId === ws.id &&
-                      ws.sessions.map((session) => (
-                        <button
-                          key={session.id}
-                          type="button"
-                          onClick={() => selectTask(session.id)}
-                          className={`flex w-full items-center justify-between rounded-[4px] px-[10px] py-[6px] pl-[32px] text-left transition ${
-                            session.id === currentTaskId ? "bg-[#e8e8e8]" : "hover:bg-[#f0f0f0]"
-                          }`}
-                        >
-                          <span className="truncate text-[13px] text-[#333]">{session.title}</span>
-                          <span className="shrink-0 text-[12px] text-[#999]">{session.time}</span>
-                        </button>
-                      ))}
-                  </div>
+                  <WorkspaceListItem
+                    key={ws.id}
+                    name={ws.name}
+                    open={openWorkspaceId === ws.id}
+                    onToggle={() => setOpenWorkspaceId((id) => (id === ws.id ? null : ws.id))}
+                    onRemoveRequest={() =>
+                      setConfirm({
+                        kind: "workspace",
+                        id: ws.id,
+                        name: ws.name,
+                        taskCount: ws.sessions.length,
+                      })
+                    }
+                  >
+                    {ws.sessions.map((session) => (
+                      <TaskListItem
+                        key={session.id}
+                        id={session.id}
+                        title={session.title}
+                        time={session.time}
+                        active={session.id === currentTaskId}
+                        indent
+                        onSelect={selectTask}
+                        onDeleteRequest={(id, title) => setConfirm({ kind: "task", id, title })}
+                      />
+                    ))}
+                  </WorkspaceListItem>
                 ))}
               </div>
             )}
@@ -446,6 +484,20 @@ export function Sidebar() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* 删除任务 / 移除空间确认弹窗（fixed 定位，折叠态也正常） */}
+      {confirmText && (
+        <ConfirmDialog
+          open={!!confirm}
+          title={confirmText.title}
+          description={confirmText.description}
+          confirmLabel={confirmText.confirmLabel}
+          loading={confirmLoading}
+          error={confirmError}
+          onConfirm={handleConfirm}
+          onCancel={closeConfirm}
+        />
       )}
     </aside>
   );

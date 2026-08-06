@@ -6,6 +6,8 @@
  */
 
 import { randomUUID } from "node:crypto";
+import { rm } from "node:fs/promises";
+import path from "node:path";
 import type { CreateTaskRequest, TaskMeta } from "@everybuddy/ipc-contract";
 import {
   abortRequestSchema,
@@ -18,7 +20,7 @@ import {
 } from "@everybuddy/ipc-contract";
 import { type BrowserWindow, ipcMain } from "electron";
 import { agentRuntime } from "./agentRuntime";
-import { configStore } from "./configStore";
+import { configStore, SESSIONS_DIR } from "./configStore";
 import {
   createNamedWorkspace,
   createWorkspace,
@@ -30,6 +32,31 @@ import {
 /** 校验入参，失败抛错 */
 function validate<T>(schema: { parse: (v: unknown) => T }, value: unknown): T {
   return schema.parse(value);
+}
+
+/**
+ * 删除任务的完整链路（task:delete 与 workspace:remove 级联共用）：
+ * 中止并清理会话 -> 移除元数据 -> 删除磁盘 sessionDir。
+ * sessionDir 必须落在 ~/EveryBuddy/sessions 直接子目录内，否则跳过并告警
+ * （防 config.json 被篡改后误删任意目录）。
+ */
+async function deleteTaskCompletely(id: string): Promise<void> {
+  const task = configStore.getTask(id); // 先取 meta，removeTask 后就拿不到了
+  await agentRuntime.disposeSession(id);
+  configStore.removeTask(id);
+  if (task?.sessionDir) {
+    const rel = path.relative(SESSIONS_DIR, task.sessionDir);
+    const isSafe =
+      rel !== "" &&
+      !rel.startsWith("..") &&
+      !path.isAbsolute(rel) &&
+      rel.split(path.sep).length === 1;
+    if (isSafe) {
+      await rm(task.sessionDir, { recursive: true, force: true });
+    } else {
+      console.warn(`[ipcRouter] 跳过非常规 sessionDir，未删除: ${task.sessionDir}`);
+    }
+  }
 }
 
 /** 注册所有 IPC 处理器 */
@@ -97,10 +124,9 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
     return task;
   });
 
-  ipcMain.handle("task:delete", (_evt, raw) => {
+  ipcMain.handle("task:delete", async (_evt, raw) => {
     const { id } = validate(idRequestSchema, raw);
-    agentRuntime.disposeSession(id);
-    configStore.removeTask(id);
+    await deleteTaskCompletely(id);
   });
 
   ipcMain.handle("task:resume", async (_evt, raw) => {
@@ -152,8 +178,19 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
     return createNamedWorkspace(parsed.name);
   });
 
-  ipcMain.handle("workspace:remove", (_evt, raw) => {
+  ipcMain.handle("workspace:remove", async (_evt, raw) => {
     const { id } = validate(idRequestSchema, raw);
+    // 级联删除该空间下所有任务及其会话记录（空间磁盘目录保留——
+    // session 统一落在 ~/EveryBuddy/sessions，与空间目录解耦）
+    const wsTasks = configStore.listTasks().filter((t) => t.workspaceId === id);
+    for (const t of wsTasks) {
+      try {
+        await deleteTaskCompletely(t.id);
+      } catch (err) {
+        // 单个失败不阻断整体
+        console.error(`[ipcRouter] 级联删除任务 ${t.id} 失败:`, err);
+      }
+    }
     configStore.removeWorkspace(id);
   });
 
