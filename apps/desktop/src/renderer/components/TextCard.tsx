@@ -7,13 +7,15 @@ import { MarkdownText } from "./MarkdownText";
 
 interface TextCardProps {
   block: TextBlock;
+  /** 消息是否仍在流式：block.done 丢失时仍可及时收起光标（纵深防御） */
+  streaming: boolean;
 }
 
-export function TextCard({ block }: TextCardProps) {
+export function TextCard({ block, streaming }: TextCardProps) {
   return (
     <div className="rounded-xl border border-[var(--border-light)] bg-[var(--surface-card)] px-4 py-3">
       <MarkdownText content={block.content} />
-      {!block.done && (
+      {!block.done && streaming && (
         <span className="ml-0.5 inline-block h-3.5 w-1.5 animate-pulse bg-[var(--text-muted)] align-middle" />
       )}
     </div>

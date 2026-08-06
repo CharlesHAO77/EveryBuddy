@@ -7,10 +7,14 @@ import type { ThinkingBlock } from "../stores/sessionStore";
 
 interface ThinkingCardProps {
   block: ThinkingBlock;
+  /** 消息是否仍在流式：block.done 丢失时仍可及时收起跳动点（纵深防御） */
+  streaming: boolean;
 }
 
-export function ThinkingCard({ block }: ThinkingCardProps) {
+export function ThinkingCard({ block, streaming }: ThinkingCardProps) {
   const [expanded, setExpanded] = useState(false);
+  // 流式结束后视为完成，兜底 block.done 丢失（SDK 未发 thinking_end）的情况
+  const done = block.done || !streaming;
 
   return (
     <div className="select-none">
@@ -29,7 +33,7 @@ export function ThinkingCard({ block }: ThinkingCardProps) {
         >
           <path d="M9 18h6M10 22h4M12 2a7 7 0 00-4 12.7c.6.5 1 1.3 1 2.1V18h6v-1.2c0-.8.4-1.6 1-2.1A7 7 0 0012 2z" />
         </svg>
-        {!block.done ? (
+        {!done ? (
           <span className="flex items-center gap-1">
             思考中
             <span className="flex gap-0.5">
@@ -42,14 +46,9 @@ export function ThinkingCard({ block }: ThinkingCardProps) {
           <span>已思考 {expanded ? "▾" : "▸"}</span>
         )}
       </button>
-      {expanded && block.done && (
+      {expanded && (
         <div className="mt-1 ml-5 whitespace-pre-wrap rounded-md bg-[var(--surface-hover)] px-3 py-2 text-[12px] text-gray-500">
-          {block.content || "（无内容）"}
-        </div>
-      )}
-      {expanded && !block.done && (
-        <div className="mt-1 ml-5 whitespace-pre-wrap rounded-md bg-[var(--surface-hover)] px-3 py-2 text-[12px] text-gray-500">
-          {block.content}
+          {done ? block.content || "（无内容）" : block.content}
         </div>
       )}
     </div>

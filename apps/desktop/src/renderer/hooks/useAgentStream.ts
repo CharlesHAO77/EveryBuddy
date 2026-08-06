@@ -19,7 +19,9 @@ export function useAgentStream(): void {
           store.startAssistantMessage(taskId);
           break;
         case "message_end":
-          // 单条 LLM response 结束，不结束流式：工具可能仍在执行（tool_execution 在 message_end 之后）
+          // 单条 LLM response 结束：内容块已完整，兜底关闭未闭合的 thinking/text 块。
+          // 不结束消息级流式--工具可能仍在 message_end 之后执行
+          store.closeContentBlocks(taskId);
           break;
         case "error":
           store.addErrorMessage(taskId, event.payload.message);

@@ -58,14 +58,14 @@ export function AssistantGroup({ messages }: AssistantGroupProps) {
         {messages.flatMap((m) =>
           m.blocks.map((block) => {
             const key = `${m.id}-${block.id}`;
-            if (block.kind === "text") return <TextCard key={key} block={block} />;
-            if (block.kind === "thinking") return <ThinkingCard key={key} block={block} />;
+            if (block.kind === "text")
+              return <TextCard key={key} block={block} streaming={m.isStreaming ?? false} />;
+            if (block.kind === "thinking")
+              return <ThinkingCard key={key} block={block} streaming={m.isStreaming ?? false} />;
             return <ToolCallCard key={key} block={block} />;
           }),
         )}
-        {!isStreaming && (
-          <div className="mt-0.5 text-[10px] text-[var(--text-muted)]">{time}</div>
-        )}
+        {!isStreaming && <div className="mt-0.5 text-[10px] text-[var(--text-muted)]">{time}</div>}
       </div>
     </div>
   );

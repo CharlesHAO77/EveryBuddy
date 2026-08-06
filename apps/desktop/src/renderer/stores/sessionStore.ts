@@ -96,6 +96,8 @@ interface SessionState {
   ) => void;
   appendBlockDelta: (taskId: string, contentIndex: number, delta: string) => void;
   endBlock: (taskId: string, contentIndex: number, content?: string) => void;
+  /** 兜底关闭当前流式消息内未闭合的 thinking/text 块（不碰 tool 块，工具在 message_end 后才执行） */
+  closeContentBlocks: (taskId: string) => void;
   setToolCallInfo: (
     taskId: string,
     contentIndex: number,
@@ -354,6 +356,25 @@ export const useSessionStore = create<SessionState>((set, get) => ({
       }),
     })),
 
+  closeContentBlocks: (taskId) =>
+    set((state) => ({
+      tasks: state.tasks.map((t) => {
+        if (t.id !== taskId || !t.streamMessageId) return t;
+        return {
+          ...t,
+          messages: t.messages.map((m) => {
+            if (m.id !== t.streamMessageId) return m;
+            // 仅关闭 thinking/text；tool 块由 tool_execution_end 负责，执行在 message_end 之后
+            if (!m.blocks.some((b) => !b.done && b.kind !== "tool")) return m;
+            return {
+              ...m,
+              blocks: m.blocks.map((b) => (b.done || b.kind === "tool" ? b : { ...b, done: true })),
+            };
+          }),
+        };
+      }),
+    })),
+
   setToolCallInfo: (taskId, contentIndex, info) =>
     set((state) => ({
       tasks: state.tasks.map((t) => {
@@ -447,11 +468,21 @@ export const useSessionStore = create<SessionState>((set, get) => ({
         if (t.id !== taskId) return t;
         return {
           ...t,
-          // agent 消息结算（agent_end/agent_settled）：只翻转消息级 isStreaming、清流式指针、
-          // 移除空消息。不碰 block.done——块的结束状态由各类型 end 事件负责
-          // （thinking_end/text_end -> endBlock；tool -> tool_execution_end）。
+          // agent 消息结算（agent_end/agent_settled）：翻转消息级 isStreaming、清流式指针、
+          // 移除空消息。同时兜底关闭所有未闭合块--块的结束状态优先由各类型 end 事件负责
+          // （thinking_end/text_end -> endBlock；tool -> tool_execution_end），但 SDK 不保证
+          // 一定发出 *_end（pi-ai 协议：流以 done/error 终止，中途 *_end 可能丢失），
+          // 故在此兜底，避免思考跳动点/文本光标永不消失。
           messages: t.messages
-            .map((m) => (m.isStreaming ? { ...m, isStreaming: false } : m))
+            .map((m) =>
+              m.isStreaming
+                ? {
+                    ...m,
+                    isStreaming: false,
+                    blocks: m.blocks.map((b) => (b.done ? b : { ...b, done: true })),
+                  }
+                : m,
+            )
             .filter((m) => !(m.blocks.length === 0 && !m.errorMessage && !m.isStreaming)),
           isStreaming: false,
           streamMessageId: null,
@@ -482,6 +513,10 @@ export const useSessionStore = create<SessionState>((set, get) => ({
             streamMessageId: null,
           };
         }
+        // 无流式消息：仅当上一条不是错误消息时才追加，避免同一失败被 SDK error 事件
+        // 与 session.prompt() reject 双重上报产生重复错误气泡
+        const last = t.messages[t.messages.length - 1];
+        if (last?.errorMessage) return t;
         const errMsg: ChatMessage = {
           id: genId(),
           role: "assistant",
