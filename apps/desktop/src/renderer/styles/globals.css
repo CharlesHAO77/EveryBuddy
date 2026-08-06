@@ -1,29 +1,83 @@
 @import "tailwindcss";
 
+/*
+ * EveryBuddy 设计 Token —— 温暖纸感
+ * 双层变量：:root 放语义变量（将来 [data-theme="dark"] 覆盖即可换肤），
+ * @theme inline 把 Tailwind 工具类映射到 var() 引用。
+ */
 :root {
-  --sidebar-bg: #fafafa;
-  --sidebar-width: 260px;
-  --bg-main: #ffffff;
-  --text-main: #111111;
-  --text-secondary: #333333;
-  --text-muted: #999999;
-  --border: #e8e8e8;
-  --border-light: #eeeeee;
-  --border-subtle: #e8e8e8;
-  --surface-hover: #f0f0f0;
-  --surface-tab: #f5f5f5;
-  --surface-card: #ffffff;
-  --input-bg: #ffffff;
-  --cream: #faf9f6;
-  --accent-black: #111111;
+  /* ── 纸感底色（暖） ── */
+  --paper: #faf8f4; /* 主区底色 */
+  --paper-deep: #f4f0e9; /* 侧栏底色（略深一档分区） */
+  --card: #ffffff; /* 卡片/输入框/弹层 */
+  --hover: #f1ede4; /* hover 表面 */
+  --active: #eae4d8; /* 选中表面 */
 
-  /* Flip7 色彩方案 - teal 主色 */
-  --primary: #14b8a6;
-  --primary-dark: #0d9488;
-  --primary-light: #5eead4;
-  --primary-bg: #f0fdfa;
-  --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.06);
-  --shadow-teal-glow: 0 0 12px rgba(20, 184, 166, 0.25);
+  /* ── 墨色文字 ── */
+  --ink: #1f1c18; /* 主文字 */
+  --ink-2: #57534b; /* 次级文字 */
+  --ink-3: #a39e93; /* 弱化/占位/图标默认 */
+
+  /* ── 暖边框线 ── */
+  --line: #e9e4da; /* 主边框 */
+  --line-strong: #dcd5c7; /* 强调边框 */
+
+  /* ── 点睛青碧（唯一签名色） ── */
+  --accent: #0d7a5f;
+  --accent-strong: #0a6450; /* hover/active 加深 */
+  --accent-tint: #e7f2ee; /* tint 背景（选中项、徽章底） */
+  --accent-line: #bcddd2; /* accent 浅描边 */
+
+  /* ── 暖红（错误/危险操作） ── */
+  --danger: #b4453a;
+  --danger-strong: #9c3a31;
+
+  /* ── 终端色块（代码块/输出，暖黑） ── */
+  --terminal: #2a2723;
+  --terminal-text: #e8e4dc;
+
+  /* ── 阴影（3 档，暖黑） ── */
+  --shadow-card: 0 1px 2px rgb(31 28 24 / 0.04), 0 1px 6px rgb(31 28 24 / 0.03);
+  --shadow-pop: 0 4px 16px rgb(31 28 24 / 0.1), 0 1px 3px rgb(31 28 24 / 0.06);
+  --shadow-modal: 0 12px 40px rgb(31 28 24 / 0.16), 0 2px 8px rgb(31 28 24 / 0.08);
+}
+
+@theme inline {
+  --color-paper: var(--paper);
+  --color-paper-deep: var(--paper-deep);
+  --color-card: var(--card);
+  --color-hover: var(--hover);
+  --color-active: var(--active);
+
+  --color-ink: var(--ink);
+  --color-ink-2: var(--ink-2);
+  --color-ink-3: var(--ink-3);
+
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+
+  --color-accent: var(--accent);
+  --color-accent-strong: var(--accent-strong);
+  --color-accent-tint: var(--accent-tint);
+  --color-accent-line: var(--accent-line);
+
+  --color-danger: var(--danger);
+  --color-danger-strong: var(--danger-strong);
+
+  --color-terminal: var(--terminal);
+  --color-terminal-text: var(--terminal-text);
+
+  /* 圆角 3 档：s=6 按钮/chips，m=10 卡片/菜单，l=16 输入框大卡片 */
+  --radius-s: 6px;
+  --radius-m: 10px;
+  --radius-l: 16px;
+
+  --shadow-card: var(--shadow-card);
+  --shadow-pop: var(--shadow-pop);
+  --shadow-modal: var(--shadow-modal);
+
+  /* 编辑感标题字体（仅欢迎页大标题，系统栈零打包） */
+  --font-display: Georgia, "Times New Roman", "Songti SC", "STSong", serif;
 }
 
 * {
@@ -42,12 +96,33 @@ body {
   font-family:
     -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans SC",
     "PingFang SC", "Microsoft YaHei", sans-serif;
-  background-color: var(--bg-main);
-  color: var(--text-main);
+  background-color: var(--paper);
+  color: var(--ink);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   font-size: 14px;
   line-height: 1.5;
+}
+
+::selection {
+  background: var(--accent-tint);
+}
+
+/* ── macOS 沉浸式标题栏（hiddenInset）──
+ * titlebar-drag 区域可拖动窗口；其上的交互控件需 titlebar-no-drag。
+ * macOS 下顶栏左侧留出红绿灯空间（Tailwind px-[10px] 在后会被此规则覆盖）。 */
+.titlebar-drag {
+  -webkit-app-region: drag;
+}
+
+.titlebar-no-drag {
+  -webkit-app-region: no-drag;
+}
+
+/* 仅展开态顶栏需要为红绿灯让位；折叠态（50px 窄条）红绿灯直接悬浮其上，
+ * 展开按钮已移到栏体内红绿灯下方，故折叠态不推左内边距 */
+html[data-platform="mac"] .titlebar-drag:not(.titlebar-drag--collapsed) {
+  padding-left: 80px;
 }
 
 ::-webkit-scrollbar {
@@ -56,7 +131,7 @@ body {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #d1d5db;
+  background: #d6d0c4;
   border-radius: 3px;
 }
 

@@ -17,6 +17,10 @@ export function createMainWindow(): BrowserWindow {
     minWidth: 900,
     minHeight: 600,
     title: "EveryBuddy",
+    // 暖纸感底色，避免启动时白屏闪烁；配色与 renderer globals.css --paper 保持一致
+    backgroundColor: "#faf8f4",
+    // macOS 沉浸式标题栏：红绿灯嵌入侧边栏顶栏（Windows/Linux 保持默认标题栏）
+    ...(process.platform === "darwin" ? { titleBarStyle: "hiddenInset" as const } : {}),
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
       contextIsolation: true,

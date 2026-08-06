@@ -4,6 +4,14 @@
  */
 import { useState } from "react";
 import type { ToolBlock } from "../stores/sessionStore";
+import {
+  IconCheck,
+  IconChevronDown,
+  IconChevronRight,
+  IconLoader,
+  IconWrench,
+  IconX,
+} from "./icons";
 
 interface ToolCallCardProps {
   block: ToolBlock;
@@ -11,54 +19,19 @@ interface ToolCallCardProps {
 
 function StatusIcon({ status }: { status: ToolBlock["status"] }) {
   if (status === "running" || status === "calling") {
-    return (
-      <svg
-        className="animate-spin"
-        width="11"
-        height="11"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2.5"
-      >
-        <path d="M21 12a9 9 0 11-6.219-8.56" strokeLinecap="round" />
-      </svg>
-    );
+    return <IconLoader className="animate-spin" size={11} strokeWidth={2.5} />;
   }
   if (status === "success") {
-    return (
-      <svg
-        width="11"
-        height="11"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="3"
-      >
-        <polyline points="20 6 9 17 4 12" />
-      </svg>
-    );
+    return <IconCheck size={11} strokeWidth={3} />;
   }
-  return (
-    <svg
-      width="11"
-      height="11"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="3"
-    >
-      <line x1="18" y1="6" x2="6" y2="18" />
-      <line x1="6" y1="6" x2="18" y2="18" />
-    </svg>
-  );
+  return <IconX size={11} strokeWidth={3} />;
 }
 
 const statusColor: Record<ToolBlock["status"], string> = {
-  calling: "text-gray-400",
-  running: "text-blue-500",
-  success: "text-green-500",
-  error: "text-red-500",
+  calling: "text-ink-3",
+  running: "text-accent",
+  success: "text-accent-strong",
+  error: "text-danger",
 };
 
 /** 安全序列化：工具结果可能含循环引用或非 JSON 值，render 期间不能抛错 */
@@ -89,33 +62,27 @@ export function ToolCallCard({ block }: ToolCallCardProps) {
       <button
         type="button"
         onClick={() => setExpanded((v) => !v)}
-        className="flex items-center gap-1.5 rounded-md bg-[var(--surface-tab)] px-2 py-1 text-[11px] text-[var(--text-secondary)] transition hover:bg-[var(--surface-hover)]"
+        className="flex items-center gap-1.5 rounded-s bg-hover px-2 py-1 text-[11px] text-ink-2 transition hover:bg-active"
       >
-        <svg
-          width="11"
-          height="11"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-        >
-          <path d="M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.77-3.77a6 6 0 01-7.94 7.94l-6.91 6.91a2.12 2.12 0 01-3-3l6.91-6.91a6 6 0 017.94-7.94l-3.76 3.76z" />
-        </svg>
+        <IconWrench size={11} strokeWidth={2} className="text-ink-3" />
         <span className="font-medium">{name}</span>
         <span className={statusColor[block.status]}>
           <StatusIcon status={block.status} />
         </span>
-        <span className="text-[var(--text-muted)]">· {statusLabel}</span>
-        {expanded && <span className="text-[var(--text-muted)]">▾</span>}
-        {!expanded && <span className="text-[var(--text-muted)]">▸</span>}
+        <span className="text-ink-3">· {statusLabel}</span>
+        {expanded ? (
+          <IconChevronDown size={10} strokeWidth={2} className="text-ink-3" />
+        ) : (
+          <IconChevronRight size={10} strokeWidth={2} className="text-ink-3" />
+        )}
       </button>
 
       {expanded && (
-        <div className="mt-1 ml-4 space-y-1.5 border-l border-[var(--border-light)] pl-3">
+        <div className="mt-1 ml-4 space-y-1.5 border-l border-line pl-3">
           {block.args !== undefined && (
             <div>
-              <div className="text-[10px] text-[var(--text-muted)]">参数</div>
-              <pre className="mt-0.5 overflow-x-auto rounded bg-[var(--surface-hover)] px-2 py-1 text-[11px] text-[var(--text-secondary)]">
+              <div className="text-[10px] text-ink-3">参数</div>
+              <pre className="mt-0.5 overflow-x-auto rounded-s bg-hover px-2 py-1 text-[11px] text-ink-2">
                 {safeStringify(block.args)}
               </pre>
             </div>
@@ -123,8 +90,8 @@ export function ToolCallCard({ block }: ToolCallCardProps) {
 
           {block.outputDelta && (
             <div>
-              <div className="text-[10px] text-[var(--text-muted)]">输出</div>
-              <pre className="mt-0.5 max-h-48 overflow-auto rounded bg-gray-900 px-2 py-1 text-[11px] leading-relaxed text-gray-100">
+              <div className="text-[10px] text-ink-3">输出</div>
+              <pre className="mt-0.5 max-h-48 overflow-auto rounded-s bg-terminal px-2 py-1 text-[11px] leading-relaxed text-terminal-text">
                 {block.outputDelta}
               </pre>
             </div>
@@ -132,12 +99,10 @@ export function ToolCallCard({ block }: ToolCallCardProps) {
 
           {!block.outputDelta && block.output !== undefined && block.output !== "" && (
             <div>
-              <div className="text-[10px] text-[var(--text-muted)]">结果</div>
+              <div className="text-[10px] text-ink-3">结果</div>
               <pre
-                className={`mt-0.5 overflow-x-auto rounded px-2 py-1 text-[11px] ${
-                  block.status === "error"
-                    ? "bg-red-50 text-red-600"
-                    : "bg-[var(--surface-hover)] text-[var(--text-secondary)]"
+                className={`mt-0.5 overflow-x-auto rounded-s px-2 py-1 text-[11px] ${
+                  block.status === "error" ? "bg-danger/10 text-danger" : "bg-hover text-ink-2"
                 }`}
               >
                 {safeStringify(block.output)}
@@ -145,7 +110,7 @@ export function ToolCallCard({ block }: ToolCallCardProps) {
             </div>
           )}
 
-          {block.error && <div className="text-[11px] text-red-500">{block.error}</div>}
+          {block.error && <div className="text-[11px] text-danger">{block.error}</div>}
         </div>
       )}
     </div>

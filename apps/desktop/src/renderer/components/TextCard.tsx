@@ -13,10 +13,10 @@ interface TextCardProps {
 
 export function TextCard({ block, streaming }: TextCardProps) {
   return (
-    <div className="rounded-xl border border-[var(--border-light)] bg-[var(--surface-card)] px-4 py-3">
+    <div className="rounded-m border border-line bg-card px-4 py-3">
       <MarkdownText content={block.content} />
       {!block.done && streaming && (
-        <span className="ml-0.5 inline-block h-3.5 w-1.5 animate-pulse bg-[var(--text-muted)] align-middle" />
+        <span className="ml-0.5 inline-block h-3.5 w-1.5 animate-pulse bg-ink-3 align-middle" />
       )}
     </div>
   );

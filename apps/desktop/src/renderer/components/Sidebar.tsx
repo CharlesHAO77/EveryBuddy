@@ -2,158 +2,25 @@ import { useState } from "react";
 import { useSessionStore } from "../stores/sessionStore";
 import { useUIStore } from "../stores/uiStore";
 import { ConfirmDialog } from "./ConfirmDialog";
+import {
+  IconActivity,
+  IconBell,
+  IconChevronDown,
+  IconPanelLeftClose,
+  IconPanelLeftOpen,
+  IconPlus,
+  IconSearch,
+  IconSettings,
+  IconShield,
+} from "./icons";
 import { TaskListItem } from "./TaskListItem";
 import { WorkspaceListItem } from "./WorkspaceListItem";
-
-/* ── Inline SVG Icons ─────────────────────────── */
-
-const CollapseIcon = () => (
-  <svg
-    width="16"
-    height="16"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="#999"
-    strokeWidth="1.5"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-  >
-    <rect x="3" y="3" width="18" height="18" rx="2" />
-    <line x1="9" y1="3" x2="9" y2="21" />
-  </svg>
-);
-
-const ExpandIcon = () => (
-  <svg
-    width="16"
-    height="16"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="#999"
-    strokeWidth="1.5"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-  >
-    <rect x="3" y="3" width="18" height="18" rx="2" />
-    <line x1="15" y1="3" x2="15" y2="21" />
-  </svg>
-);
-
-const PlusIcon = () => (
-  <svg
-    width="16"
-    height="16"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="#999"
-    strokeWidth="1.5"
-    strokeLinecap="round"
-  >
-    <line x1="12" y1="5" x2="12" y2="19" />
-    <line x1="5" y1="12" x2="19" y2="12" />
-  </svg>
-);
-
-const SearchIcon = () => (
-  <svg
-    width="16"
-    height="16"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="#999"
-    strokeWidth="1.5"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-  >
-    <circle cx="11" cy="11" r="8" />
-    <line x1="21" y1="21" x2="16.65" y2="16.65" />
-  </svg>
-);
-
-const ChevronDownIcon = ({ open }: { open?: boolean }) => (
-  <svg
-    width="12"
-    height="12"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="#999"
-    strokeWidth="2"
-    strokeLinecap="round"
-    className={`transition-transform ${open ? "rotate-180" : ""}`}
-  >
-    <polyline points="6 9 12 15 18 9" />
-  </svg>
-);
-
-const NotificationIcon = () => (
-  <svg
-    width="16"
-    height="16"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="#999"
-    strokeWidth="1.5"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-  >
-    <path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9" />
-    <path d="M13.73 21a2 2 0 01-3.46 0" />
-  </svg>
-);
-
-const SettingsIcon = () => (
-  <svg
-    width="16"
-    height="16"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="#999"
-    strokeWidth="1.5"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-  >
-    <circle cx="12" cy="12" r="3" />
-    <path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-2 2 2 2 0 01-2-2v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 01-2-2 2 2 0 012-2h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 012-2 2 2 0 012 2v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 012 2 2 2 0 01-2 2h-.09a1.65 1.65 0 00-1.51 1z" />
-  </svg>
-);
-
-/* ── Navigation Icons ─────────────────────────── */
-
-const ExpertIcon = () => (
-  <svg
-    width="16"
-    height="16"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="#999"
-    strokeWidth="1.5"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-  >
-    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-  </svg>
-);
-
-const AutoIcon = () => (
-  <svg
-    width="16"
-    height="16"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="#999"
-    strokeWidth="1.5"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-  >
-    <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
-  </svg>
-);
 
 /* ── Data ────────────────────────────────────── */
 
 const navItems = [
-  { id: "expert", label: "专家·技能·连接器", icon: ExpertIcon },
-  { id: "auto", label: "自动化", icon: AutoIcon },
+  { id: "expert", label: "专家·技能·连接器", icon: IconShield },
+  { id: "auto", label: "自动化", icon: IconActivity },
 ];
 
 /** 相对时间格式化 */
@@ -269,33 +136,40 @@ export function Sidebar() {
 
   return (
     <aside
-      className={`flex h-full flex-col border-r border-[#e8e8e8] bg-[#fafafa] transition-all duration-200 ${
+      className={`flex h-full flex-col border-r border-line bg-paper-deep transition-all duration-200 ${
         collapsed ? "w-[50px]" : "w-[260px]"
       }`}
     >
       {/* ── Fixed Top Bar: collapse button + new task icon ── */}
-      <div className="flex h-[50px] shrink-0 items-center justify-between px-[10px]">
-        {/* Collapse button */}
-        <button
-          type="button"
-          onClick={() => setCollapsed((v) => !v)}
-          className="flex h-[30px] w-[30px] items-center justify-center rounded-md hover:bg-[#e8e8e8]"
-          title={collapsed ? "展开侧栏" : "折叠侧栏"}
-        >
-          {collapsed ? <ExpandIcon /> : <CollapseIcon />}
-        </button>
+      <div
+        className={`titlebar-drag flex h-[50px] shrink-0 items-center justify-between px-[10px] ${
+          collapsed ? "titlebar-drag--collapsed" : ""
+        }`}
+      >
+        {/* Collapse button（折叠态移到栏体内红绿灯下方，见下方 Collapsed State） */}
+        {!collapsed && (
+          <button
+            type="button"
+            onClick={() => setCollapsed((v) => !v)}
+            className="titlebar-no-drag flex h-[30px] w-[30px] items-center justify-center rounded-s text-ink-3 transition hover:bg-hover hover:text-ink-2"
+            title="折叠侧栏"
+          >
+            <IconPanelLeftClose />
+          </button>
+        )}
 
         {/* Search icon / input (expanded only) */}
         {!collapsed &&
           (showSearch ? (
-            <div className="flex flex-1 items-center gap-[6px] pl-[8px]">
-              <SearchIcon />
+            <div className="flex flex-1 items-center gap-[6px] pl-[8px] text-ink-3">
+              <IconSearch />
               <input
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="搜索任务或会话..."
-                className="w-full border-0 bg-transparent text-[13px] text-[#333] placeholder:text-[#999] focus:outline-none"
+                className="titlebar-no-drag w-full border-0 bg-transparent text-[13px] text-ink placeholder:text-ink-3 focus:outline-none"
+                // biome-ignore lint/a11y/noAutofocus: 点击搜索按钮展开后需立即聚焦输入
                 autoFocus
                 onBlur={() => {
                   if (!searchQuery) {
@@ -308,24 +182,33 @@ export function Sidebar() {
             <button
               type="button"
               onClick={() => setShowSearch(true)}
-              className="flex h-[30px] w-[30px] items-center justify-center rounded-md text-[#999] transition hover:bg-[#e8e8e8]"
+              className="titlebar-no-drag flex h-[30px] w-[30px] items-center justify-center rounded-s text-ink-3 transition hover:bg-hover hover:text-ink-2"
               title="搜索任务"
             >
-              <SearchIcon />
+              <IconSearch />
             </button>
           ))}
       </div>
 
       {collapsed ? (
-        /* ── Collapsed State: new task icon + bottom settings ── */
-        <div className="flex flex-1 flex-col items-center pt-[4px]">
+        /* ── Collapsed State: 展开按钮（顶栏之下，避开红绿灯） + 新建任务 + 底部设置 ── */
+        <div className="flex flex-1 flex-col items-center gap-[2px] pt-[2px]">
+          {/* 展开侧栏按钮：放在 50px 顶栏之下，正好避开红绿灯区域（y≈22-33） */}
+          <button
+            type="button"
+            onClick={() => setCollapsed((v) => !v)}
+            className="flex h-[30px] w-[30px] items-center justify-center rounded-s text-ink-3 transition hover:bg-hover hover:text-ink-2"
+            title="展开侧栏"
+          >
+            <IconPanelLeftOpen />
+          </button>
           <button
             type="button"
             onClick={handleNewTask}
-            className="flex h-[30px] w-[30px] items-center justify-center rounded-md text-[#666] hover:bg-[#e8e8e8]"
+            className="flex h-[30px] w-[30px] items-center justify-center rounded-s text-ink-2 transition hover:bg-hover"
             title="新建任务"
           >
-            <PlusIcon />
+            <IconPlus />
           </button>
 
           {/* Spacer */}
@@ -336,10 +219,10 @@ export function Sidebar() {
             <button
               type="button"
               onClick={() => useUIStore.getState().setModelSettingsOpen(true)}
-              className="flex h-[30px] w-[30px] items-center justify-center rounded-md text-[#999] hover:bg-[#e8e8e8]"
+              className="flex h-[30px] w-[30px] items-center justify-center rounded-s text-ink-3 transition hover:bg-hover hover:text-ink-2"
               title="设置"
             >
-              <SettingsIcon />
+              <IconSettings />
             </button>
           </div>
         </div>
@@ -351,9 +234,9 @@ export function Sidebar() {
             <button
               type="button"
               onClick={handleNewTask}
-              className="flex h-[40px] w-full items-center gap-[10px] rounded-[6px] px-[12px] text-[14px] text-[#333] transition hover:bg-[#f0f0f0] active:scale-[0.98]"
+              className="flex h-[40px] w-full items-center gap-[10px] rounded-s px-[12px] text-[14px] text-ink transition hover:bg-hover active:scale-[0.98]"
             >
-              <PlusIcon />
+              <IconPlus className="text-ink-3" />
               新建任务
             </button>
           </div>
@@ -368,13 +251,11 @@ export function Sidebar() {
                   key={item.id}
                   type="button"
                   onClick={() => setActiveNav(item.id)}
-                  className={`flex h-[40px] items-center gap-[10px] rounded-[6px] px-[12px] text-[14px] transition ${
-                    isActive
-                      ? "bg-[#e8e8e8] font-medium text-[#333]"
-                      : "text-[#333] hover:bg-[#f0f0f0]"
+                  className={`flex h-[40px] items-center gap-[10px] rounded-s px-[12px] text-[14px] transition ${
+                    isActive ? "bg-active font-medium text-ink" : "text-ink-2 hover:bg-hover"
                   }`}
                 >
-                  <Icon />
+                  <Icon className={isActive ? "text-ink-2" : "text-ink-3"} />
                   <span>{item.label}</span>
                 </button>
               );
@@ -382,17 +263,21 @@ export function Sidebar() {
           </nav>
 
           {/* Divider */}
-          <div className="mx-[14px] my-[6px] border-t border-[#e8e8e8]" />
+          <div className="mx-[14px] my-[6px] border-t border-line" />
 
           {/* ── Task List ── */}
           <div className="px-[10px]">
             <button
               type="button"
               onClick={() => setTasksOpen((v) => !v)}
-              className="flex h-[30px] w-full items-center justify-between rounded-[4px] px-[10px] text-[13px] text-[#666] hover:bg-[#f0f0f0]"
+              className="flex h-[30px] w-full items-center justify-between rounded-s px-[10px] text-[11px] font-medium tracking-[0.08em] text-ink-3 transition hover:bg-hover"
             >
               <span>任务 ({filteredTasks.length})</span>
-              <ChevronDownIcon open={tasksOpen} />
+              <IconChevronDown
+                size={12}
+                strokeWidth={2}
+                className={`transition-transform ${tasksOpen ? "rotate-180" : ""}`}
+              />
             </button>
 
             {tasksOpen && (
@@ -417,10 +302,14 @@ export function Sidebar() {
             <button
               type="button"
               onClick={() => setWorkspacesOpen((v) => !v)}
-              className="flex h-[30px] w-full items-center justify-between rounded-[4px] px-[10px] text-[13px] text-[#666] hover:bg-[#f0f0f0]"
+              className="flex h-[30px] w-full items-center justify-between rounded-s px-[10px] text-[11px] font-medium tracking-[0.08em] text-ink-3 transition hover:bg-hover"
             >
               <span>空间 ({filteredWorkspaces.length})</span>
-              <ChevronDownIcon open={workspacesOpen} />
+              <IconChevronDown
+                size={12}
+                strokeWidth={2}
+                className={`transition-transform ${workspacesOpen ? "rotate-180" : ""}`}
+              />
             </button>
 
             {workspacesOpen && (
@@ -459,27 +348,27 @@ export function Sidebar() {
           </div>
 
           {/* ── Bottom User Area ── */}
-          <div className="flex shrink-0 items-center justify-between border-t border-[#e8e8e8] px-[14px] py-[10px]">
+          <div className="flex shrink-0 items-center justify-between border-t border-line px-[14px] py-[10px]">
             <div className="flex items-center gap-[8px]">
-              <div className="h-[28px] w-[28px] rounded-full bg-gradient-to-br from-[#6c8eb2] to-[#4a6a8a] text-[11px] font-medium text-white flex items-center justify-center">
+              <div className="h-[28px] w-[28px] rounded-full bg-accent text-[11px] font-medium text-white flex items-center justify-center">
                 C
               </div>
-              <span className="text-[13px] text-[#333]">Charles.Hao</span>
+              <span className="text-[13px] text-ink-2">Charles.Hao</span>
             </div>
             <div className="flex items-center gap-[6px]">
               <button
                 type="button"
-                className="flex h-[28px] w-[28px] items-center justify-center rounded-md hover:bg-[#e8e8e8]"
+                className="flex h-[28px] w-[28px] items-center justify-center rounded-s text-ink-3 transition hover:bg-hover hover:text-ink-2"
               >
-                <NotificationIcon />
+                <IconBell />
               </button>
               <button
                 type="button"
                 onClick={() => useUIStore.getState().setModelSettingsOpen(true)}
-                className="flex h-[28px] w-[28px] items-center justify-center rounded-md hover:bg-[#e8e8e8]"
+                className="flex h-[28px] w-[28px] items-center justify-center rounded-s text-ink-3 transition hover:bg-hover hover:text-ink-2"
                 title="模型设置"
               >
-                <SettingsIcon />
+                <IconSettings />
               </button>
             </div>
           </div>

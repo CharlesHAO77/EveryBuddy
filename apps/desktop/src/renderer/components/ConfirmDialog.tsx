@@ -51,19 +51,19 @@ export function ConfirmDialog({
         if (e.target === e.currentTarget && !loading) onCancel();
       }}
     >
-      <div className="w-[360px] rounded-2xl bg-white p-5 shadow-2xl">
-        <h3 className="text-[15px] font-medium text-[#333]">{title}</h3>
-        <p className="mt-2 whitespace-pre-line text-[13px] leading-[1.6] text-[#666]">
+      <div className="w-[360px] rounded-l bg-card p-5 shadow-modal">
+        <h3 className="text-[15px] font-medium text-ink">{title}</h3>
+        <p className="mt-2 whitespace-pre-line text-[13px] leading-[1.6] text-ink-2">
           {description}
         </p>
-        {error && <p className="mt-2 text-[12px] text-red-500">{error}</p>}
+        {error && <p className="mt-2 text-[12px] text-danger">{error}</p>}
         <div className="mt-5 flex justify-end gap-2">
           <button
             ref={cancelRef}
             type="button"
             disabled={loading}
             onClick={onCancel}
-            className="rounded-[6px] border border-[#e0e0e0] px-3 py-[6px] text-[13px] text-[#666] transition hover:bg-[#f5f5f5] disabled:opacity-50"
+            className="rounded-s border border-line-strong px-3 py-[6px] text-[13px] text-ink-2 transition hover:bg-hover disabled:opacity-50"
           >
             {cancelLabel}
           </button>
@@ -71,7 +71,7 @@ export function ConfirmDialog({
             type="button"
             disabled={loading}
             onClick={onConfirm}
-            className="rounded-[6px] bg-red-500 px-3 py-[6px] text-[13px] text-white transition hover:bg-red-600 disabled:opacity-50"
+            className="rounded-s bg-danger px-3 py-[6px] text-[13px] text-white transition hover:bg-danger-strong disabled:opacity-50"
           >
             {loading ? "处理中…" : confirmLabel}
           </button>

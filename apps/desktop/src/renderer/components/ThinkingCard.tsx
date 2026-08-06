@@ -4,6 +4,7 @@
  */
 import { useState } from "react";
 import type { ThinkingBlock } from "../stores/sessionStore";
+import { IconChevronDown, IconChevronRight, IconLightbulb } from "./icons";
 
 interface ThinkingCardProps {
   block: ThinkingBlock;
@@ -21,18 +22,9 @@ export function ThinkingCard({ block, streaming }: ThinkingCardProps) {
       <button
         type="button"
         onClick={() => setExpanded((v) => !v)}
-        className="flex items-center gap-1.5 rounded-md px-1.5 py-0.5 text-[11px] text-[var(--text-muted)] transition hover:bg-[var(--surface-hover)]"
+        className="flex items-center gap-1.5 rounded-s px-1.5 py-0.5 text-[11px] text-ink-3 transition hover:bg-hover hover:text-ink-2"
       >
-        <svg
-          width="11"
-          height="11"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-        >
-          <path d="M9 18h6M10 22h4M12 2a7 7 0 00-4 12.7c.6.5 1 1.3 1 2.1V18h6v-1.2c0-.8.4-1.6 1-2.1A7 7 0 0012 2z" />
-        </svg>
+        <IconLightbulb size={11} strokeWidth={2} />
         {!done ? (
           <span className="flex items-center gap-1">
             思考中
@@ -43,11 +35,18 @@ export function ThinkingCard({ block, streaming }: ThinkingCardProps) {
             </span>
           </span>
         ) : (
-          <span>已思考 {expanded ? "▾" : "▸"}</span>
+          <span className="flex items-center gap-0.5">
+            已思考
+            {expanded ? (
+              <IconChevronDown size={10} strokeWidth={2} />
+            ) : (
+              <IconChevronRight size={10} strokeWidth={2} />
+            )}
+          </span>
         )}
       </button>
       {expanded && (
-        <div className="mt-1 ml-5 whitespace-pre-wrap rounded-md bg-[var(--surface-hover)] px-3 py-2 text-[12px] text-gray-500">
+        <div className="mt-1 ml-5 whitespace-pre-wrap rounded-s bg-hover px-3 py-2 text-[12px] text-ink-2">
           {done ? block.content || "（无内容）" : block.content}
         </div>
       )}

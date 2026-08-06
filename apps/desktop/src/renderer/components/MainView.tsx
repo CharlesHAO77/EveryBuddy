@@ -2,109 +2,19 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { type ChatMessage, useSessionStore } from "../stores/sessionStore";
 import { type CategoryId, useUIStore } from "../stores/uiStore";
+import {
+  IconArrowUp,
+  IconCheck,
+  IconChevronDown,
+  IconClock,
+  IconFolder,
+  IconMic,
+  IconPlus,
+  IconStop,
+  IconX,
+} from "./icons";
 import { AssistantGroup, MessageBubble } from "./MessageBubble";
 import { ModelSelector } from "./ModelSelector";
-
-/* ── Inline SVG Icons ─────────────────────────── */
-
-const PlusIcon = () => (
-  <svg
-    width="16"
-    height="16"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="#999"
-    strokeWidth="1.5"
-    strokeLinecap="round"
-  >
-    <line x1="12" y1="5" x2="12" y2="19" />
-    <line x1="5" y1="12" x2="19" y2="12" />
-  </svg>
-);
-
-const MicIcon = () => (
-  <svg
-    width="16"
-    height="16"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="#999"
-    strokeWidth="1.5"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-  >
-    <rect x="9" y="2" width="6" height="11" rx="3" />
-    <path d="M5 10v1a7 7 0 0014 0v-1" />
-    <line x1="12" y1="19" x2="12" y2="23" />
-    <line x1="8" y1="23" x2="16" y2="23" />
-  </svg>
-);
-
-const SendIcon = () => (
-  <svg
-    width="16"
-    height="16"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="#fff"
-    strokeWidth="2"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-  >
-    <line x1="12" y1="19" x2="12" y2="5" />
-    <polyline points="5 12 12 5 19 12" />
-  </svg>
-);
-
-const StopIcon = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="#fff">
-    <rect x="6" y="6" width="12" height="12" rx="2" />
-  </svg>
-);
-
-const ChevronDownSmall = () => (
-  <svg
-    width="10"
-    height="10"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="#999"
-    strokeWidth="2"
-    strokeLinecap="round"
-  >
-    <polyline points="6 9 12 15 18 9" />
-  </svg>
-);
-
-const FolderSmallIcon = () => (
-  <svg
-    width="14"
-    height="14"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="#999"
-    strokeWidth="1.5"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-  >
-    <path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z" />
-  </svg>
-);
-
-const CheckIcon = () => (
-  <svg
-    width="12"
-    height="12"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="#333"
-    strokeWidth="2.5"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-  >
-    <polyline points="20 6 9 17 4 12" />
-  </svg>
-);
 
 /* ── Model Selector Helpers ───────────────────── */
 
@@ -163,7 +73,7 @@ export function MainView() {
   const currentTaskId = useSessionStore((s) => s.currentTaskId);
 
   return (
-    <main className="relative flex flex-1 flex-col overflow-hidden bg-white">
+    <main className="relative flex flex-1 flex-col overflow-hidden bg-paper">
       {currentTaskId ? <ChatView taskId={currentTaskId} /> : <WelcomeView />}
     </main>
   );
@@ -228,13 +138,13 @@ function WorkspaceSelector() {
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="flex items-center gap-[4px] text-[12px] text-[#999] transition hover:text-[#666]"
+        className="flex items-center gap-[4px] text-[12px] text-ink-3 transition hover:text-ink-2"
       >
         {label}
-        <ChevronDownSmall />
+        <IconChevronDown size={10} strokeWidth={2} />
       </button>
       {open && (
-        <div className="absolute bottom-full left-0 mb-[6px] w-[220px] rounded-[10px] border border-[#e8e8e8] bg-white py-[6px] shadow-[0_4px_16px_rgba(0,0,0,0.08)]">
+        <div className="absolute bottom-full left-0 mb-[6px] w-[220px] rounded-m border border-line bg-card py-[6px] shadow-pop">
           {workspaces.map((ws) => (
             <button
               key={ws.id}
@@ -243,24 +153,26 @@ function WorkspaceSelector() {
                 setPendingWorkspace(ws.id);
                 setOpen(false);
               }}
-              className={`flex w-full items-center gap-[8px] px-[12px] py-[7px] text-left text-[13px] transition hover:bg-[#f5f5f5] ${
-                ws.id === pendingWorkspaceId ? "text-[#111]" : "text-[#333]"
+              className={`flex w-full items-center gap-[8px] px-[12px] py-[7px] text-left text-[13px] transition hover:bg-hover ${
+                ws.id === pendingWorkspaceId ? "text-ink" : "text-ink-2"
               }`}
             >
-              <FolderSmallIcon />
+              <IconFolder size={14} className="text-ink-3" />
               <span className="flex-1 truncate">{ws.name}</span>
-              {ws.id === pendingWorkspaceId && <CheckIcon />}
+              {ws.id === pendingWorkspaceId && (
+                <IconCheck size={12} strokeWidth={2.5} className="text-accent" />
+              )}
             </button>
           ))}
 
-          <div className="my-[4px] border-t border-[#eee]" />
+          <div className="my-[4px] border-t border-line" />
 
           <button
             type="button"
             onClick={handlePickFolder}
-            className="flex w-full items-center gap-[8px] px-[12px] py-[7px] text-left text-[13px] text-[#333] transition hover:bg-[#f5f5f5]"
+            className="flex w-full items-center gap-[8px] px-[12px] py-[7px] text-left text-[13px] text-ink-2 transition hover:bg-hover"
           >
-            <FolderSmallIcon />
+            <IconFolder size={14} className="text-ink-3" />
             指定文件夹
           </button>
 
@@ -269,6 +181,7 @@ function WorkspaceSelector() {
               <input
                 type="text"
                 value={name}
+                // biome-ignore lint/a11y/noAutofocus: 点「新建空间」后需立即聚焦名称输入
                 autoFocus
                 onChange={(e) => setName(e.target.value)}
                 onKeyDown={(e) => {
@@ -282,14 +195,14 @@ function WorkspaceSelector() {
                   }
                 }}
                 placeholder="空间名称"
-                className="w-full rounded-md border border-[#e8e8e8] px-[8px] py-[5px] text-[13px] text-[#333] focus:border-[#ccc] focus:outline-none"
+                className="w-full rounded-s border border-line bg-card px-[8px] py-[5px] text-[13px] text-ink placeholder:text-ink-3 focus:border-accent focus:outline-none"
               />
               <div className="mt-[6px] flex gap-[6px]">
                 <button
                   type="button"
                   onClick={() => void handleCreateNamed()}
                   disabled={!name.trim()}
-                  className="rounded-md bg-[#555] px-[10px] py-[4px] text-[12px] text-white transition hover:bg-[#333] disabled:opacity-30"
+                  className="rounded-s bg-accent px-[10px] py-[4px] text-[12px] text-white transition hover:bg-accent-strong disabled:opacity-30"
                 >
                   创建
                 </button>
@@ -299,7 +212,7 @@ function WorkspaceSelector() {
                     setCreating(false);
                     setName("");
                   }}
-                  className="rounded-md px-[10px] py-[4px] text-[12px] text-[#999] transition hover:bg-[#f0f0f0]"
+                  className="rounded-s px-[10px] py-[4px] text-[12px] text-ink-3 transition hover:bg-hover"
                 >
                   取消
                 </button>
@@ -309,14 +222,14 @@ function WorkspaceSelector() {
             <button
               type="button"
               onClick={() => setCreating(true)}
-              className="flex w-full items-center gap-[8px] px-[12px] py-[7px] text-left text-[13px] text-[#333] transition hover:bg-[#f5f5f5]"
+              className="flex w-full items-center gap-[8px] px-[12px] py-[7px] text-left text-[13px] text-ink-2 transition hover:bg-hover"
             >
-              <PlusIcon />
+              <IconPlus size={14} className="text-ink-3" />
               新建空间
             </button>
           )}
 
-          <div className="my-[4px] border-t border-[#eee]" />
+          <div className="my-[4px] border-t border-line" />
 
           <button
             type="button"
@@ -324,9 +237,10 @@ function WorkspaceSelector() {
               setPendingWorkspace(null);
               setOpen(false);
             }}
-            className="flex w-full items-center gap-[8px] px-[12px] py-[7px] text-left text-[13px] text-[#999] transition hover:bg-[#f5f5f5]"
+            className="flex w-full items-center gap-[8px] px-[12px] py-[7px] text-left text-[13px] text-ink-3 transition hover:bg-hover"
           >
-            ✕ 无工作空间
+            <IconX size={12} />
+            无工作空间
           </button>
         </div>
       )}
@@ -393,7 +307,9 @@ function WelcomeView() {
       {/* ── Centered Content ── */}
       <div className="flex w-full max-w-[600px] flex-col items-center pt-[130px]">
         {/* Title */}
-        <h1 className="text-[32px] font-semibold tracking-tight text-[#111]">EveryBuddy, 我帮你</h1>
+        <h1 className="font-display text-[34px] font-medium tracking-tight text-ink">
+          EveryBuddy, 我帮你
+        </h1>
 
         {/* Mode Tabs */}
         <div className="mt-[24px] flex gap-[8px]">
@@ -404,8 +320,8 @@ function WelcomeView() {
                 key={mode.id}
                 type="button"
                 onClick={() => setActiveCategory(mode.id)}
-                className={`h-[36px] rounded-[20px] px-[20px] text-[14px] font-medium transition active:scale-[0.97] ${
-                  isActive ? "bg-[#111] text-white" : "bg-[#f5f5f5] text-[#666] hover:bg-[#ebebeb]"
+                className={`h-[36px] rounded-full px-[20px] text-[14px] font-medium transition active:scale-[0.97] ${
+                  isActive ? "bg-ink text-card" : "bg-hover text-ink-2 hover:bg-active"
                 }`}
               >
                 {mode.label}
@@ -423,34 +339,23 @@ function WelcomeView() {
                 <button
                   key={tag.id}
                   type="button"
-                  className="flex h-[32px] items-center gap-[6px] rounded-[16px] border border-[#e8e8e8] bg-white px-[14px] text-[13px] text-[#666] transition hover:bg-[#f5f5f5]"
+                  className="flex h-[32px] items-center gap-[6px] rounded-full border border-line bg-card px-[14px] text-[13px] text-ink-2 transition hover:border-line-strong hover:bg-hover"
                 >
-                  <svg
-                    width="12"
-                    height="12"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="#999"
-                    strokeWidth="1.5"
-                    strokeLinecap="round"
-                  >
-                    <circle cx="12" cy="12" r="10" />
-                    <polyline points="12 6 12 12 16 14" />
-                  </svg>
+                  <IconClock size={12} className="text-ink-3" />
                   {tag.label}
                 </button>
               ))}
             </div>
           )}
 
-          <div className="relative h-[160px] rounded-[18px] border border-[#eee] bg-white shadow-[0_1px_6px_rgba(0,0,0,0.04)] transition focus-within:border-[#ddd]">
+          <div className="relative h-[160px] rounded-l border border-line bg-card shadow-card transition focus-within:border-accent">
             <textarea
               value={text}
               onChange={(e) => setText(e.target.value)}
               onKeyDown={handleKeyDown}
               placeholder="今天帮你做些什么？"
               rows={3}
-              className="h-full w-full resize-none border-0 bg-transparent px-[20px] pt-[20px] text-[16px] text-[#333] placeholder:text-[#999] focus:outline-none"
+              className="h-full w-full resize-none border-0 bg-transparent px-[20px] pt-[20px] text-[16px] text-ink placeholder:text-ink-3 focus:outline-none"
             />
 
             {/* Bottom toolbar */}
@@ -458,11 +363,11 @@ function WelcomeView() {
               <div className="flex items-center gap-[16px]">
                 <button
                   type="button"
-                  className="flex h-[28px] w-[28px] items-center justify-center rounded-md text-[#999] transition hover:bg-[#f0f0f0]"
+                  className="flex h-[28px] w-[28px] items-center justify-center rounded-s text-ink-3 transition hover:bg-hover hover:text-ink-2"
                 >
-                  <PlusIcon />
+                  <IconPlus />
                 </button>
-                <span className="text-[13px] text-[#999]">@引用对话文件，/调用技能与指令</span>
+                <span className="text-[13px] text-ink-3">@引用对话文件，/调用技能与指令</span>
               </div>
 
               <div className="flex items-center gap-[8px]">
@@ -480,9 +385,9 @@ function WelcomeView() {
                 {/* Mic */}
                 <button
                   type="button"
-                  className="flex h-[28px] w-[28px] items-center justify-center rounded-md text-[#999] transition hover:bg-[#f0f0f0]"
+                  className="flex h-[28px] w-[28px] items-center justify-center rounded-s text-ink-3 transition hover:bg-hover hover:text-ink-2"
                 >
-                  <MicIcon />
+                  <IconMic />
                 </button>
 
                 {/* Send */}
@@ -490,9 +395,9 @@ function WelcomeView() {
                   type="button"
                   onClick={handleSend}
                   disabled={!text.trim()}
-                  className="flex h-[30px] w-[30px] items-center justify-center rounded-full bg-[#555] text-white transition hover:bg-[#333] active:scale-95 disabled:opacity-30 disabled:cursor-not-allowed"
+                  className="flex h-[30px] w-[30px] items-center justify-center rounded-full bg-accent text-white transition hover:bg-accent-strong active:scale-95 disabled:opacity-30 disabled:cursor-not-allowed"
                 >
-                  <SendIcon />
+                  <IconArrowUp strokeWidth={2} />
                 </button>
               </div>
             </div>
@@ -504,10 +409,10 @@ function WelcomeView() {
           <WorkspaceSelector />
           <button
             type="button"
-            className="flex items-center gap-[4px] text-[12px] text-[#999] transition hover:text-[#666]"
+            className="flex items-center gap-[4px] text-[12px] text-ink-3 transition hover:text-ink-2"
           >
             默认权限
-            <ChevronDownSmall />
+            <IconChevronDown size={10} strokeWidth={2} />
           </button>
         </div>
       </div>
@@ -544,6 +449,7 @@ function ChatView({ taskId }: { taskId: string }) {
     if (!el) return;
     atBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
   };
+  // biome-ignore lint/correctness/useExhaustiveDependencies: 需在消息变化时触发自动滚动（effect 仅引用 ref，deps 用于触发时机）
   useEffect(() => {
     const el = scrollRef.current;
     if (el && atBottomRef.current) {
@@ -577,7 +483,7 @@ function ChatView({ taskId }: { taskId: string }) {
       <div ref={scrollRef} onScroll={handleScroll} className="flex-1 overflow-y-auto px-6 py-6">
         {messages.length === 0 ? (
           <div className="flex min-h-full flex-col items-center justify-center">
-            <p className="text-sm text-[#999]">
+            <p className="text-sm text-ink-3">
               {hydrating ? "加载历史中…" : "新会话，发送消息开始对话"}
             </p>
           </div>
@@ -597,23 +503,23 @@ function ChatView({ taskId }: { taskId: string }) {
       </div>
 
       {/* Chat input */}
-      <div className="border-t border-[#eee] bg-white px-6 py-4">
+      <div className="border-t border-line bg-paper px-6 py-4">
         <div className="mx-auto max-w-3xl">
-          <div className="relative h-[120px] rounded-[18px] border border-[#eee] bg-white shadow-[0_1px_6px_rgba(0,0,0,0.04)] transition focus-within:border-[#ddd]">
+          <div className="relative h-[120px] rounded-l border border-line bg-card shadow-card transition focus-within:border-accent">
             <textarea
               value={text}
               onChange={(e) => setText(e.target.value)}
               onKeyDown={handleKeyDown}
               placeholder="今天帮你做些什么？ @引用对话文件，/调用技能与指令"
               rows={2}
-              className="h-full w-full resize-none border-0 bg-transparent px-[20px] pt-[16px] text-[16px] text-[#333] placeholder:text-[#999] focus:outline-none"
+              className="h-full w-full resize-none border-0 bg-transparent px-[20px] pt-[16px] text-[16px] text-ink placeholder:text-ink-3 focus:outline-none"
             />
             <div className="absolute bottom-0 left-0 right-0 flex items-center justify-between px-[14px] pb-[10px]">
               <button
                 type="button"
-                className="flex h-[28px] w-[28px] items-center justify-center rounded-md text-[#999] transition hover:bg-[#f0f0f0]"
+                className="flex h-[28px] w-[28px] items-center justify-center rounded-s text-ink-3 transition hover:bg-hover hover:text-ink-2"
               >
-                <PlusIcon />
+                <IconPlus />
               </button>
               <div className="flex items-center gap-[8px]">
                 <ModelSelector
@@ -623,27 +529,27 @@ function ChatView({ taskId }: { taskId: string }) {
                 />
                 <button
                   type="button"
-                  className="flex h-[28px] w-[28px] items-center justify-center rounded-md text-[#999] transition hover:bg-[#f0f0f0]"
+                  className="flex h-[28px] w-[28px] items-center justify-center rounded-s text-ink-3 transition hover:bg-hover hover:text-ink-2"
                 >
-                  <MicIcon />
+                  <IconMic />
                 </button>
                 {isStreaming ? (
                   <button
                     type="button"
                     onClick={() => void abortTask(taskId)}
                     title="停止生成"
-                    className="flex h-[30px] w-[30px] items-center justify-center rounded-full bg-[#555] text-white transition hover:bg-[#333] active:scale-95"
+                    className="flex h-[30px] w-[30px] items-center justify-center rounded-full bg-accent text-white transition hover:bg-accent-strong active:scale-95"
                   >
-                    <StopIcon />
+                    <IconStop size={14} />
                   </button>
                 ) : (
                   <button
                     type="button"
                     onClick={handleSend}
                     disabled={!text.trim()}
-                    className="flex h-[30px] w-[30px] items-center justify-center rounded-full bg-[#555] text-white transition hover:bg-[#333] active:scale-95 disabled:opacity-30 disabled:cursor-not-allowed"
+                    className="flex h-[30px] w-[30px] items-center justify-center rounded-full bg-accent text-white transition hover:bg-accent-strong active:scale-95 disabled:opacity-30 disabled:cursor-not-allowed"
                   >
-                    <SendIcon />
+                    <IconArrowUp strokeWidth={2} />
                   </button>
                 )}
               </div>

@@ -1,19 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useUIStore } from "../stores/uiStore";
-
-const ChevronDownSmall = () => (
-  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-    <title>展开</title>
-    <polyline points="6 9 12 15 18 9" />
-  </svg>
-);
-
-const CheckIcon = () => (
-  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <title>已选</title>
-    <polyline points="20 6 9 17 4 12" />
-  </svg>
-);
+import { IconCheck, IconChevronDown } from "./icons";
 
 interface ModelSelectorProps {
   selectedId?: string | null;
@@ -66,14 +53,14 @@ export function ModelSelector({ selectedId, onSelect, onOpenSettings }: ModelSel
       <button
         type="button"
         onClick={handleTriggerClick}
-        className="flex items-center gap-[4px] rounded-[6px] px-[8px] py-[4px] text-[12px] text-[#999] transition hover:bg-[#f0f0f0]"
+        className="flex items-center gap-[4px] rounded-s px-[8px] py-[4px] text-[12px] text-ink-3 transition hover:bg-hover hover:text-ink-2"
       >
         {displayName}
-        {models.length > 0 && <ChevronDownSmall />}
+        {models.length > 0 && <IconChevronDown size={10} strokeWidth={2} title="展开" />}
       </button>
 
       {open && models.length > 0 && (
-        <div className="absolute bottom-full right-0 z-50 mb-1 w-[180px] rounded-[8px] border border-[#e8e8e8] bg-white py-1 shadow-[0_4px_16px_rgba(0,0,0,0.08)]">
+        <div className="absolute bottom-full right-0 z-50 mb-1 w-[180px] rounded-m border border-line bg-card py-1 shadow-pop">
           {models.map((m) => {
             const isSelected = m.id === effectiveId;
             return (
@@ -82,11 +69,11 @@ export function ModelSelector({ selectedId, onSelect, onOpenSettings }: ModelSel
                 type="button"
                 onClick={() => handleSelect(m.id)}
                 className={`flex w-full items-center justify-between px-3 py-2 text-left text-[13px] transition ${
-                  isSelected ? "bg-[#f0fdfa] text-[#0d9488]" : "text-[#333] hover:bg-[#f5f5f5]"
+                  isSelected ? "bg-accent-tint text-accent-strong" : "text-ink-2 hover:bg-hover"
                 }`}
               >
                 <span className="truncate">{m.name}</span>
-                {isSelected && <CheckIcon />}
+                {isSelected && <IconCheck size={12} strokeWidth={2} title="已选" />}
               </button>
             );
           })}

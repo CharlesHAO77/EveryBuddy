@@ -6,20 +6,7 @@
 import type { ModelProviderConfig, SaveModelRequest } from "@everybuddy/ipc-contract";
 import { useState } from "react";
 import { useUIStore } from "../stores/uiStore";
-
-const CloseIcon = () => (
-  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-    <line x1="18" y1="6" x2="6" y2="18" />
-    <line x1="6" y1="6" x2="18" y2="18" />
-  </svg>
-);
-
-const TrashIcon = () => (
-  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-    <polyline points="3 6 5 6 21 6" />
-    <path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2" />
-  </svg>
-);
+import { IconTrash, IconX } from "./icons";
 
 interface ModelSettingsProps {
   onClose: () => void;
@@ -78,19 +65,19 @@ export function ModelSettings({ onClose }: ModelSettingsProps) {
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4">
-      <div className="flex max-h-[80vh] w-full max-w-xl flex-col rounded-2xl bg-white shadow-2xl">
+      <div className="flex max-h-[80vh] w-full max-w-xl flex-col rounded-l bg-card shadow-modal">
         {/* Header */}
-        <div className="flex items-center justify-between border-b border-[var(--border)] px-5 py-4">
+        <div className="flex items-center justify-between border-b border-line px-5 py-4">
           <div>
-            <h2 className="text-[16px] font-semibold text-[var(--text-main)]">模型设置</h2>
-            <p className="text-[11px] text-[var(--text-muted)]">支持 OpenAI 兼容格式的自定义模型</p>
+            <h2 className="text-[16px] font-semibold text-ink">模型设置</h2>
+            <p className="text-[11px] text-ink-3">支持 OpenAI 兼容格式的自定义模型</p>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="rounded-lg p-1 text-[var(--text-muted)] transition hover:bg-[var(--primary-bg)]"
+            className="rounded-s p-1 text-ink-3 transition hover:bg-accent-tint hover:text-ink-2"
           >
-            <CloseIcon />
+            <IconX size={18} strokeWidth={2} title="关闭" />
           </button>
         </div>
 
@@ -100,10 +87,10 @@ export function ModelSettings({ onClose }: ModelSettingsProps) {
             {models.map((m) => (
               <div
                 key={m.id}
-                className={`rounded-xl border p-4 transition ${
+                className={`rounded-m border p-4 transition ${
                   currentModelId === m.id
-                    ? "border-[var(--primary)] bg-[var(--primary-bg)]"
-                    : "border-[var(--border)] bg-[var(--surface-card)] hover:border-[var(--primary-light)]"
+                    ? "border-accent bg-accent-tint"
+                    : "border-line bg-card hover:border-accent-line"
                 }`}
               >
                 {editingId === m.id && draft ? (
@@ -125,14 +112,14 @@ export function ModelSettings({ onClose }: ModelSettingsProps) {
                         className="flex-1 text-left"
                       >
                         <div className="flex items-center gap-2">
-                          <span className="font-medium text-[var(--text-main)]">{m.name}</span>
+                          <span className="font-medium text-ink">{m.name}</span>
                           {currentModelId === m.id && (
-                            <span className="rounded-full bg-[var(--primary)] px-2 py-0.5 text-[10px] font-medium text-white">
+                            <span className="rounded-full bg-accent px-2 py-0.5 text-[10px] font-medium text-white">
                               当前
                             </span>
                           )}
                         </div>
-                        <div className="mt-1 text-[11px] text-[var(--text-muted)]">
+                        <div className="mt-1 text-[11px] text-ink-3">
                           {m.model} · {m.baseUrl}
                         </div>
                       </button>
@@ -140,7 +127,7 @@ export function ModelSettings({ onClose }: ModelSettingsProps) {
                         <button
                           type="button"
                           onClick={() => startEdit(m)}
-                          className="rounded-lg px-2 py-1 text-[11px] text-[var(--text-muted)] transition hover:bg-[var(--primary-bg)]"
+                          className="rounded-s px-2 py-1 text-[11px] text-ink-3 transition hover:bg-accent-tint hover:text-ink-2"
                         >
                           编辑
                         </button>
@@ -148,9 +135,9 @@ export function ModelSettings({ onClose }: ModelSettingsProps) {
                           <button
                             type="button"
                             onClick={() => removeModel(m.id)}
-                            className="rounded-lg p-1 text-red-500 transition hover:bg-red-50"
+                            className="rounded-s p-1 text-danger transition hover:bg-danger/10"
                           >
-                            <TrashIcon />
+                            <IconTrash size={13} strokeWidth={2} title="删除模型" />
                           </button>
                         )}
                       </div>
@@ -158,7 +145,7 @@ export function ModelSettings({ onClose }: ModelSettingsProps) {
                     {/* API Key 设置 */}
                     <div className="mt-2 flex items-center gap-2">
                       {m.hasApiKey ? (
-                        <span className="rounded-full bg-green-50 px-2 py-0.5 text-[10px] text-green-600">
+                        <span className="rounded-full bg-accent-tint px-2 py-0.5 text-[10px] text-accent-strong">
                           ✓ API Key 已配置
                         </span>
                       ) : (
@@ -171,13 +158,13 @@ export function ModelSettings({ onClose }: ModelSettingsProps) {
                         value={apiKeyInput[m.id] ?? ""}
                         onChange={(e) => setApiKeyInput((p) => ({ ...p, [m.id]: e.target.value }))}
                         placeholder={m.hasApiKey ? "输入新 Key 替换" : "输入 API Key"}
-                        className="flex-1 rounded-md border border-[var(--border)] bg-white px-2 py-1 text-[11px] focus:border-[var(--primary-light)] focus:outline-none"
+                        className="flex-1 rounded-s border border-line bg-card px-2 py-1 text-[11px] text-ink focus:border-accent focus:outline-none"
                       />
                       <button
                         type="button"
                         onClick={() => handleSetApiKey(m.id)}
                         disabled={!apiKeyInput[m.id]?.trim()}
-                        className="rounded-md bg-[var(--primary)] px-2 py-1 text-[10px] font-medium text-white transition hover:bg-[var(--primary-dark)] disabled:opacity-40"
+                        className="rounded-s bg-accent px-2 py-1 text-[10px] font-medium text-white transition hover:bg-accent-strong disabled:opacity-40"
                       >
                         保存
                       </button>
@@ -188,7 +175,7 @@ export function ModelSettings({ onClose }: ModelSettingsProps) {
             ))}
 
             {editingId && !models.some((m) => m.id === editingId) && draft && (
-              <div className="rounded-xl border border-[var(--primary-light)] bg-[var(--primary-bg)] p-4">
+              <div className="rounded-m border border-accent-line bg-accent-tint p-4">
                 <ModelForm
                   draft={draft}
                   onChange={setDraft}
@@ -204,12 +191,12 @@ export function ModelSettings({ onClose }: ModelSettingsProps) {
         </div>
 
         {/* Footer */}
-        <div className="border-t border-[var(--border)] px-5 py-3">
+        <div className="border-t border-line px-5 py-3">
           <button
             type="button"
             onClick={startAdd}
             disabled={editingId !== null}
-            className="w-full rounded-full border border-dashed border-[var(--primary-light)] py-2 text-[13px] font-medium text-[var(--primary)] transition hover:bg-[var(--primary-bg)] disabled:cursor-not-allowed disabled:opacity-50"
+            className="w-full rounded-full border border-dashed border-accent-line py-2 text-[13px] font-medium text-accent transition hover:bg-accent-tint disabled:cursor-not-allowed disabled:opacity-50"
           >
             + 添加 OpenAI 兼容模型
           </button>
@@ -228,8 +215,8 @@ interface ModelFormProps {
 
 function ModelForm({ draft, onChange, onSave, onCancel }: ModelFormProps) {
   const field =
-    "w-full rounded-lg border border-[var(--border)] bg-[var(--surface-card)] px-3 py-2 text-[13px] outline-none transition focus:border-[var(--primary-light)]";
-  const label = "mb-1 block text-[11px] font-medium text-[var(--text-muted)]";
+    "w-full rounded-s border border-line bg-card px-3 py-2 text-[13px] text-ink outline-none transition focus:border-accent";
+  const label = "mb-1 block text-[11px] font-medium text-ink-3";
 
   return (
     <div className="space-y-2.5">
@@ -260,12 +247,12 @@ function ModelForm({ draft, onChange, onSave, onCancel }: ModelFormProps) {
           placeholder="gpt-4o"
         />
       </div>
-      <label className="flex items-center gap-2 text-[13px] text-[var(--text-main)]">
+      <label className="flex items-center gap-2 text-[13px] text-ink">
         <input
           type="checkbox"
           checked={draft.isOpenAiCompatible}
           onChange={(e) => onChange({ ...draft, isOpenAiCompatible: e.target.checked })}
-          className="h-4 w-4 rounded border-gray-300 text-[var(--primary)]"
+          className="h-4 w-4 rounded border-line-strong text-accent"
         />
         OpenAI 兼容格式
       </label>
@@ -273,14 +260,14 @@ function ModelForm({ draft, onChange, onSave, onCancel }: ModelFormProps) {
         <button
           type="button"
           onClick={onCancel}
-          className="rounded-lg px-3 py-1.5 text-[12px] text-[var(--text-muted)] transition hover:bg-[var(--primary-bg)]"
+          className="rounded-s px-3 py-1.5 text-[12px] text-ink-3 transition hover:bg-accent-tint"
         >
           取消
         </button>
         <button
           type="button"
           onClick={onSave}
-          className="rounded-full bg-[var(--primary)] px-3 py-1.5 text-[12px] font-medium text-white transition hover:bg-[var(--primary-dark)] active:scale-95"
+          className="rounded-full bg-accent px-3 py-1.5 text-[12px] font-medium text-white transition hover:bg-accent-strong active:scale-95"
         >
           保存
         </button>

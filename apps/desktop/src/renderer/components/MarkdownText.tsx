@@ -20,18 +20,18 @@ function CodeBlock({ code, lang }: CodeBlockProps) {
     });
   };
   return (
-    <div className="group relative my-2 overflow-hidden rounded-lg bg-gray-900">
-      <div className="flex items-center justify-between border-b border-gray-700 px-3 py-1">
-        <span className="text-[10px] text-gray-400">{lang || "code"}</span>
+    <div className="group relative my-2 overflow-hidden rounded-s bg-terminal">
+      <div className="flex items-center justify-between border-b border-white/10 px-3 py-1">
+        <span className="text-[10px] text-white/40">{lang || "code"}</span>
         <button
           type="button"
           onClick={handleCopy}
-          className="text-[10px] text-gray-400 transition hover:text-gray-200"
+          className="text-[10px] text-white/40 transition hover:text-white/80"
         >
           {copied ? "已复制" : "复制"}
         </button>
       </div>
-      <pre className="overflow-x-auto px-3 py-2 text-[12px] leading-relaxed text-gray-100">
+      <pre className="overflow-x-auto px-3 py-2 text-[12px] leading-relaxed text-terminal-text">
         <code>{code}</code>
       </pre>
     </div>
@@ -53,7 +53,7 @@ function renderInline(text: string, keyPrefix: string): ReactNode[] {
       nodes.push(
         <code
           key={`${keyPrefix}-c-${i}`}
-          className="rounded bg-gray-100 px-1 py-0.5 text-[12px] text-[var(--text-main)]"
+          className="rounded bg-hover px-1 py-0.5 text-[12px] text-ink"
         >
           {token.slice(1, -1)}
         </code>,
@@ -79,7 +79,7 @@ interface MarkdownTextProps {
 export function MarkdownText({ content }: MarkdownTextProps) {
   const blocks = useMemo(() => parseBlocks(content), [content]);
   return (
-    <div className="text-[14px] leading-relaxed text-[var(--text-main)]">
+    <div className="text-[14px] leading-relaxed text-ink">
       {blocks.map((b, i) => {
         if (b.type === "code") {
           return <CodeBlock key={i} code={b.code} lang={b.lang} />;

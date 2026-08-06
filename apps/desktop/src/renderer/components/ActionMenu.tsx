@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { IconMoreVertical } from "./icons";
 
 export interface MenuItem {
   label: string;
@@ -9,15 +10,6 @@ export interface MenuItem {
 interface ActionMenuProps {
   items: MenuItem[];
 }
-
-const MoreIcon = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
-    <title>更多操作</title>
-    <circle cx="12" cy="5" r="1.7" />
-    <circle cx="12" cy="12" r="1.7" />
-    <circle cx="12" cy="19" r="1.7" />
-  </svg>
-);
 
 /**
  * 列表项 hover 出现的 ⋯ 按钮 + dropdown 菜单。
@@ -70,17 +62,17 @@ export function ActionMenu({ items }: ActionMenuProps) {
         aria-label="更多操作"
         onClick={handleTriggerClick}
         onMouseDown={(e) => e.stopPropagation()}
-        className={`flex h-[20px] w-[20px] items-center justify-center rounded-[4px] text-[#999] transition hover:bg-[#e0e0e0] ${
+        className={`flex h-[20px] w-[20px] items-center justify-center rounded-s text-ink-3 transition hover:bg-active ${
           open ? "opacity-100" : "opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
         }`}
       >
-        <MoreIcon />
+        <IconMoreVertical size={14} title="更多操作" />
       </button>
 
       {open && (
         // biome-ignore lint/a11y/noStaticElementInteractions lint/a11y/useKeyWithClickEvents: 菜单面板仅用于拦截点击穿透（stopPropagation），非交互控件
         <div
-          className={`absolute right-0 z-50 w-[140px] rounded-[8px] border border-[#e8e8e8] bg-white py-1 shadow-[0_4px_16px_rgba(0,0,0,0.08)] ${
+          className={`absolute right-0 z-50 w-[140px] rounded-m border border-line bg-card py-1 shadow-pop ${
             dropUp ? "bottom-full mb-[2px]" : "top-full mt-[2px]"
           }`}
           onClick={(e) => e.stopPropagation()}
@@ -95,7 +87,7 @@ export function ActionMenu({ items }: ActionMenuProps) {
                 item.onSelect();
               }}
               className={`flex w-full items-center px-3 py-[6px] text-left text-[13px] transition ${
-                item.danger ? "text-red-500 hover:bg-red-50" : "text-[#333] hover:bg-[#f5f5f5]"
+                item.danger ? "text-danger hover:bg-danger/10" : "text-ink-2 hover:bg-hover"
               }`}
             >
               {item.label}

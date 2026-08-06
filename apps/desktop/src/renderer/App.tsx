@@ -35,7 +35,7 @@ export function App() {
   }, [sessionLoaded, uiLoaded, models.length, setModelSettingsOpen]);
 
   return (
-    <div className="flex h-screen w-full overflow-hidden bg-[var(--bg-main)]">
+    <div className="flex h-screen w-full overflow-hidden bg-paper">
       <Sidebar />
       <MainView />
       {isModelSettingsOpen && <ModelSettings onClose={() => setModelSettingsOpen(false)} />}

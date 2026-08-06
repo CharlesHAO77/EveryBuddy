@@ -3,6 +3,7 @@
  * 助手消息（一个 turn 内可能含多轮思考/文本/工具）由 AssistantGroup 合并渲染。
  */
 import type { ChatMessage } from "../stores/sessionStore";
+import { IconAlertTriangle } from "./icons";
 import { TextCard } from "./TextCard";
 import { ThinkingCard } from "./ThinkingCard";
 import { ToolCallCard } from "./ToolCallCard";
@@ -21,8 +22,9 @@ export function MessageBubble({ message }: MessageBubbleProps) {
   if (message.errorMessage) {
     return (
       <div className="flex justify-start">
-        <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-2 text-[13px] text-red-600">
-          ⚠ {message.errorMessage}
+        <div className="flex items-start gap-1.5 rounded-m border border-danger/30 bg-danger/5 px-4 py-2 text-[13px] text-danger">
+          <IconAlertTriangle size={14} className="mt-[3px] shrink-0" />
+          <span>{message.errorMessage}</span>
         </div>
       </div>
     );
@@ -31,9 +33,9 @@ export function MessageBubble({ message }: MessageBubbleProps) {
   const text = message.blocks.find((b) => b.kind === "text")?.content ?? "";
   return (
     <div className="flex w-full justify-end">
-      <div className="max-w-[80%] rounded-2xl rounded-br-none bg-[var(--primary)] px-4 py-3 text-sm text-white shadow-sm">
+      <div className="max-w-[80%] rounded-l rounded-br-none bg-accent px-4 py-3 text-sm text-white shadow-card">
         <div className="whitespace-pre-wrap">{text}</div>
-        <div className="mt-1 text-right text-[10px] text-[var(--primary-bg)]">{time}</div>
+        <div className="mt-1 text-right text-[10px] text-accent-tint">{time}</div>
       </div>
     </div>
   );
@@ -65,7 +67,7 @@ export function AssistantGroup({ messages }: AssistantGroupProps) {
             return <ToolCallCard key={key} block={block} />;
           }),
         )}
-        {!isStreaming && <div className="mt-0.5 text-[10px] text-[var(--text-muted)]">{time}</div>}
+        {!isStreaming && <div className="mt-0.5 text-[10px] text-ink-3">{time}</div>}
       </div>
     </div>
   );

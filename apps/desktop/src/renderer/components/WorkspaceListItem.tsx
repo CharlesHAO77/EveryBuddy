@@ -1,38 +1,6 @@
 import type { ReactNode } from "react";
 import { ActionMenu } from "./ActionMenu";
-
-const FolderIcon = () => (
-  <svg
-    width="14"
-    height="14"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="#999"
-    strokeWidth="1.5"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-    className="shrink-0"
-  >
-    <title>空间</title>
-    <path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z" />
-  </svg>
-);
-
-const ChevronDownIcon = ({ open }: { open?: boolean }) => (
-  <svg
-    width="12"
-    height="12"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="#999"
-    strokeWidth="2"
-    strokeLinecap="round"
-    className={`shrink-0 transition-transform ${open ? "rotate-180" : ""}`}
-  >
-    <title>{open ? "折叠" : "展开"}</title>
-    <polyline points="6 9 12 15 18 9" />
-  </svg>
-);
+import { IconChevronDown, IconFolder } from "./icons";
 
 interface WorkspaceListItemProps {
   name: string;
@@ -64,14 +32,19 @@ export function WorkspaceListItem({
         onKeyDown={(e) => {
           if (e.key === "Enter" || e.key === " ") onToggle();
         }}
-        className="group flex h-[30px] w-full cursor-pointer items-center gap-[8px] rounded-[4px] px-[10px] text-[13px] text-[#333] transition hover:bg-[#f0f0f0]"
+        className="group flex h-[30px] w-full cursor-pointer items-center gap-[8px] rounded-s px-[10px] text-[13px] text-ink-2 transition hover:bg-hover"
       >
-        <FolderIcon />
+        <IconFolder size={14} title="空间" className="shrink-0 text-ink-3" />
         <span className="flex-1 truncate text-left">{name}</span>
         <ActionMenu items={[{ label: "移除空间", danger: true, onSelect: onRemoveRequest }]} />
         {/* chevron hover 时让位给 ⋯ 按钮 */}
-        <span className="group-hover:hidden">
-          <ChevronDownIcon open={open} />
+        <span className="text-ink-3 group-hover:hidden">
+          <IconChevronDown
+            size={12}
+            strokeWidth={2}
+            title={open ? "折叠" : "展开"}
+            className={`shrink-0 transition-transform ${open ? "rotate-180" : ""}`}
+          />
         </span>
       </div>
       {open && children}
