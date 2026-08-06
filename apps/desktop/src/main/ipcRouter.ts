@@ -20,6 +20,7 @@ import { type BrowserWindow, ipcMain } from "electron";
 import { agentRuntime } from "./agentRuntime";
 import { configStore } from "./configStore";
 import {
+  createNamedWorkspace,
   createWorkspace,
   openInFinder,
   resolveSessionLocation,
@@ -113,6 +114,11 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
     await agentRuntime.createTaskSession(task, task.providerId ?? defaultProvider);
   });
 
+  ipcMain.handle("task:loadHistory", async (_evt, raw) => {
+    const { id } = validate(idRequestSchema, raw);
+    return agentRuntime.loadHistory(id);
+  });
+
   ipcMain.handle("task:rename", (_evt, raw) => {
     const parsed = raw as { id?: string; title?: string };
     if (!parsed.id || !parsed.title) throw new Error("参数缺失");
@@ -138,6 +144,12 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
     const parsed = raw as { name?: string; dirPath?: string };
     if (!parsed.name || !parsed.dirPath) throw new Error("参数缺失");
     return createWorkspace(parsed.name, parsed.dirPath);
+  });
+
+  ipcMain.handle("workspace:createNamed", (_evt, raw) => {
+    const parsed = raw as { name?: string };
+    if (!parsed.name) throw new Error("参数缺失");
+    return createNamedWorkspace(parsed.name);
   });
 
   ipcMain.handle("workspace:remove", (_evt, raw) => {

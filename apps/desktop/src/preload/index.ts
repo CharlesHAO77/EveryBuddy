@@ -24,14 +24,17 @@ const api: ElectronAPI = {
     list: () => ipcRenderer.invoke("task:list"),
     create: (req) => ipcRenderer.invoke("task:create", req),
     resume: (id) => ipcRenderer.invoke("task:resume", { id }),
+    loadHistory: (id) => ipcRenderer.invoke("task:loadHistory", { id }),
     delete: (id) => ipcRenderer.invoke("task:delete", { id }),
     rename: (id, title) => ipcRenderer.invoke("task:rename", { id, title }),
-    setProvider: (taskId, providerId) => ipcRenderer.invoke("task:setProvider", { taskId, providerId }),
+    setProvider: (taskId, providerId) =>
+      ipcRenderer.invoke("task:setProvider", { taskId, providerId }),
     openDir: (id) => ipcRenderer.invoke("task:openDir", { id }),
   },
   workspace: {
     list: () => ipcRenderer.invoke("workspace:list"),
     create: (name, dirPath) => ipcRenderer.invoke("workspace:create", { name, dirPath }),
+    createNamed: (name) => ipcRenderer.invoke("workspace:createNamed", { name }),
     remove: (id) => ipcRenderer.invoke("workspace:remove", { id }),
     selectDir: () => ipcRenderer.invoke("workspace:selectDir"),
     openDir: (path) => ipcRenderer.invoke("workspace:openDir", { path }),

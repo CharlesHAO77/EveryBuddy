@@ -69,12 +69,17 @@ interface SessionState {
   currentTaskId: string | null;
   workspaces: Workspace[];
   loaded: boolean;
+  /** 待用于下一个新任务的工作空间 id（在主页选定，发送首条消息后建任务时消费） */
+  pendingWorkspaceId: string | null;
+  /** 正在加载历史的任务 id 集合（用于 ChatView 显示加载态） */
+  hydratingIds: string[];
 
   initFromBackend: (tasks: TaskMeta[], workspaces: Workspace[]) => void;
   upsertTask: (task: Task) => void;
 
   createTask: (req: CreateTaskRequest) => Promise<Task>;
   selectTask: (id: string) => void;
+  hydrateTask: (id: string) => Promise<void>;
   deleteTask: (id: string) => Promise<void>;
   renameTask: (id: string, title: string) => void;
   openTaskDir: (id: string) => Promise<void>;
@@ -82,6 +87,7 @@ interface SessionState {
   addWorkspace: (ws: Workspace) => void;
   removeWorkspace: (id: string) => void;
   selectWorkspaceDir: () => Promise<string | null>;
+  setPendingWorkspace: (id: string | null) => void;
 
   sendMessage: (taskId: string, text: string) => Promise<void>;
   setTaskProvider: (taskId: string, providerId: string) => Promise<void>;
@@ -150,10 +156,15 @@ export const useSessionStore = create<SessionState>((set, get) => ({
   currentTaskId: null,
   workspaces: [],
   loaded: false,
+  pendingWorkspaceId: null,
+  hydratingIds: [],
 
   initFromBackend: (tasks, workspaces) =>
     set({
-      tasks: tasks.map((t) => ({ ...t, messages: [] })),
+      // 按 updatedAt 倒序加载（最新优先）；updatedAt 相同时保持稳定顺序
+      tasks: [...tasks]
+        .sort((a, b) => (a.updatedAt < b.updatedAt ? 1 : a.updatedAt > b.updatedAt ? -1 : 0))
+        .map((t) => ({ ...t, messages: [] })),
       workspaces,
       loaded: true,
     }),
@@ -196,7 +207,34 @@ export const useSessionStore = create<SessionState>((set, get) => ({
   selectTask: (id) => {
     set({ currentTaskId: id });
     // 恢复已有任务的 AgentSession（重启后选中任务时）
-    if (id) void window.electronAPI.task.resume(id);
+    if (id) {
+      void window.electronAPI.task.resume(id);
+      // 加载历史消息（仅当尚未加载且非流式时）
+      void get().hydrateTask(id);
+    }
+  },
+
+  hydrateTask: async (id) => {
+    const task = get().tasks.find((t) => t.id === id);
+    if (!task) return;
+    // 已有消息或正在流式则不覆盖；已在加载中则跳过
+    if (task.messages.length > 0 || task.isStreaming) return;
+    if (get().hydratingIds.includes(id)) return;
+    set((state) => ({ hydratingIds: [...state.hydratingIds, id] }));
+    try {
+      const history = await window.electronAPI.task.loadHistory(id);
+      set((state) => ({
+        tasks: state.tasks.map((t) =>
+          t.id === id && t.messages.length === 0 && !t.isStreaming
+            ? { ...t, messages: history }
+            : t,
+        ),
+        hydratingIds: state.hydratingIds.filter((x) => x !== id),
+      }));
+    } catch (err) {
+      console.error("[hydrateTask] 加载历史失败:", err);
+      set((state) => ({ hydratingIds: state.hydratingIds.filter((x) => x !== id) }));
+    }
   },
 
   deleteTask: async (id) => {
@@ -222,6 +260,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
   removeWorkspace: (id) =>
     set((state) => ({ workspaces: state.workspaces.filter((w) => w.id !== id) })),
   selectWorkspaceDir: () => window.electronAPI.workspace.selectDir(),
+  setPendingWorkspace: (id) => set({ pendingWorkspaceId: id }),
 
   sendMessage: async (taskId, text) => {
     const userMsg: ChatMessage = {

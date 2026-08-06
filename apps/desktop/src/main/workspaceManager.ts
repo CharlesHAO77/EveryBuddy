@@ -3,9 +3,9 @@
  *
  * 职责：
  *  - 选择本地目录（Electron 原生 dialog）
- *  - 创建工作空间（注册 + 确保 .everybuddy/sessions 目录）
+ *  - 创建工作空间（仅注册元数据；会话统一存于 ~/EveryBuddy/sessions，不在工作空间内落盘）
  *  - 在 Finder/资源管理器中打开目录
- *  - 解析任务会话落盘目录（临时任务 -> ~/EveryBuddy/sessions/<datetime>；空间任务 -> <workspace>/.everybuddy/sessions）
+ *  - 解析任务会话落盘目录（所有任务 -> ~/EveryBuddy/sessions/<datetime>-<short>；cwd 按任务类型：空间任务 -> workspacePath，临时任务 -> sessionDir）
  */
 
 import { randomUUID } from "node:crypto";
@@ -13,7 +13,7 @@ import { existsSync, mkdirSync } from "node:fs";
 import path from "node:path";
 import type { TaskMeta, TaskType, Workspace } from "@everybuddy/ipc-contract";
 import { type BrowserWindow, dialog, shell } from "electron";
-import { APP_ROOT, configStore, SESSIONS_DIR } from "./configStore";
+import { APP_ROOT, configStore, SESSIONS_DIR, WORK_SPACES_DIR } from "./configStore";
 
 /** 格式化日期时间为目录名：2026-08-05_143020-a1b2 */
 function datetimeDir(): string {
@@ -37,11 +37,25 @@ export async function selectDirectory(parent?: BrowserWindow | null): Promise<st
   return result.filePaths[0] ?? null;
 }
 
-/** 创建工作空间：注册到 configStore 并确保会话目录存在 */
+/** 创建工作空间：仅注册到 configStore（会话统一存于 ~/EveryBuddy/sessions，不在工作空间内落盘） */
 export function createWorkspace(name: string, dirPath: string): Workspace {
-  const sessionsDir = path.join(dirPath, ".everybuddy", "sessions");
-  if (!existsSync(sessionsDir)) mkdirSync(sessionsDir, { recursive: true });
   return configStore.addWorkspace(name, dirPath);
+}
+
+/**
+ * 按名称创建工作空间（不选目录）。
+ * 默认落盘到 ~/EveryBuddy/work-spaces/<name>，并确保该目录存在。
+ * 同名目录已存在时追加短随机后缀以避免冲突。
+ */
+export function createNamedWorkspace(name: string): Workspace {
+  if (!existsSync(WORK_SPACES_DIR)) mkdirSync(WORK_SPACES_DIR, { recursive: true });
+  const trimmed = name.trim() || "新空间";
+  let dirPath = path.join(WORK_SPACES_DIR, trimmed);
+  if (existsSync(dirPath)) {
+    dirPath = path.join(WORK_SPACES_DIR, `${trimmed}-${randomUUID().slice(0, 4)}`);
+  }
+  mkdirSync(dirPath, { recursive: true });
+  return createWorkspace(trimmed, dirPath);
 }
 
 /** 在系统文件管理器中打开目录 */
@@ -54,27 +68,18 @@ export async function openInFinder(dirPath: string): Promise<void> {
 
 /**
  * 为新任务解析会话落盘目录。
- *  - temp：~/EveryBuddy/sessions/<datetime>-<short>/，cwd 也设为该目录
- *  - workspace：<workspacePath>/.everybuddy/sessions/<short>/，cwd = workspacePath
+ * 所有任务的会话统一存放在 ~/EveryBuddy/sessions/<datetime>-<short>/，与工作空间路径解耦；
+ * cwd 仍按任务类型确定：空间任务 -> workspacePath（agent 在工作空间内操作），
+ * 临时任务 -> sessionDir（以会话目录为工作目录）。
  */
 export function resolveSessionLocation(
   type: TaskType,
   workspace?: Workspace,
 ): { sessionDir: string; cwd: string } {
-  if (type === "workspace" && workspace) {
-    const sessionDir = path.join(
-      workspace.path,
-      ".everybuddy",
-      "sessions",
-      randomUUID().slice(0, 8),
-    );
-    if (!existsSync(sessionDir)) mkdirSync(sessionDir, { recursive: true });
-    return { sessionDir, cwd: workspace.path };
-  }
-  // 临时任务
   const sessionDir = path.join(SESSIONS_DIR, datetimeDir());
   if (!existsSync(sessionDir)) mkdirSync(sessionDir, { recursive: true });
-  return { sessionDir, cwd: sessionDir };
+  const cwd = type === "workspace" && workspace ? workspace.path : sessionDir;
+  return { sessionDir, cwd };
 }
 
 /** 获取任务的工作目录（用于 agent cwd） */

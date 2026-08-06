@@ -11,9 +11,16 @@
  */
 
 import { randomUUID } from "node:crypto";
-import { existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, statSync, writeFileSync } from "node:fs";
 import path from "node:path";
-import type { AgentEvent, ModelProviderConfig, TaskMeta } from "@everybuddy/ipc-contract";
+import type { SessionEntry } from "@earendil-works/pi-coding-agent";
+import type {
+  AgentEvent,
+  HistoryBlock,
+  HistoryMessage,
+  ModelProviderConfig,
+  TaskMeta,
+} from "@everybuddy/ipc-contract";
 import { APP_ROOT, configStore } from "./configStore";
 import { getTaskCwd } from "./workspaceManager";
 
@@ -150,12 +157,8 @@ class AgentRuntime {
     const sessionDir = task.sessionDir;
     if (!existsSync(sessionDir)) mkdirSync(sessionDir, { recursive: true });
 
-    // 恢复已有会话或新建
-    const recentFile = (
-      sdk as unknown as {
-        findMostRecentSession?: (dir: string) => string | null;
-      }
-    ).findMostRecentSession?.(sessionDir);
+    // 恢复已有会话或新建（SDK 声明了 findMostRecentSession 但运行时未导出，自行按 mtime 取最近 .jsonl）
+    const recentFile = findMostRecentSessionFile(sessionDir);
     let sessionManager: SessionManagerInstance;
     if (recentFile && existsSync(recentFile)) {
       sessionManager = sdk.SessionManager.open(
@@ -222,10 +225,7 @@ class AgentRuntime {
     try {
       await state.session.prompt(text);
     } catch (err) {
-      this.emitError(
-        taskId,
-        `发送消息失败: ${err instanceof Error ? err.message : String(err)}`,
-      );
+      this.emitError(taskId, `发送消息失败: ${err instanceof Error ? err.message : String(err)}`);
     }
   }
 
@@ -248,6 +248,33 @@ class AgentRuntime {
       state.unsubscribe();
       this.sessions.delete(taskId);
     }
+  }
+
+  /**
+   * 加载任务的历史消息（用于选中已有任务时回放）。
+   * 优先用活跃会话的 sessionManager；无活跃会话则直接打开会话文件读取
+   * （不依赖 task:resume 时序）。映射遵循 §0.4 卡片化消息模型。
+   */
+  async loadHistory(taskId: string): Promise<HistoryMessage[]> {
+    const sdk = await this.load();
+    let entries: SessionEntry[];
+    const state = this.sessions.get(taskId);
+    if (state) {
+      entries = state.session.sessionManager.buildContextEntries();
+    } else {
+      const task = configStore.getTask(taskId);
+      if (!task) return [];
+      const cwd = getTaskCwd(task);
+      const recentFile = findMostRecentSessionFile(task.sessionDir);
+      if (!recentFile || !existsSync(recentFile)) return [];
+      const sm = sdk.SessionManager.open(
+        recentFile,
+        task.sessionDir,
+        cwd,
+      ) as SessionManagerInstance;
+      entries = sm.buildContextEntries();
+    }
+    return entriesToHistory(entries);
   }
 
   // ── 事件映射（见 §3.2） ───────────────────
@@ -328,9 +355,10 @@ class AgentRuntime {
       }
       case "error": {
         // SDK 顶层错误事件（如会话级异常）
-        const msg = (e as { message?: string; error?: { message?: string } }).error?.message
-          ?? (e as { message?: string }).message
-          ?? "未知错误";
+        const msg =
+          (e as { message?: string; error?: { message?: string } }).error?.message ??
+          (e as { message?: string }).message ??
+          "未知错误";
         emit({ type: "error", payload: { message: msg } });
         break;
       }
@@ -420,6 +448,132 @@ class AgentRuntime {
     }
     return undefined;
   }
+}
+
+// ── 历史消息映射 ─────────────────────────────
+
+/** 提取文本内容（content 可能是 string 或内容块数组） */
+function extractText(content: unknown): string {
+  if (typeof content === "string") return content;
+  if (Array.isArray(content)) {
+    return content
+      .map((c) =>
+        c && typeof c === "object" && "text" in c ? String((c as { text: unknown }).text) : "",
+      )
+      .join("");
+  }
+  return "";
+}
+
+/** 将会话条目映射为渲染进程可用的历史消息（见 §0.4 卡片化消息模型） */
+function entriesToHistory(entries: SessionEntry[]): HistoryMessage[] {
+  const messages: HistoryMessage[] = [];
+  for (const entry of entries) {
+    if (entry.type !== "message") continue;
+    const msg = entry.message as {
+      role?: string;
+      content?: unknown;
+      timestamp?: number;
+      errorMessage?: string;
+      toolCallId?: string;
+      isError?: boolean;
+    };
+    const ts =
+      typeof msg.timestamp === "number" ? msg.timestamp : Date.parse(entry.timestamp) || Date.now();
+    const role = msg.role;
+
+    if (role === "user") {
+      messages.push({
+        id: entry.id,
+        role: "user",
+        timestamp: ts,
+        blocks: [{ id: "0", kind: "text", content: extractText(msg.content), done: true }],
+      });
+    } else if (role === "assistant") {
+      const blocks: HistoryBlock[] = [];
+      if (Array.isArray(msg.content)) {
+        msg.content.forEach((c, i) => {
+          if (!c || typeof c !== "object") return;
+          const ct = (c as { type?: string }).type;
+          if (ct === "text") {
+            blocks.push({
+              id: String(i),
+              kind: "text",
+              content: String((c as { text?: unknown }).text ?? ""),
+              done: true,
+            });
+          } else if (ct === "thinking") {
+            blocks.push({
+              id: String(i),
+              kind: "thinking",
+              content: String((c as { thinking?: unknown }).thinking ?? ""),
+              done: true,
+            });
+          } else if (ct === "toolCall") {
+            const tc = c as { id?: string; name?: string; arguments?: unknown };
+            blocks.push({
+              id: String(i),
+              kind: "tool",
+              toolCallId: tc.id ?? String(i),
+              toolName: tc.name ?? "",
+              args: tc.arguments,
+              argDelta: "",
+              status: "success",
+              output: undefined,
+              outputDelta: "",
+              done: true,
+            });
+          }
+        });
+      }
+      messages.push({
+        id: entry.id,
+        role: "assistant",
+        timestamp: ts,
+        blocks,
+        errorMessage: msg.errorMessage,
+      });
+    } else if (role === "toolResult") {
+      // 工具结果回填到前一条 assistant 消息中匹配 toolCallId 的工具块
+      const lastAssistant = [...messages].reverse().find((m) => m.role === "assistant");
+      const toolBlock = lastAssistant?.blocks.find(
+        (b) => b.kind === "tool" && b.toolCallId === msg.toolCallId,
+      );
+      if (toolBlock && toolBlock.kind === "tool") {
+        toolBlock.output = msg.content;
+        toolBlock.status = msg.isError ? "error" : "success";
+        if (msg.isError) toolBlock.error = extractText(msg.content);
+      }
+    }
+    // 其余角色（bashExecution/custom/branchSummary/compactionSummary）跳过
+  }
+  return messages;
+}
+
+/**
+ * 扫描会话目录，返回最近修改的 .jsonl 文件路径。
+ * SDK 的 d.ts 声明了 findMostRecentSession，但 dist 运行时未导出该函数，
+ * 故本地按 mtime 取最新 .jsonl（等价于原打算调用的语义）。
+ */
+function findMostRecentSessionFile(sessionDir: string): string | null {
+  let names: string[];
+  try {
+    names = readdirSync(sessionDir);
+  } catch {
+    return null;
+  }
+  let best: { path: string; mtime: number } | null = null;
+  for (const name of names) {
+    if (!name.endsWith(".jsonl")) continue;
+    const full = path.join(sessionDir, name);
+    try {
+      const mtime = statSync(full).mtimeMs;
+      if (!best || mtime > best.mtime) best = { path: full, mtime };
+    } catch {
+      // 忽略不可读文件
+    }
+  }
+  return best?.path ?? null;
 }
 
 export const agentRuntime = new AgentRuntime();

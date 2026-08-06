@@ -5,28 +5,63 @@ import { useUIStore } from "../stores/uiStore";
 /* ── Inline SVG Icons ─────────────────────────── */
 
 const CollapseIcon = () => (
-  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#999" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+  <svg
+    width="16"
+    height="16"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="#999"
+    strokeWidth="1.5"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
     <rect x="3" y="3" width="18" height="18" rx="2" />
     <line x1="9" y1="3" x2="9" y2="21" />
   </svg>
 );
 
 const ExpandIcon = () => (
-  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#999" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+  <svg
+    width="16"
+    height="16"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="#999"
+    strokeWidth="1.5"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
     <rect x="3" y="3" width="18" height="18" rx="2" />
     <line x1="15" y1="3" x2="15" y2="21" />
   </svg>
 );
 
 const PlusIcon = () => (
-  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#999" strokeWidth="1.5" strokeLinecap="round">
+  <svg
+    width="16"
+    height="16"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="#999"
+    strokeWidth="1.5"
+    strokeLinecap="round"
+  >
     <line x1="12" y1="5" x2="12" y2="19" />
     <line x1="5" y1="12" x2="19" y2="12" />
   </svg>
 );
 
 const SearchIcon = () => (
-  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#999" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+  <svg
+    width="16"
+    height="16"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="#999"
+    strokeWidth="1.5"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
     <circle cx="11" cy="11" r="8" />
     <line x1="21" y1="21" x2="16.65" y2="16.65" />
   </svg>
@@ -48,14 +83,32 @@ const ChevronDownIcon = ({ open }: { open?: boolean }) => (
 );
 
 const NotificationIcon = () => (
-  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#999" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+  <svg
+    width="16"
+    height="16"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="#999"
+    strokeWidth="1.5"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
     <path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9" />
     <path d="M13.73 21a2 2 0 01-3.46 0" />
   </svg>
 );
 
 const SettingsIcon = () => (
-  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#999" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+  <svg
+    width="16"
+    height="16"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="#999"
+    strokeWidth="1.5"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
     <circle cx="12" cy="12" r="3" />
     <path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-2 2 2 2 0 01-2-2v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 01-2-2 2 2 0 012-2h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 012-2 2 2 0 012 2v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 012 2 2 2 0 01-2 2h-.09a1.65 1.65 0 00-1.51 1z" />
   </svg>
@@ -64,19 +117,46 @@ const SettingsIcon = () => (
 /* ── Navigation Icons ─────────────────────────── */
 
 const ExpertIcon = () => (
-  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#999" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+  <svg
+    width="16"
+    height="16"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="#999"
+    strokeWidth="1.5"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
     <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
   </svg>
 );
 
 const AutoIcon = () => (
-  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#999" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+  <svg
+    width="16"
+    height="16"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="#999"
+    strokeWidth="1.5"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
     <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
   </svg>
 );
 
 const FolderIcon = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#999" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+  <svg
+    width="14"
+    height="14"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="#999"
+    strokeWidth="1.5"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
     <path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z" />
   </svg>
 );
@@ -117,13 +197,11 @@ export function Sidebar() {
   const workspaces = useSessionStore((s) => s.workspaces);
   const currentTaskId = useSessionStore((s) => s.currentTaskId);
   const selectTask = useSessionStore((s) => s.selectTask);
-  const createTask = useSessionStore((s) => s.createTask);
-  const selectWorkspaceDir = useSessionStore((s) => s.selectWorkspaceDir);
-  const addWorkspace = useSessionStore((s) => s.addWorkspace);
 
-  // 临时任务（任务区）
+  // 临时任务（任务区），按 updatedAt 倒序（最新优先）
   const tempTasks = allTasks
     .filter((t) => t.type === "temp")
+    .sort((a, b) => (a.updatedAt < b.updatedAt ? 1 : a.updatedAt > b.updatedAt ? -1 : 0))
     .map((t) => ({ id: t.id, title: t.title, time: relativeTime(t.updatedAt) }));
 
   const handleNewTask = () => {
@@ -131,34 +209,21 @@ export function Sidebar() {
     selectTask(""); // 回到欢迎页
   };
 
-  const handleNewWorkspace = async () => {
-    const dir = await selectWorkspaceDir();
-    if (!dir) return;
-    const name = dir.split("/").pop() || dir;
-    const ws = await window.electronAPI.workspace.create(name, dir);
-    addWorkspace(ws);
-  };
-
-  const handleCreateWorkspaceTask = async (workspaceId: string) => {
-    await createTask({ type: "workspace", workspaceId });
-  };
-
   const filteredTasks = searchQuery
     ? tempTasks.filter((t) => t.title.includes(searchQuery))
     : tempTasks;
 
-  // 工作空间 + 其下的任务（保持原 ws.sessions 结构）
+  // 工作空间 + 其下的任务（保持原 ws.sessions 结构），任务按 updatedAt 倒序
   const filteredWorkspaces = workspaces
     .map((ws) => {
       const wsTasks = allTasks
         .filter((t) => t.type === "workspace" && t.workspaceId === ws.id)
+        .sort((a, b) => (a.updatedAt < b.updatedAt ? 1 : a.updatedAt > b.updatedAt ? -1 : 0))
         .map((t) => ({ id: t.id, title: t.title, time: relativeTime(t.updatedAt) }));
       return {
         id: ws.id,
         name: ws.name,
-        sessions: searchQuery
-          ? wsTasks.filter((s) => s.title.includes(searchQuery))
-          : wsTasks,
+        sessions: searchQuery ? wsTasks.filter((s) => s.title.includes(searchQuery)) : wsTasks,
       };
     })
     .filter((ws) => !searchQuery || ws.sessions.length > 0);
@@ -182,8 +247,8 @@ export function Sidebar() {
         </button>
 
         {/* Search icon / input (expanded only) */}
-        {!collapsed && (
-          showSearch ? (
+        {!collapsed &&
+          (showSearch ? (
             <div className="flex flex-1 items-center gap-[6px] pl-[8px]">
               <SearchIcon />
               <input
@@ -209,8 +274,7 @@ export function Sidebar() {
             >
               <SearchIcon />
             </button>
-          )
-        )}
+          ))}
       </div>
 
       {collapsed ? (
@@ -326,27 +390,15 @@ export function Sidebar() {
               <div className="mt-[2px] space-y-[2px]">
                 {filteredWorkspaces.map((ws) => (
                   <div key={ws.id}>
-                    <div className="flex items-center">
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setOpenWorkspaceId((id) => (id === ws.id ? null : ws.id))
-                        }
-                        className="flex h-[30px] flex-1 items-center gap-[8px] rounded-[4px] px-[10px] text-[13px] text-[#333] transition hover:bg-[#f0f0f0]"
-                      >
-                        <FolderIcon />
-                        <span className="flex-1 text-left">{ws.name}</span>
-                        <ChevronDownIcon open={openWorkspaceId === ws.id} />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleCreateWorkspaceTask(ws.id)}
-                        className="flex h-[24px] w-[24px] items-center justify-center rounded text-[#999] transition hover:bg-[#e8e8e8]"
-                        title="在此空间新建任务"
-                      >
-                        <PlusIcon />
-                      </button>
-                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setOpenWorkspaceId((id) => (id === ws.id ? null : ws.id))}
+                      className="flex h-[30px] w-full items-center gap-[8px] rounded-[4px] px-[10px] text-[13px] text-[#333] transition hover:bg-[#f0f0f0]"
+                    >
+                      <FolderIcon />
+                      <span className="flex-1 text-left">{ws.name}</span>
+                      <ChevronDownIcon open={openWorkspaceId === ws.id} />
+                    </button>
 
                     {openWorkspaceId === ws.id &&
                       ws.sessions.map((session) => (
@@ -358,25 +410,12 @@ export function Sidebar() {
                             session.id === currentTaskId ? "bg-[#e8e8e8]" : "hover:bg-[#f0f0f0]"
                           }`}
                         >
-                          <span className="truncate text-[13px] text-[#333]">
-                            {session.title}
-                          </span>
-                          <span className="shrink-0 text-[12px] text-[#999]">
-                            {session.time}
-                          </span>
+                          <span className="truncate text-[13px] text-[#333]">{session.title}</span>
+                          <span className="shrink-0 text-[12px] text-[#999]">{session.time}</span>
                         </button>
                       ))}
                   </div>
                 ))}
-                {/* 新建空间 */}
-                <button
-                  type="button"
-                  onClick={handleNewWorkspace}
-                  className="mt-[4px] flex h-[30px] w-full items-center gap-[8px] rounded-[4px] px-[10px] text-[12px] text-[#999] transition hover:bg-[#f0f0f0]"
-                >
-                  <PlusIcon />
-                  新建空间
-                </button>
               </div>
             )}
           </div>
@@ -390,7 +429,10 @@ export function Sidebar() {
               <span className="text-[13px] text-[#333]">Charles.Hao</span>
             </div>
             <div className="flex items-center gap-[6px]">
-              <button type="button" className="flex h-[28px] w-[28px] items-center justify-center rounded-md hover:bg-[#e8e8e8]">
+              <button
+                type="button"
+                className="flex h-[28px] w-[28px] items-center justify-center rounded-md hover:bg-[#e8e8e8]"
+              >
                 <NotificationIcon />
               </button>
               <button

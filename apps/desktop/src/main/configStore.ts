@@ -25,6 +25,8 @@ import type {
 export const APP_ROOT = path.join(homedir(), "EveryBuddy");
 /** 非空间任务会话目录 */
 export const SESSIONS_DIR = path.join(APP_ROOT, "sessions");
+/** 「新建空间」默认落盘目录 ~/EveryBuddy/work-spaces */
+export const WORK_SPACES_DIR = path.join(APP_ROOT, "work-spaces");
 
 /** 确保应用根目录与 sessions 目录存在 */
 export function ensureAppDirs(): void {

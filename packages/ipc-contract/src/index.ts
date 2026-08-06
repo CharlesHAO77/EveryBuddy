@@ -147,6 +147,48 @@ export interface CreateTaskRequest {
 }
 
 // ────────────────────────────────────────────────
+// History（历史消息回放，结构与渲染进程 ContentBlock/ChatMessage 对齐）
+// ────────────────────────────────────────────────
+
+export interface HistoryThinkingBlock {
+  id: string;
+  kind: "thinking";
+  content: string;
+  done: boolean;
+}
+
+export interface HistoryTextBlock {
+  id: string;
+  kind: "text";
+  content: string;
+  done: boolean;
+}
+
+export interface HistoryToolBlock {
+  id: string;
+  kind: "tool";
+  toolCallId: string;
+  toolName: string;
+  args: unknown;
+  argDelta: string;
+  status: "calling" | "running" | "success" | "error";
+  output: unknown;
+  error?: string;
+  outputDelta: string;
+  done: boolean;
+}
+
+export type HistoryBlock = HistoryThinkingBlock | HistoryTextBlock | HistoryToolBlock;
+
+export interface HistoryMessage {
+  id: string;
+  role: "user" | "assistant";
+  blocks: HistoryBlock[];
+  timestamp: number;
+  errorMessage?: string;
+}
+
+// ────────────────────────────────────────────────
 // Config（模型配置，不含 API Key 明文）
 // ────────────────────────────────────────────────
 
@@ -238,6 +280,7 @@ export interface ElectronAPI {
     list: () => Promise<TaskMeta[]>;
     create: (req: CreateTaskRequest) => Promise<TaskMeta>;
     resume: (id: string) => Promise<void>;
+    loadHistory: (id: string) => Promise<HistoryMessage[]>;
     delete: (id: string) => Promise<void>;
     rename: (id: string, title: string) => Promise<void>;
     setProvider: (taskId: string, providerId: string) => Promise<void>;
@@ -246,6 +289,7 @@ export interface ElectronAPI {
   workspace: {
     list: () => Promise<Workspace[]>;
     create: (name: string, dirPath: string) => Promise<Workspace>;
+    createNamed: (name: string) => Promise<Workspace>;
     remove: (id: string) => Promise<void>;
     selectDir: () => Promise<string | null>;
     openDir: (path: string) => Promise<void>;
