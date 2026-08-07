@@ -8,6 +8,7 @@
 
 - PRD：`docs/requirements.md`
 - 架构：`docs/architecture.md`
+- pi-coding-agent SDK文档: `docs/pi-coding-sdk.md`
 
 ## 2. 仓库结构（npm workspaces monorepo）
 
