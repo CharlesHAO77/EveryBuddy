@@ -134,13 +134,12 @@ class AgentRuntime {
       throw new Error("未配置可用模型，请先在设置中添加模型并配置 API Key");
     }
 
-    const isWorkspace = task.type === "workspace";
     const { session } = await sdk.createAgentSession({
       cwd,
       model,
       modelRuntime: this.modelRuntime ?? undefined,
       sessionManager,
-      tools: isWorkspace ? ["read", "write", "edit", "bash", "grep", "find", "ls"] : ["read", "ls"],
+      tools:  ["read", "write", "edit", "bash", "grep", "find", "ls"],
     });
 
     const unsubscribe = session.subscribe((event: unknown) => {
