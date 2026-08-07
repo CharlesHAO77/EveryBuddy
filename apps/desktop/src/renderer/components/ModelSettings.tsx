@@ -77,7 +77,7 @@ export function ModelSettings({ onClose }: ModelSettingsProps) {
             onClick={onClose}
             className="rounded-s p-1 text-ink-3 transition hover:bg-accent-tint hover:text-ink-2"
           >
-            <IconX size={18} strokeWidth={2} title="关闭" />
+            <IconX title="关闭" />
           </button>
         </div>
 

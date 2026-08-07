@@ -176,7 +176,7 @@ function WorkspaceSelector() {
                 ws.id === pendingWorkspaceId ? "text-ink" : "text-ink-2"
               }`}
             >
-              <IconFolder size={15} className="text-ink-2" />
+              <IconFolder className="text-ink-2" />
               <span className="flex-1 truncate">{ws.name}</span>
               {ws.id === pendingWorkspaceId && (
                 <IconCheck size={12} strokeWidth={2.5} className="text-accent" />
@@ -191,7 +191,7 @@ function WorkspaceSelector() {
             onClick={handlePickFolder}
             className="flex w-full items-center gap-[8px] px-[12px] py-[7px] text-left text-[14px] text-ink-2 transition hover:bg-hover"
           >
-            <IconFolder size={15} className="text-ink-2" />
+            <IconFolder className="text-ink-2" />
             指定文件夹
           </button>
 
@@ -243,7 +243,7 @@ function WorkspaceSelector() {
               onClick={() => setCreating(true)}
               className="flex w-full items-center gap-[8px] px-[12px] py-[7px] text-left text-[14px] text-ink-2 transition hover:bg-hover"
             >
-              <IconPlus size={14} className="text-ink-3" />
+              <IconPlus className="text-ink-2" />
               新建空间
             </button>
           )}
@@ -258,7 +258,7 @@ function WorkspaceSelector() {
             }}
             className="flex w-full items-center gap-[8px] px-[12px] py-[7px] text-left text-[14px] text-ink-3 transition hover:bg-hover"
           >
-            <IconX size={12} />
+            <IconX className="text-ink-2" />
             无工作空间
           </button>
         </div>
@@ -382,7 +382,7 @@ function WelcomeView() {
               <div className="flex items-center gap-[16px]">
                 <button
                   type="button"
-                  className="flex h-[28px] w-[28px] items-center justify-center rounded-s text-ink-3 transition hover:bg-hover hover:text-ink-2"
+                  className="flex h-[28px] w-[28px] items-center justify-center rounded-s text-ink-2 transition hover:bg-hover hover:text-ink"
                 >
                   <IconPlus />
                 </button>
@@ -404,7 +404,7 @@ function WelcomeView() {
                 {/* Mic */}
                 <button
                   type="button"
-                  className="flex h-[28px] w-[28px] items-center justify-center rounded-s text-ink-3 transition hover:bg-hover hover:text-ink-2"
+                  className="flex h-[28px] w-[28px] items-center justify-center rounded-s text-ink-2 transition hover:bg-hover hover:text-ink"
                 >
                   <IconMic />
                 </button>
@@ -536,7 +536,7 @@ function ChatView({ taskId }: { taskId: string }) {
             <div className="absolute bottom-0 left-0 right-0 flex items-center justify-between px-[14px] pb-[10px]">
               <button
                 type="button"
-                className="flex h-[28px] w-[28px] items-center justify-center rounded-s text-ink-3 transition hover:bg-hover hover:text-ink-2"
+                className="flex h-[28px] w-[28px] items-center justify-center rounded-s text-ink-2 transition hover:bg-hover hover:text-ink"
               >
                 <IconPlus />
               </button>
@@ -548,7 +548,7 @@ function ChatView({ taskId }: { taskId: string }) {
                 />
                 <button
                   type="button"
-                  className="flex h-[28px] w-[28px] items-center justify-center rounded-s text-ink-3 transition hover:bg-hover hover:text-ink-2"
+                  className="flex h-[28px] w-[28px] items-center justify-center rounded-s text-ink-2 transition hover:bg-hover hover:text-ink"
                 >
                   <IconMic />
                 </button>

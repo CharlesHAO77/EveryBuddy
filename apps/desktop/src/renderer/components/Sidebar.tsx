@@ -154,14 +154,14 @@ export function Sidebar() {
           className="flex h-[30px] w-[30px] items-center justify-center rounded-s text-ink-2 transition hover:bg-hover hover:text-ink"
           title={collapsed ? "展开侧栏" : "折叠侧栏"}
         >
-          {collapsed ? <IconPanelLeftOpen size={18} /> : <IconPanelLeftClose size={18} />}
+          {collapsed ? <IconPanelLeftOpen /> : <IconPanelLeftClose />}
         </button>
 
         {/* Search icon / input (expanded only) */}
         {!collapsed &&
           (showSearch ? (
             <div className="flex flex-1 items-center gap-[6px] pl-[8px] text-ink-2">
-              <IconSearch size={18} ring />
+              <IconSearch />
               <input
                 type="text"
                 value={searchQuery}
@@ -184,7 +184,7 @@ export function Sidebar() {
               className="flex h-[30px] w-[30px] items-center justify-center rounded-s text-ink-2 transition hover:bg-hover hover:text-ink"
               title="搜索任务"
             >
-              <IconSearch size={18} ring />
+              <IconSearch />
             </button>
           ))}
       </div>
@@ -198,7 +198,7 @@ export function Sidebar() {
             className="flex h-[30px] w-[30px] items-center justify-center rounded-s text-ink-2 transition hover:bg-hover"
             title="新建任务"
           >
-            <IconPlus size={18} strokeWidth={2.4} />
+            <IconPlus />
           </button>
 
           {/* Spacer */}
@@ -212,7 +212,7 @@ export function Sidebar() {
               className="flex h-[30px] w-[30px] items-center justify-center rounded-s text-ink-2 transition hover:bg-hover hover:text-ink"
               title="设置"
             >
-              <IconSettings size={18} />
+              <IconSettings />
             </button>
           </div>
         </div>
@@ -226,7 +226,7 @@ export function Sidebar() {
               onClick={handleNewTask}
               className="flex h-[40px] w-full items-center gap-[10px] rounded-s px-[12px] text-[15px] text-ink transition hover:bg-hover active:scale-[0.98]"
             >
-              <IconPlus size={18} strokeWidth={2.4} className="text-ink-2" />
+              <IconPlus className="text-ink-2" />
               新建任务
             </button>
           </div>
@@ -247,7 +247,7 @@ export function Sidebar() {
                       : "text-ink-2 hover:bg-hover"
                   }`}
                 >
-                  <Icon size={18} className={isActive ? "text-accent" : "text-ink-2"} />
+                  <Icon className={isActive ? "text-accent" : "text-ink-2"} />
                   <span>{item.label}</span>
                 </button>
               );
@@ -352,7 +352,7 @@ export function Sidebar() {
                 type="button"
                 className="flex h-[28px] w-[28px] items-center justify-center rounded-s text-ink-2 transition hover:bg-hover hover:text-ink"
               >
-                <IconBell size={18} />
+                <IconBell />
               </button>
               <button
                 type="button"
@@ -360,7 +360,7 @@ export function Sidebar() {
                 className="flex h-[28px] w-[28px] items-center justify-center rounded-s text-ink-2 transition hover:bg-hover hover:text-ink"
                 title="模型设置"
               >
-                <IconSettings size={18} />
+                <IconSettings />
               </button>
             </div>
           </div>
