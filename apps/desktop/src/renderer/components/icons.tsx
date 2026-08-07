@@ -2,9 +2,9 @@
  * icons - 全应用统一图标模块（Lucide/Feather 风格）。
  *
  * 约定：
- * - 24 viewBox，stroke="currentColor"，默认 16px / 1.5px 描边，round 端点
- * - 颜色一律由父级 text-* 类控制，图标自身不写死颜色
- * - 填充型图标（IconStop / IconMoreVertical）用 fill="currentColor"
+ * - 24 viewBox，stroke="currentColor"，默认 16px / 2px 描边，round 端点
+ * - 颜色一律由父级 text-* 类控制，图标自身不写死颜色（个别点睛元素除外，如 IconSearch 的青碧内圈用 var(--accent) 语义 token）
+ * - 填充型图标（IconStop / IconMoreVertical / IconZap）用 fill="currentColor"
  */
 
 import type { ReactNode } from "react";
@@ -12,7 +12,7 @@ import type { ReactNode } from "react";
 export interface IconProps {
   /** 边长，默认 16 */
   size?: number;
-  /** 描边粗细，默认 1.5（填充型图标忽略） */
+  /** 描边粗细，默认 2（填充型图标忽略） */
   strokeWidth?: number;
   className?: string;
   /** 无障碍标题；不传则 aria-hidden */
@@ -25,7 +25,7 @@ interface SvgProps extends IconProps {
   fill?: boolean;
 }
 
-function Svg({ size = 16, strokeWidth = 1.5, className, title, children, fill }: SvgProps) {
+function Svg({ size = 16, strokeWidth = 2, className, title, children, fill }: SvgProps) {
   const labelled = typeof title === "string" && title.length > 0;
   return (
     // biome-ignore lint/a11y/noSvgWithoutTitle: 装饰性图标已 aria-hidden；带 title 的图标渲染了 <title>，规则无法静态验证条件分支
@@ -77,11 +77,21 @@ export function IconPlus(props: IconProps) {
   );
 }
 
-export function IconSearch(props: IconProps) {
+export function IconSearch({ ring, ...props }: IconProps & { ring?: boolean }) {
   return (
     <Svg {...props}>
       <circle cx="11" cy="11" r="8" />
       <line x1="21" y1="21" x2="16.65" y2="16.65" />
+      {ring && (
+        <circle
+          cx="11"
+          cy="11"
+          r="4.2"
+          fill="none"
+          stroke="var(--accent)"
+          strokeWidth={Math.max(1.5, (props.strokeWidth ?? 2) * 0.85)}
+        />
+      )}
     </Svg>
   );
 }
@@ -104,18 +114,20 @@ export function IconSettings(props: IconProps) {
   );
 }
 
-export function IconShield(props: IconProps) {
+export function IconSparkles(props: IconProps) {
   return (
     <Svg {...props}>
-      <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+      <path d="M12 3l1.9 5.8a2 2 0 0 0 1.3 1.3L21 12l-5.8 1.9a2 2 0 0 0-1.3 1.3L12 21l-1.9-5.8a2 2 0 0 0-1.3-1.3L3 12l5.8-1.9a2 2 0 0 0 1.3-1.3z" />
+      <line x1="5" y1="3" x2="5" y2="6" />
+      <line x1="3" y1="5" x2="6" y2="5" />
     </Svg>
   );
 }
 
-export function IconActivity(props: IconProps) {
+export function IconZap(props: IconProps) {
   return (
-    <Svg {...props}>
-      <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
+    <Svg {...props} fill>
+      <path d="M13 2 3 14h7l-1 8 10-12h-7l1-8z" />
     </Svg>
   );
 }

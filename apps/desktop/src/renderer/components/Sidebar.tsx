@@ -3,7 +3,6 @@ import { useSessionStore } from "../stores/sessionStore";
 import { useUIStore } from "../stores/uiStore";
 import { ConfirmDialog } from "./ConfirmDialog";
 import {
-  IconActivity,
   IconBell,
   IconChevronDown,
   IconPanelLeftClose,
@@ -11,7 +10,8 @@ import {
   IconPlus,
   IconSearch,
   IconSettings,
-  IconShield,
+  IconSparkles,
+  IconZap,
 } from "./icons";
 import { TaskListItem } from "./TaskListItem";
 import { WorkspaceListItem } from "./WorkspaceListItem";
@@ -19,8 +19,8 @@ import { WorkspaceListItem } from "./WorkspaceListItem";
 /* ── Data ────────────────────────────────────── */
 
 const navItems = [
-  { id: "expert", label: "专家·技能·连接器", icon: IconShield },
-  { id: "auto", label: "自动化", icon: IconActivity },
+  { id: "expert", label: "专家·技能·连接器", icon: IconSparkles },
+  { id: "auto", label: "自动化", icon: IconZap },
 ];
 
 /** 相对时间格式化 */
@@ -151,17 +151,17 @@ export function Sidebar() {
         <button
           type="button"
           onClick={() => setCollapsed(!collapsed)}
-          className="flex h-[30px] w-[30px] items-center justify-center rounded-s text-ink-3 transition hover:bg-hover hover:text-ink-2"
+          className="flex h-[30px] w-[30px] items-center justify-center rounded-s text-ink-2 transition hover:bg-hover hover:text-ink"
           title={collapsed ? "展开侧栏" : "折叠侧栏"}
         >
-          {collapsed ? <IconPanelLeftOpen /> : <IconPanelLeftClose />}
+          {collapsed ? <IconPanelLeftOpen size={18} /> : <IconPanelLeftClose size={18} />}
         </button>
 
         {/* Search icon / input (expanded only) */}
         {!collapsed &&
           (showSearch ? (
-            <div className="flex flex-1 items-center gap-[6px] pl-[8px] text-ink-3">
-              <IconSearch />
+            <div className="flex flex-1 items-center gap-[6px] pl-[8px] text-ink-2">
+              <IconSearch size={18} ring />
               <input
                 type="text"
                 value={searchQuery}
@@ -181,10 +181,10 @@ export function Sidebar() {
             <button
               type="button"
               onClick={() => setShowSearch(true)}
-              className="flex h-[30px] w-[30px] items-center justify-center rounded-s text-ink-3 transition hover:bg-hover hover:text-ink-2"
+              className="flex h-[30px] w-[30px] items-center justify-center rounded-s text-ink-2 transition hover:bg-hover hover:text-ink"
               title="搜索任务"
             >
-              <IconSearch />
+              <IconSearch size={18} ring />
             </button>
           ))}
       </div>
@@ -198,7 +198,7 @@ export function Sidebar() {
             className="flex h-[30px] w-[30px] items-center justify-center rounded-s text-ink-2 transition hover:bg-hover"
             title="新建任务"
           >
-            <IconPlus />
+            <IconPlus size={18} strokeWidth={2.4} />
           </button>
 
           {/* Spacer */}
@@ -209,10 +209,10 @@ export function Sidebar() {
             <button
               type="button"
               onClick={() => useUIStore.getState().setModelSettingsOpen(true)}
-              className="flex h-[30px] w-[30px] items-center justify-center rounded-s text-ink-3 transition hover:bg-hover hover:text-ink-2"
+              className="flex h-[30px] w-[30px] items-center justify-center rounded-s text-ink-2 transition hover:bg-hover hover:text-ink"
               title="设置"
             >
-              <IconSettings />
+              <IconSettings size={18} />
             </button>
           </div>
         </div>
@@ -226,7 +226,7 @@ export function Sidebar() {
               onClick={handleNewTask}
               className="flex h-[40px] w-full items-center gap-[10px] rounded-s px-[12px] text-[15px] text-ink transition hover:bg-hover active:scale-[0.98]"
             >
-              <IconPlus className="text-ink-3" />
+              <IconPlus size={18} strokeWidth={2.4} className="text-ink-2" />
               新建任务
             </button>
           </div>
@@ -242,10 +242,12 @@ export function Sidebar() {
                   type="button"
                   onClick={() => setActiveNav(item.id)}
                   className={`flex h-[40px] items-center gap-[10px] rounded-s px-[12px] text-[15px] transition ${
-                    isActive ? "bg-active font-semibold text-ink" : "text-ink-2 hover:bg-hover"
+                    isActive
+                      ? "bg-accent-tint font-semibold text-ink"
+                      : "text-ink-2 hover:bg-hover"
                   }`}
                 >
-                  <Icon className={isActive ? "text-ink-2" : "text-ink-3"} />
+                  <Icon size={18} className={isActive ? "text-accent" : "text-ink-2"} />
                   <span>{item.label}</span>
                 </button>
               );
@@ -348,17 +350,17 @@ export function Sidebar() {
             <div className="flex items-center gap-[6px]">
               <button
                 type="button"
-                className="flex h-[28px] w-[28px] items-center justify-center rounded-s text-ink-3 transition hover:bg-hover hover:text-ink-2"
+                className="flex h-[28px] w-[28px] items-center justify-center rounded-s text-ink-2 transition hover:bg-hover hover:text-ink"
               >
-                <IconBell />
+                <IconBell size={18} />
               </button>
               <button
                 type="button"
                 onClick={() => useUIStore.getState().setModelSettingsOpen(true)}
-                className="flex h-[28px] w-[28px] items-center justify-center rounded-s text-ink-3 transition hover:bg-hover hover:text-ink-2"
+                className="flex h-[28px] w-[28px] items-center justify-center rounded-s text-ink-2 transition hover:bg-hover hover:text-ink"
                 title="模型设置"
               >
-                <IconSettings />
+                <IconSettings size={18} />
               </button>
             </div>
           </div>
