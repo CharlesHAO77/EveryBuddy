@@ -25,6 +25,7 @@ import {
 import { type BrowserWindow, ipcMain } from "electron";
 import { agentRuntime } from "./agentRuntime";
 import { configStore, SESSIONS_DIR } from "./configStore";
+import * as modelStore from "./modelStore";
 import {
   createNamedWorkspace,
   createWorkspace,
@@ -96,7 +97,7 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
     const { sessionDir } = resolveSessionLocation(req.type, workspace);
 
     // 默认使用第一个已配置的模型
-    const providerId = req.providerId ?? configStore.getDefaultProviderId();
+    const providerId = req.providerId ?? modelStore.getDefaultProviderId();
 
     const now = new Date().toISOString();
     const task: TaskMeta = {
@@ -139,7 +140,7 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
     if (agentRuntime.hasSession(id)) return;
     await agentRuntime.createTaskSession(
       task,
-      task.providerId ?? configStore.getDefaultProviderId(),
+      task.providerId ?? modelStore.getDefaultProviderId(),
     );
   });
 
@@ -204,24 +205,24 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
   });
 
   // ── config:* ──────────────────────────────
-  ipcMain.handle("config:getModels", () => configStore.getModels());
+  ipcMain.handle("config:getModels", () => modelStore.listProviders());
 
   ipcMain.handle("config:saveModel", async (_evt, raw) => {
     const req = validate(saveModelRequestSchema, raw);
-    const result = configStore.saveModel(req);
-    await agentRuntime.refreshModel(req.id);
+    const result = modelStore.saveProvider(req);
+    await agentRuntime.refreshModel();
     return result;
   });
 
   ipcMain.handle("config:removeModel", async (_evt, raw) => {
     const { id } = validate(idRequestSchema, raw);
-    configStore.removeModel(id);
-    await agentRuntime.refreshModel(id);
+    modelStore.removeProvider(id);
+    await agentRuntime.refreshModel();
   });
 
   ipcMain.handle("config:setApiKey", async (_evt, raw) => {
     const req = validate(setApiKeyRequestSchema, raw);
-    configStore.setApiKey(req.providerId, req.apiKey);
-    await agentRuntime.refreshModel(req.providerId, req.apiKey);
+    modelStore.setApiKey(req.providerId, req.apiKey);
+    await agentRuntime.refreshModel();
   });
 }

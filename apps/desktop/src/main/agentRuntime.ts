@@ -3,7 +3,7 @@
  *
  * 职责：
  *  1. 动态加载 @earendil-works/pi-coding-agent（ESM，运行时 import()）
- *  2. 管理 ModelRuntime（~/EveryBuddy 下的 models.json + auth）
+ *  2. 管理 ModelRuntime（models.json + auth.json 由 modelStore 以 SDK 原生格式维护，见 §7.3）
  *  3. 为每个任务创建 AgentSession（SessionManager 落盘到对应目录）
  *  4. 将 pi 内容块粒度事件归一化为 AgentEvent，回调推送给 ipcRouter 广播
  *
@@ -11,17 +11,13 @@
  */
 
 import { randomUUID } from "node:crypto";
-import { existsSync, mkdirSync, readdirSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, statSync } from "node:fs";
+import { tmpdir } from "node:os";
 import path from "node:path";
 import type { SessionEntry } from "@earendil-works/pi-coding-agent";
-import type {
-  AgentEvent,
-  HistoryBlock,
-  HistoryMessage,
-  ModelProviderConfig,
-  TaskMeta,
-} from "@everybuddy/ipc-contract";
-import { APP_ROOT, configStore } from "./configStore";
+import type { AgentEvent, HistoryBlock, HistoryMessage, TaskMeta } from "@everybuddy/ipc-contract";
+import { configStore } from "./configStore";
+import { AUTH_PATH, getProvider, MODELS_JSON_PATH } from "./modelStore";
 import { getTaskCwd } from "./workspaceManager";
 
 // 类型导入（编译期擦除）；运行时通过动态 import() 加载 ESM 包
@@ -42,8 +38,8 @@ type PiModel = NonNullable<ReturnType<ModelRuntime["getModel"]>>;
 /** 分布式 Omit，保留判别联合各成员的形状 */
 type WithoutStreamId<T> = T extends { streamId: string } ? Omit<T, "streamId"> : T;
 
-const MODELS_JSON_PATH = path.join(APP_ROOT, "models.json");
-const AUTH_PATH = path.join(APP_ROOT, "auth.json");
+/** models-store.json 缓存重定向到系统临时目录，避免远程目录缓存落入 ~/EveryBuddy */
+const MODELS_STORE_TMP_PATH = path.join(tmpdir(), "everybuddy-models-store.json");
 
 interface RuntimeState {
   session: AgentSession;
@@ -74,78 +70,34 @@ class AgentRuntime {
     return sdk;
   }
 
-  /** 初始化 ModelRuntime，写入 models.json，注入 apiKey */
+  /** 初始化 ModelRuntime（models.json + auth.json 由 modelStore 维护，凭证自动读取） */
   async init(): Promise<void> {
-    const sdk = await this.load();
-    this.syncModelsJson();
-    this.modelRuntime = await sdk.ModelRuntime.create({
-      authPath: AUTH_PATH,
-      modelsPath: MODELS_JSON_PATH,
-      allowModelNetwork: false,
-    });
-    // 为每个已配置 apiKey 的 provider 注入密钥
-    for (const m of configStore.getModels()) {
-      const stored = configStore.getStoredModel(m.id);
-      if (stored?.apiKey) {
-        try {
-          await this.modelRuntime.setRuntimeApiKey(m.id, stored.apiKey);
-        } catch (err) {
-          console.error(`[agentRuntime] setRuntimeApiKey(${m.id}) 失败:`, err);
-        }
-      }
-    }
+    this.modelRuntime = await this.createRuntime();
   }
 
-  /** 将 configStore 中的模型配置同步到 ~/EveryBuddy/models.json */
-  private syncModelsJson(): void {
-    if (!existsSync(APP_ROOT)) mkdirSync(APP_ROOT, { recursive: true });
-    const models = configStore.getModels();
-    const providers: Record<string, unknown> = {};
-    for (const m of models) {
-      const stored = configStore.getStoredModel(m.id);
-      providers[m.id] = {
-        name: m.name,
-        baseUrl: m.baseUrl,
-        api: "openai-completions",
-        apiKey: "placeholder",
-        compat: {
-          supportsDeveloperRole: false,
-          supportsReasoningEffort: false,
-        },
-        models: [{ id: stored?.model ?? m.model }],
-      };
-    }
-    const content = JSON.stringify({ providers }, null, 2);
-    writeFileSync(MODELS_JSON_PATH, content, "utf-8");
+  /** 重建 ModelRuntime（新增/更新/删除模型或密钥后调用，重新加载 models.json + auth.json） */
+  async refreshModel(): Promise<void> {
+    this.modelRuntime = await this.createRuntime();
   }
 
-  /** 新增/更新模型后刷新 runtime */
-  async refreshModel(providerId: string, apiKey?: string): Promise<void> {
-    if (!this.modelRuntime) await this.init();
-    this.syncModelsJson();
-    // 重建 runtime 以重新加载 models.json
+  private async createRuntime(): Promise<ModelRuntime> {
     const sdk = await this.load();
-    this.modelRuntime = await sdk.ModelRuntime.create({
+    return sdk.ModelRuntime.create({
       authPath: AUTH_PATH,
       modelsPath: MODELS_JSON_PATH,
+      modelsStorePath: MODELS_STORE_TMP_PATH,
       allowModelNetwork: false,
     });
-    if (apiKey) {
-      await this.modelRuntime?.setRuntimeApiKey(providerId, apiKey);
-    } else {
-      const stored = configStore.getStoredModel(providerId);
-      if (stored?.apiKey) {
-        await this.modelRuntime?.setRuntimeApiKey(providerId, stored.apiKey);
-      }
-    }
   }
 
   /** 解析模型对象 */
   private resolveModel(providerId: string): PiModel | undefined {
     if (!this.modelRuntime) return undefined;
-    const stored = configStore.getStoredModel(providerId);
-    if (!stored) return undefined;
-    return this.modelRuntime.getModel(providerId, stored.model) as PiModel | undefined;
+    const provider = getProvider(providerId);
+    if (!provider) return undefined;
+    return this.modelRuntime.getModel(providerId, provider.models[0]?.id ?? "") as
+      | PiModel
+      | undefined;
   }
 
   /** 为任务创建/恢复 AgentSession */
@@ -583,4 +535,3 @@ function findMostRecentSessionFile(sessionDir: string): string | null {
 }
 
 export const agentRuntime = new AgentRuntime();
-export type { ModelProviderConfig };

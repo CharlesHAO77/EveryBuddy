@@ -1,25 +1,20 @@
 /**
- * 非敏感配置 + 模型配置管理（见 docs/architecture.md §7.3）。
+ * 非敏感配置（workspaces + tasks）管理（见 docs/architecture.md §7.3）。
  *
  * 使用 JSON 文件 ~/EveryBuddy/config.json 持久化（替代 electron-store，避免 ESM 互操作问题）。
- * 存储内容：
- *  - models: 模型 provider 配置（含 apiKey，仅主进程持有，不回传渲染进程明文）
+ * 存储内容（不含模型/密钥——模型配置统一由 modelStore 管理，见 modelStore.ts）：
  *  - workspaces: 工作空间注册表
  *  - tasks: 任务（会话）元数据
  *
- * 安全：getModels() 回传渲染进程时剥离 apiKey，替换为 hasApiKey 标志。
+ * 模型 provider 配置与 API Key 迁至 pi-ai 原生两件套：models.json（provider 配置）+
+ * auth.json（凭证，0600），由 modelStore 读写、ModelRuntime 直接消费。
  */
 
 import { randomUUID } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import path from "node:path";
-import type {
-  ModelProviderConfig,
-  SaveModelRequest,
-  TaskMeta,
-  Workspace,
-} from "@everybuddy/ipc-contract";
+import type { TaskMeta, Workspace } from "@everybuddy/ipc-contract";
 
 /** 应用根目录 ~/EveryBuddy */
 export const APP_ROOT = path.join(homedir(), "EveryBuddy");
@@ -34,20 +29,14 @@ export function ensureAppDirs(): void {
   if (!existsSync(SESSIONS_DIR)) mkdirSync(SESSIONS_DIR, { recursive: true });
 }
 
-interface StoredModel extends SaveModelRequest {
-  apiKey: string;
-}
-
 interface ConfigShape {
-  models: StoredModel[];
   workspaces: Workspace[];
   tasks: TaskMeta[];
 }
 
-const CONFIG_PATH = path.join(APP_ROOT, "config.json");
+export const CONFIG_PATH = path.join(APP_ROOT, "config.json");
 
 const DEFAULT_CONFIG: ConfigShape = {
-  models: [],
   workspaces: [],
   tasks: [],
 };
@@ -64,7 +53,6 @@ class ConfigStore {
         const raw = readFileSync(CONFIG_PATH, "utf-8");
         const parsed = JSON.parse(raw) as Partial<ConfigShape>;
         this.data = {
-          models: parsed.models ?? [],
           workspaces: parsed.workspaces ?? [],
           tasks: parsed.tasks ?? [],
         };
@@ -78,63 +66,6 @@ class ConfigStore {
   private save(): void {
     ensureAppDirs();
     writeFileSync(CONFIG_PATH, JSON.stringify(this.data, null, 2), "utf-8");
-  }
-
-  // ── Models ────────────────────────────────
-
-  getModels(): ModelProviderConfig[] {
-    this.load();
-    return this.data.models.map((m) => ({
-      id: m.id,
-      name: m.name,
-      baseUrl: m.baseUrl,
-      model: m.model,
-      isOpenAiCompatible: m.isOpenAiCompatible,
-      hasApiKey: Boolean(m.apiKey),
-    }));
-  }
-
-  /** 默认模型 provider id = 第一个已配置的模型（未配置则 undefined） */
-  getDefaultProviderId(): string | undefined {
-    this.load();
-    return this.data.models[0]?.id;
-  }
-
-  /** 获取含明文 apiKey 的模型配置（仅主进程内部使用，不回传渲染进程） */
-  getStoredModel(id: string): StoredModel | undefined {
-    this.load();
-    return this.data.models.find((m) => m.id === id);
-  }
-
-  saveModel(req: SaveModelRequest): ModelProviderConfig {
-    this.load();
-    const idx = this.data.models.findIndex((m) => m.id === req.id);
-    const existing = idx >= 0 ? this.data.models[idx] : undefined;
-    const stored: StoredModel = {
-      ...req,
-      apiKey: existing?.apiKey ?? "",
-    };
-    if (idx >= 0) this.data.models[idx] = stored;
-    else this.data.models.push(stored);
-    this.save();
-    return {
-      ...req,
-      hasApiKey: Boolean(stored.apiKey),
-    };
-  }
-
-  setApiKey(providerId: string, apiKey: string): void {
-    this.load();
-    const m = this.data.models.find((x) => x.id === providerId);
-    if (!m) throw new Error(`模型不存在: ${providerId}`);
-    m.apiKey = apiKey;
-    this.save();
-  }
-
-  removeModel(id: string): void {
-    this.load();
-    this.data.models = this.data.models.filter((m) => m.id !== id);
-    this.save();
   }
 
   // ── Workspaces ────────────────────────────

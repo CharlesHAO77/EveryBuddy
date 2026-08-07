@@ -140,8 +140,9 @@ everyBuddy/
         │   │   ├── windowManager.ts      # BrowserWindow 工厂
         │   │   ├── ipcRouter.ts          # IPC 路由与校验
         │   │   ├── agentRuntime.ts       # pi-coding-agent 运行时集成
+        │   │   ├── modelStore.ts         # 模型维护唯一模块（models.json + auth.json，SDK 原生格式）
         │   │   ├── apiGatewayBridge.ts   # 主进程 ↔ API Gateway 桥接
-        │   │   ├── configStore.ts        # 非敏感配置
+        │   │   ├── configStore.ts        # 非敏感配置（workspaces + tasks）
         │   │   ├── apiKeyDialog.ts       # 原生 API Key 输入对话框
         │   │   └── toolConfirmDialog.ts  # 工具确认弹窗
         │   ├── preload/
@@ -346,13 +347,22 @@ contextBridge.exposeInMainWorld("electronAPI", api);
 - 主进程不信任渲染进程的任何输入。
 - 仅暴露最小必要 API。
 
-### 7.3 凭证安全
+### 7.3 模型与凭证：统一交给 pi-ai 原生文件
 
-- **API Key 由 pi-coding-agent 内置 AuthStorage 管理**，底层使用系统钥匙串 + 加密文件。
-- **API Key 输入流程**：用户点击"配置 API Key" → 渲染进程触发 `config:openApiKeyDialog` IPC → 主进程弹出原生输入框 → 用户输入密钥 → 主进程调用 `AuthStorage.set()` 存储 → 原生对话框关闭。渲染进程全程不接触原始密钥字符串。
-- AgentRuntime 通过 AuthStorage 直接获取密钥，不经由 IPC。
-- 配置文件中仅存 provider 名称、模型名称等非敏感信息。
-- 主进程不再维护独立的 `credentialService.ts`，凭证操作委托给 pi-coding-agent 的 AuthStorage。
+**模型维护统一交给 pi-ai 原生两件套**，App 不维护平行注册表。`~/EveryBuddy/` 下的配置文件所有权：
+
+| 文件 | 所有权 | 内容 | 可编辑性 |
+| ---- | ------ | ---- | -------- |
+| `config.json`（0600） | 应用（`configStore.ts`） | 仅 `workspaces` + `tasks`，**无模型、无密钥** | 应用真源，可手改 |
+| `models.json` | 应用（`modelStore.ts`）→ pi SDK `ModelConfig` 消费 | provider 配置（SDK `ProviderConfigSchema` 原生格式） | 应用直写，勿手改 |
+| `auth.json`（0600） | 应用（`modelStore.ts`）→ pi SDK `AuthStorage` 消费 | 凭证（SDK `AuthCredential` 格式 `{ providerId: { type:"api_key", key } }`） | 应用直写，勿手改 |
+| `models-store.json` | pi SDK 内部（远程目录缓存） | **已移除**；`allowModelNetwork:false` 时 SDK 只读缓存、永不写，`modelsStorePath` 重定向到系统临时目录兜底 | 不落盘 |
+
+- **模型配置**：`modelStore.ts` 是 models.json + auth.json 唯一读写入口，按 SDK 原生格式直写；`ModelRuntime.create({ modelsPath, authPath })` 直接消费，**无派生/同步步骤**（旧 `configStore.models[]` 平行注册表与 `syncModelsJson` 已移除）。
+- **凭证**：密钥只写 `auth.json`（0600，原子写），SDK `RuntimeCredentials`→`AuthStorage` 自动读取（解析优先级：运行时覆盖 → auth.json → 环境变量 → models.json 兜底）。`config.json` 不存任何明文密钥。
+- **API Key 输入流程**：用户点击"配置 API Key" → `config:setApiKey` IPC → 主进程 `modelStore.setApiKey()` 写 auth.json → 重建 ModelRuntime。渲染进程全程不接触原始密钥字符串，仅见 `hasApiKey` 布尔。
+- **SDK 版本说明**：pi-mono master 的公共 `AuthStorage` 类尚未随 `@earendil-works/pi-coding-agent` 发布（0.83.0/0.84.1 均只导出只读的 `readStoredCredential`），故应用按 SDK `AuthCredential` 格式直写 auth.json；待 SDK 发布 `AuthStorage` 后，`modelStore.writeAuth` 内部可换为 `AuthStorage.set()`，一处改动即可升级。
+- 主进程不再维护独立的 `credentialService.ts`，凭证写入收口于 `modelStore.ts`。
 
 ### 7.4 工具执行安全
 
