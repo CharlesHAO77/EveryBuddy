@@ -8,7 +8,7 @@
  */
 
 import type { ElectronAPI } from "@everybuddy/ipc-contract";
-import { contextBridge, ipcRenderer } from "electron";
+import { contextBridge, ipcRenderer, webUtils } from "electron";
 
 const api: ElectronAPI = {
   agent: {
@@ -44,6 +44,10 @@ const api: ElectronAPI = {
     saveModel: (req) => ipcRenderer.invoke("config:saveModel", req),
     removeModel: (id) => ipcRenderer.invoke("config:removeModel", { id }),
     setApiKey: (req) => ipcRenderer.invoke("config:setApiKey", req),
+  },
+  system: {
+    // 仅在 preload（拥有 node/electron 环境）中可调；contextBridge 支持 File 对象跨桥传递
+    getPathForFile: (file) => webUtils.getPathForFile(file),
   },
 };
 

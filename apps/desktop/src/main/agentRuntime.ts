@@ -15,8 +15,21 @@ import { existsSync, mkdirSync, readdirSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import type { SessionEntry } from "@earendil-works/pi-coding-agent";
-import type { AgentEvent, HistoryBlock, HistoryMessage, TaskMeta } from "@everybuddy/ipc-contract";
+import type {
+  AgentEvent,
+  AttachmentRef,
+  HistoryBlock,
+  HistoryMessage,
+  TaskMeta,
+} from "@everybuddy/ipc-contract";
 import { configStore } from "./configStore";
+import {
+  buildManifestText,
+  parseFileContent,
+  resolveInUploads,
+  splitFileMarkers,
+  stageAttachments,
+} from "./fileParser";
 import { AUTH_PATH, getProvider, MODELS_JSON_PATH } from "./modelStore";
 import { getTaskCwd } from "./workspaceManager";
 
@@ -139,7 +152,8 @@ class AgentRuntime {
       model,
       modelRuntime: this.modelRuntime ?? undefined,
       sessionManager,
-      tools:  ["read", "write", "edit", "bash", "grep", "find", "ls"],
+      tools: ["read", "write", "edit", "bash", "grep", "find", "ls", "parse_attachment"],
+      customTools: [await this.buildParseAttachmentTool(cwd)],
     });
 
     const unsubscribe = session.subscribe((event: unknown) => {
@@ -149,8 +163,45 @@ class AgentRuntime {
     this.sessions.set(task.id, { session, unsubscribe });
   }
 
-  /** 发送消息，支持按任务切换模型 */
-  async prompt(taskId: string, text: string, providerId?: string): Promise<void> {
+  /**
+   * 构造 parse_attachment 自定义工具：让 Agent 按需解析 uploads/ 下的附件
+   * （PDF/DOCX/XLSX/PPTX 等 read 工具读不了的二进制文档）。闭包捕获任务 cwd，
+   * 路径经 resolveInUploads 严格限定在 uploads/ 内。
+   */
+  private async buildParseAttachmentTool(
+    cwd: string,
+  ): Promise<ReturnType<CodingAgentSDK["defineTool"]>> {
+    const sdk = await this.load();
+    const { Type } = await import("typebox");
+    return sdk.defineTool({
+      name: "parse_attachment",
+      label: "解析附件",
+      description:
+        "解析上传的附件文件为文本或图片内容。文本/图片文件直接用内置 read 工具即可；本工具用于 PDF/Word/Excel/PPT 等办公文档。参数 file 为 uploads/ 目录下的文件名（如 report.pdf 或 uploads/report.pdf）。",
+      parameters: Type.Object({
+        file: Type.String({ description: "uploads/ 下的文件名或相对路径" }),
+      }),
+      execute: async (_toolCallId: string, params: { file: string }) => {
+        const filePath = resolveInUploads(path.join(cwd, "uploads"), params.file);
+        if (!filePath) {
+          return {
+            content: [{ type: "text", text: "[无效路径：文件必须位于 uploads/ 目录下]" }],
+            details: {},
+          };
+        }
+        const { content } = await parseFileContent(filePath);
+        return { content, details: {} };
+      },
+    });
+  }
+
+  /** 发送消息，支持按任务切换模型与附带附件（附件复制到 uploads/，Agent 按需读取） */
+  async prompt(
+    taskId: string,
+    text: string,
+    providerId?: string,
+    attachments?: AttachmentRef[],
+  ): Promise<void> {
     const state = this.sessions.get(taskId);
     if (!state) {
       // 会话未就绪（竞态或初始化失败）：经事件流报错，避免 IPC reject 变成未处理异常
@@ -173,8 +224,32 @@ class AgentRuntime {
       }
     }
 
+    // 附件：复制到任务工作目录 uploads/ 并构建清单文本，Agent 决定何时用 read/parse_attachment 解析
+    let fullText = text;
+    if (attachments && attachments.length > 0) {
+      const task = configStore.getTask(taskId);
+      const cwd = task ? getTaskCwd(task) : undefined;
+      if (!cwd) {
+        this.emitError(taskId, "无法定位任务工作目录");
+        return;
+      }
+      try {
+        const staged = await stageAttachments(attachments, cwd);
+        const copied = staged.filter((s) => !s.skipped);
+        if (copied.length === 0) {
+          this.emitError(taskId, `附件暂存失败：${staged[0]?.error ?? "未知错误"}`);
+          return;
+        }
+        const manifest = buildManifestText(staged);
+        fullText = text.trim() ? `${text}\n\n${manifest}` : manifest;
+      } catch (err) {
+        this.emitError(taskId, `附件处理失败: ${err instanceof Error ? err.message : String(err)}`);
+        return;
+      }
+    }
+
     try {
-      await state.session.prompt(text);
+      await state.session.prompt(fullText);
     } catch (err) {
       this.emitError(taskId, `发送消息失败: ${err instanceof Error ? err.message : String(err)}`);
     }
@@ -440,11 +515,13 @@ function entriesToHistory(entries: SessionEntry[]): HistoryMessage[] {
     const role = msg.role;
 
     if (role === "user") {
+      // 用户消息内容含附件清单标记（<file name="uploads/x" size="n"/>），
+      // 拆分为附件 chips + 剩余文本，历史回放据此渲染
       messages.push({
         id: entry.id,
         role: "user",
         timestamp: ts,
-        blocks: [{ id: "0", kind: "text", content: extractText(msg.content), done: true }],
+        blocks: splitFileMarkers(extractText(msg.content)),
       });
     } else if (role === "assistant") {
       const blocks: HistoryBlock[] = [];

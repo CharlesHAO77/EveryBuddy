@@ -3,7 +3,8 @@
  * 助手消息（一个 turn 内可能含多轮思考/文本/工具）由 AssistantGroup 合并渲染。
  */
 import type { ChatMessage } from "../stores/sessionStore";
-import { IconAlertTriangle } from "./icons";
+import { formatFileSize } from "./AttachmentPreview";
+import { IconAlertTriangle, IconFile } from "./icons";
 import { TextCard } from "./TextCard";
 import { ThinkingCard } from "./ThinkingCard";
 import { ToolCallCard } from "./ToolCallCard";
@@ -29,12 +30,30 @@ export function MessageBubble({ message }: MessageBubbleProps) {
       </div>
     );
   }
-  // 用户消息：右侧单文本气泡
+  // 用户消息：右侧气泡，附件 chips 在上、文本在下
+  const fileBlocks = message.blocks.filter((b) => b.kind === "file");
   const text = message.blocks.find((b) => b.kind === "text")?.content ?? "";
   return (
     <div className="flex w-full justify-end">
       <div className="max-w-[80%] rounded-l rounded-br-none bg-accent px-4 py-3 text-sm text-white shadow-card">
-        <div className="whitespace-pre-wrap">{text}</div>
+        {fileBlocks.length > 0 && (
+          <div className="mb-2 flex flex-wrap gap-1.5">
+            {fileBlocks.map((b) => (
+              <span
+                key={b.id}
+                className="flex max-w-[220px] items-center gap-1 rounded-s bg-white/15 px-1.5 py-0.5 text-[12px]"
+                title={b.name}
+              >
+                <IconFile size={12} className="shrink-0 opacity-80" />
+                <span className="truncate">{b.name}</span>
+                {b.size !== undefined && (
+                  <span className="shrink-0 opacity-70">{formatFileSize(b.size)}</span>
+                )}
+              </span>
+            ))}
+          </div>
+        )}
+        {text && <div className="whitespace-pre-wrap">{text}</div>}
         <div className="mt-1 text-right text-[11px] text-accent-tint">{time}</div>
       </div>
     </div>
@@ -64,6 +83,7 @@ export function AssistantGroup({ messages }: AssistantGroupProps) {
               return <TextCard key={key} block={block} streaming={m.isStreaming ?? false} />;
             if (block.kind === "thinking")
               return <ThinkingCard key={key} block={block} streaming={m.isStreaming ?? false} />;
+            if (block.kind === "file") return null; // 附件块只出现在用户消息中
             return <ToolCallCard key={key} block={block} />;
           }),
         )}

@@ -21,11 +21,18 @@ export default defineConfig({
   },
   build: {
     rollupOptions: {
-      // pi-coding-agent / pi-ai 是 ESM-only 且带 WASM 依赖，不做 bundle，
-      // 运行时在 agentRuntime.ts 中通过动态 import() 加载（Node 22 原生支持 CJS 中 import ESM）。
+      // pi-coding-agent / pi-ai 是 ESM-only 且带 WASM 依赖，不做 bundle；
+      // 附件解析库（unpdf/mammoth/xlsx/jszip）与 typebox 同样外部化，
+      // 运行时在 agentRuntime.ts / fileParser.ts 中通过动态 import() 加载
+      // （Node 22 原生支持 CJS 中 import ESM）。
       external: [
         "electron",
         "electron-store",
+        "unpdf",
+        "mammoth",
+        "xlsx",
+        "jszip",
+        "typebox",
         ...builtinModules,
         /^@earendil-works\//,
       ],

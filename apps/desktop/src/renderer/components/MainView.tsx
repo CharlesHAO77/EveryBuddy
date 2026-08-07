@@ -2,6 +2,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { type ChatMessage, useSessionStore } from "../stores/sessionStore";
 import { type CategoryId, useUIStore } from "../stores/uiStore";
+import { useAttachments } from "../hooks/useAttachments";
+import { AttachmentPreview } from "./AttachmentPreview";
 import { ConversationTitle } from "./ConversationTitle";
 import {
   IconArrowUp,
@@ -278,6 +280,15 @@ function WelcomeView() {
   const setModelSettingsOpen = useUIStore((s) => s.setModelSettingsOpen);
   const defaultProviderId = useDefaultProviderId();
   const [welcomeProviderId, setWelcomeProviderId] = useState<string | null>(defaultProviderId);
+  const {
+    attachments,
+    openPicker,
+    removeAttachment,
+    clear,
+    fileInputProps,
+    onContainerDragOver,
+    onContainerDrop,
+  } = useAttachments();
 
   // 当默认模型变化（如删除模型）时同步欢迎页选择
   const effectiveProviderId = welcomeProviderId ?? defaultProviderId;
@@ -286,7 +297,7 @@ function WelcomeView() {
 
   const handleSend = async () => {
     const trimmed = text.trim();
-    if (!trimmed) return;
+    if (!trimmed && attachments.length === 0) return;
     try {
       let taskId = currentTaskId;
       if (!taskId) {
@@ -296,19 +307,21 @@ function WelcomeView() {
             ? {
                 type: "workspace",
                 workspaceId: pendingWorkspaceId,
-                title: trimmed.slice(0, 30),
+                title: trimmed.slice(0, 30) || "新任务",
                 providerId: effectiveProviderId ?? undefined,
               }
             : {
                 type: "temp",
-                title: trimmed.slice(0, 30),
+                title: trimmed.slice(0, 30) || "新任务",
                 providerId: effectiveProviderId ?? undefined,
               },
         );
         taskId = task.id;
       }
+      const atts = attachments.map((a) => ({ name: a.name, path: a.path, size: a.size }));
       setText("");
-      await sendMessage(taskId, trimmed);
+      clear();
+      await sendMessage(taskId, trimmed, atts);
     } catch (err) {
       console.error("[WelcomeView] 发送失败:", err);
     }
@@ -351,6 +364,7 @@ function WelcomeView() {
 
         {/* ── Input Area ── */}
         <div className="mt-[24px] w-[700px]">
+          <input type="file" multiple {...fileInputProps} />
           {/* Quick Tags - above input, left-aligned, same width */}
           {currentTags.length > 0 && (
             <div className="mb-[10px] flex justify-start gap-[12px]">
@@ -367,7 +381,15 @@ function WelcomeView() {
             </div>
           )}
 
-          <div className="relative h-[160px] rounded-l border border-line bg-card shadow-card transition focus-within:border-accent">
+          {/* 附件预览条 */}
+          <AttachmentPreview attachments={attachments} onRemove={removeAttachment} />
+
+          {/* biome-ignore lint/a11y/noStaticElementInteractions: 输入容器是拖放区，需挂 onDragOver/onDrop；键盘用户聚焦内部 textarea 即可 */}
+          <div
+            className="relative h-[160px] rounded-l border border-line bg-card shadow-card transition focus-within:border-accent"
+            onDragOver={onContainerDragOver}
+            onDrop={onContainerDrop}
+          >
             <textarea
               value={text}
               onChange={(e) => setText(e.target.value)}
@@ -382,6 +404,8 @@ function WelcomeView() {
               <div className="flex items-center gap-[16px]">
                 <button
                   type="button"
+                  onClick={openPicker}
+                  title="添加附件"
                   className="flex h-[28px] w-[28px] items-center justify-center rounded-s text-ink-2 transition hover:bg-hover hover:text-ink"
                 >
                   <IconPlus />
@@ -413,7 +437,7 @@ function WelcomeView() {
                 <button
                   type="button"
                   onClick={handleSend}
-                  disabled={!text.trim()}
+                  disabled={!text.trim() && attachments.length === 0}
                   className="flex h-[30px] w-[30px] items-center justify-center rounded-full bg-accent text-white transition hover:bg-accent-strong active:scale-95 disabled:opacity-30 disabled:cursor-not-allowed"
                 >
                   <IconArrowUp strokeWidth={2} />
@@ -455,6 +479,15 @@ function ChatView({ taskId }: { taskId: string }) {
   const setTaskProvider = useSessionStore((s) => s.setTaskProvider);
   const setModelSettingsOpen = useUIStore((s) => s.setModelSettingsOpen);
   const defaultProviderId = useDefaultProviderId();
+  const {
+    attachments,
+    openPicker,
+    removeAttachment,
+    clear,
+    fileInputProps,
+    onContainerDragOver,
+    onContainerDrop,
+  } = useAttachments();
 
   const taskProviderId = task?.providerId ?? defaultProviderId;
   const isStreaming = task?.isStreaming ?? false;
@@ -480,10 +513,12 @@ function ChatView({ taskId }: { taskId: string }) {
 
   const handleSend = async () => {
     const trimmed = text.trim();
-    if (!trimmed) return;
+    if (!trimmed && attachments.length === 0) return;
+    const atts = attachments.map((a) => ({ name: a.name, path: a.path, size: a.size }));
     setText("");
+    clear();
     try {
-      await sendMessage(taskId, trimmed);
+      await sendMessage(taskId, trimmed, atts);
     } catch (err) {
       console.error("[ChatView] 发送失败:", err);
     }
@@ -524,7 +559,15 @@ function ChatView({ taskId }: { taskId: string }) {
       {/* Chat input */}
       <div className="border-t border-line bg-paper px-6 py-4">
         <div className="mx-auto max-w-3xl">
-          <div className="relative h-[120px] rounded-l border border-line bg-card shadow-card transition focus-within:border-accent">
+          <input type="file" multiple {...fileInputProps} />
+          {/* 附件预览条 */}
+          <AttachmentPreview attachments={attachments} onRemove={removeAttachment} />
+          {/* biome-ignore lint/a11y/noStaticElementInteractions: 输入容器是拖放区，需挂 onDragOver/onDrop；键盘用户聚焦内部 textarea 即可 */}
+          <div
+            className="relative h-[120px] rounded-l border border-line bg-card shadow-card transition focus-within:border-accent"
+            onDragOver={onContainerDragOver}
+            onDrop={onContainerDrop}
+          >
             <textarea
               value={text}
               onChange={(e) => setText(e.target.value)}
@@ -536,6 +579,8 @@ function ChatView({ taskId }: { taskId: string }) {
             <div className="absolute bottom-0 left-0 right-0 flex items-center justify-between px-[14px] pb-[10px]">
               <button
                 type="button"
+                onClick={openPicker}
+                title="添加附件"
                 className="flex h-[28px] w-[28px] items-center justify-center rounded-s text-ink-2 transition hover:bg-hover hover:text-ink"
               >
                 <IconPlus />
@@ -565,7 +610,7 @@ function ChatView({ taskId }: { taskId: string }) {
                   <button
                     type="button"
                     onClick={handleSend}
-                    disabled={!text.trim()}
+                    disabled={!text.trim() && attachments.length === 0}
                     className="flex h-[30px] w-[30px] items-center justify-center rounded-full bg-accent text-white transition hover:bg-accent-strong active:scale-95 disabled:opacity-30 disabled:cursor-not-allowed"
                   >
                     <IconArrowUp strokeWidth={2} />

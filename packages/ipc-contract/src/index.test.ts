@@ -4,6 +4,7 @@
  */
 import { describe, expect, it } from "vitest";
 import {
+  attachmentRefSchema,
   createNamedWorkspaceRequestSchema,
   createTaskRequestSchema,
   createWorkspaceRequestSchema,
@@ -84,7 +85,52 @@ describe("回归：既有 schema", () => {
   it("promptRequestSchema accepts sessionId + text", () => {
     expect(promptRequestSchema.safeParse({ sessionId: "a", text: "hi" }).success).toBe(true);
   });
-  it("promptRequestSchema rejects empty text", () => {
+  it("promptRequestSchema rejects empty text without attachments", () => {
     expect(promptRequestSchema.safeParse({ sessionId: "a", text: "" }).success).toBe(false);
+  });
+  it("promptRequestSchema accepts empty text with attachments", () => {
+    expect(
+      promptRequestSchema.safeParse({
+        sessionId: "a",
+        text: "",
+        attachments: [{ name: "a.txt", path: "/tmp/a.txt", size: 1 }],
+      }).success,
+    ).toBe(true);
+  });
+  it("promptRequestSchema rejects text+attachments both empty", () => {
+    expect(
+      promptRequestSchema.safeParse({ sessionId: "a", text: "", attachments: [] }).success,
+    ).toBe(false);
+  });
+});
+
+describe("attachmentRefSchema", () => {
+  it("accepts valid attachment", () => {
+    expect(
+      attachmentRefSchema.safeParse({ name: "a.pdf", path: "/tmp/a.pdf", size: 10 }).success,
+    ).toBe(true);
+  });
+  it("accepts mimeType", () => {
+    expect(
+      attachmentRefSchema.safeParse({
+        name: "a.png",
+        path: "/tmp/a.png",
+        size: 10,
+        mimeType: "image/png",
+      }).success,
+    ).toBe(true);
+  });
+  it("rejects empty name", () => {
+    expect(attachmentRefSchema.safeParse({ name: "", path: "/tmp/a", size: 1 }).success).toBe(
+      false,
+    );
+  });
+  it("rejects empty path", () => {
+    expect(attachmentRefSchema.safeParse({ name: "a", path: "", size: 1 }).success).toBe(false);
+  });
+  it("rejects negative size", () => {
+    expect(attachmentRefSchema.safeParse({ name: "a", path: "/tmp/a", size: -1 }).success).toBe(
+      false,
+    );
   });
 });

@@ -17,11 +17,25 @@ import { z } from "zod";
 // Agent
 // ────────────────────────────────────────────────
 
+/** 用户附带的本地文件（发送时由主进程复制到任务工作目录，Agent 按需解析读取） */
+export interface AttachmentRef {
+  /** 原始文件名（用于展示） */
+  name: string;
+  /** 本地绝对路径（经 webUtils.getPathForFile 获取） */
+  path: string;
+  /** 文件字节数 */
+  size: number;
+  /** 渲染进程探测的 MIME（参考信息） */
+  mimeType?: string;
+}
+
 /** 发送用户消息请求（见 §6.2 agent:prompt） */
 export interface PromptRequest {
   sessionId: string;
   text: string;
   providerId?: string;
+  /** 随消息发送的附件（发送时复制到工作目录 uploads/，由 Agent 决定何时解析） */
+  attachments?: AttachmentRef[];
 }
 
 /** agent:prompt 返回 */
@@ -180,7 +194,22 @@ export interface HistoryToolBlock {
   done: boolean;
 }
 
-export type HistoryBlock = HistoryThinkingBlock | HistoryTextBlock | HistoryToolBlock;
+export interface HistoryFileBlock {
+  id: string;
+  kind: "file";
+  /** 附件文件名（回放时取 uploads 副本的 basename 展示） */
+  name: string;
+  size?: number;
+  done: boolean;
+  /** 附件暂存/复制失败时的提示 */
+  error?: string;
+}
+
+export type HistoryBlock =
+  | HistoryThinkingBlock
+  | HistoryTextBlock
+  | HistoryToolBlock
+  | HistoryFileBlock;
 
 export interface HistoryMessage {
   id: string;
@@ -231,11 +260,23 @@ export interface LogEntry {
 // Zod schemas（运行时校验，见 §7.2）
 // ────────────────────────────────────────────────
 
-export const promptRequestSchema = z.object({
-  sessionId: z.string().min(1),
-  text: z.string().min(1),
-  providerId: z.string().optional(),
+export const attachmentRefSchema = z.object({
+  name: z.string().min(1),
+  path: z.string().min(1),
+  size: z.number().nonnegative(),
+  mimeType: z.string().optional(),
 });
+
+export const promptRequestSchema = z
+  .object({
+    sessionId: z.string().min(1),
+    text: z.string().default(""),
+    providerId: z.string().optional(),
+    attachments: z.array(attachmentRefSchema).optional().default([]),
+  })
+  .refine((v) => v.text.trim().length > 0 || (v.attachments?.length ?? 0) > 0, {
+    message: "文本或附件至少需要一项",
+  });
 
 export const abortRequestSchema = z.object({
   streamId: z.string().min(1),
@@ -319,6 +360,10 @@ export interface ElectronAPI {
     saveModel: (req: SaveModelRequest) => Promise<ModelProviderConfig>;
     removeModel: (id: string) => Promise<void>;
     setApiKey: (req: SetApiKeyRequest) => Promise<void>;
+  };
+  system: {
+    /** 从渲染进程 File 对象取得本地绝对路径（Electron 32+ 移除 File.path） */
+    getPathForFile: (file: File) => string;
   };
 }
 

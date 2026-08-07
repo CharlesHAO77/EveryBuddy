@@ -1,4 +1,5 @@
 import type {
+  AttachmentRef,
   CreateTaskRequest,
   HistoryBlock,
   HistoryMessage,
@@ -61,7 +62,7 @@ interface SessionState {
   selectWorkspaceDir: () => Promise<string | null>;
   setPendingWorkspace: (id: string | null) => void;
 
-  sendMessage: (taskId: string, text: string) => Promise<void>;
+  sendMessage: (taskId: string, text: string, attachments?: AttachmentRef[]) => Promise<void>;
   setTaskProvider: (taskId: string, providerId: string) => Promise<void>;
 
   // 流式块操作
@@ -249,11 +250,22 @@ export const useSessionStore = create<SessionState>((set, get) => ({
   selectWorkspaceDir: () => window.electronAPI.workspace.selectDir(),
   setPendingWorkspace: (id) => set({ pendingWorkspaceId: id }),
 
-  sendMessage: async (taskId, text) => {
+  sendMessage: async (taskId, text, attachments) => {
+    // 用户消息 blocks：附件 chips 在前，文本块在后（可仅有附件无文本）
+    const blocks: ContentBlock[] = (attachments ?? []).map((a, i) => ({
+      id: String(i),
+      kind: "file",
+      name: a.name,
+      size: a.size,
+      done: true,
+    }));
+    if (text.trim()) {
+      blocks.push({ id: String(blocks.length), kind: "text", content: text, done: true });
+    }
     const userMsg: ChatMessage = {
       id: genId(),
       role: "user",
-      blocks: [{ id: "0", kind: "text", content: text, done: true }],
+      blocks,
       timestamp: Date.now(),
     };
     let providerId: string | undefined;
@@ -269,7 +281,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
       };
     });
     try {
-      await window.electronAPI.agent.prompt({ sessionId: taskId, text, providerId });
+      await window.electronAPI.agent.prompt({ sessionId: taskId, text, providerId, attachments });
     } catch (err) {
       // 主进程通常已通过 error 事件报错；此处兜底，避免 unhandled rejection
       get().addErrorMessage(taskId, err instanceof Error ? err.message : String(err));
@@ -326,7 +338,9 @@ export const useSessionStore = create<SessionState>((set, get) => ({
                   }
                 : kind === "thinking"
                   ? { id: String(contentIndex), kind: "thinking", content: "", done: false }
-                  : { id: String(contentIndex), kind: "text", content: "", done: false };
+                  : kind === "file"
+                    ? { id: String(contentIndex), kind: "file", name: "", done: false }
+                    : { id: String(contentIndex), kind: "text", content: "", done: false };
             return { ...m, blocks: [...m.blocks, block] };
           }),
         };
@@ -351,6 +365,8 @@ export const useSessionStore = create<SessionState>((set, get) => ({
                 blocks: replaceAt(m.blocks, idx, { ...block, argDelta: block.argDelta + delta }),
               };
             }
+            // file 块不参与流式 delta（仅在发送时一次性创建）
+            if (block.kind !== "text" && block.kind !== "thinking") return m;
             return {
               ...m,
               blocks: replaceAt(m.blocks, idx, { ...block, content: block.content + delta }),

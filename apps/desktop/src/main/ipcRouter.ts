@@ -99,7 +99,7 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
   // ── agent:* ───────────────────────────────
   ipcMain.handle("agent:prompt", async (_evt, raw) => {
     const req = validate(promptRequestSchema, raw);
-    await agentRuntime.prompt(req.sessionId, req.text, req.providerId);
+    await agentRuntime.prompt(req.sessionId, req.text, req.providerId, req.attachments);
     return { streamId: req.sessionId };
   });
 
