@@ -176,7 +176,7 @@ function WorkspaceSelector() {
                 ws.id === pendingWorkspaceId ? "text-ink" : "text-ink-2"
               }`}
             >
-              <IconFolder size={14} className="text-ink-3" />
+              <IconFolder size={15} className="text-ink-2" />
               <span className="flex-1 truncate">{ws.name}</span>
               {ws.id === pendingWorkspaceId && (
                 <IconCheck size={12} strokeWidth={2.5} className="text-accent" />
@@ -191,7 +191,7 @@ function WorkspaceSelector() {
             onClick={handlePickFolder}
             className="flex w-full items-center gap-[8px] px-[12px] py-[7px] text-left text-[14px] text-ink-2 transition hover:bg-hover"
           >
-            <IconFolder size={14} className="text-ink-3" />
+            <IconFolder size={15} className="text-ink-2" />
             指定文件夹
           </button>
 
