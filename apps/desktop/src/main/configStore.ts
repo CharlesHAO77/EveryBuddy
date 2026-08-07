@@ -94,6 +94,12 @@ class ConfigStore {
     }));
   }
 
+  /** 默认模型 provider id = 第一个已配置的模型（未配置则 undefined） */
+  getDefaultProviderId(): string | undefined {
+    this.load();
+    return this.data.models[0]?.id;
+  }
+
   /** 获取含明文 apiKey 的模型配置（仅主进程内部使用，不回传渲染进程） */
   getStoredModel(id: string): StoredModel | undefined {
     this.load();

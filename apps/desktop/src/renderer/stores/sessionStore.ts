@@ -1,60 +1,32 @@
-import type { CreateTaskRequest, TaskMeta, Workspace } from "@everybuddy/ipc-contract";
+import type {
+  CreateTaskRequest,
+  HistoryBlock,
+  HistoryMessage,
+  HistoryTextBlock,
+  HistoryThinkingBlock,
+  HistoryToolBlock,
+  TaskMeta,
+  Workspace,
+} from "@everybuddy/ipc-contract";
 import { create } from "zustand";
 
 // ────────────────────────────────────────────────
 // 内容块与消息模型（见 §0.4 卡片化消息模型）
+// 单一真源：块类型从 ipc-contract 的 History* 类型派生（AGENTS.md §4.2），
+// 此处仅做别名与扩展，不再声明平行接口。
 // ────────────────────────────────────────────────
 
-export interface ThinkingBlock {
-  id: string;
-  kind: "thinking";
-  content: string;
-  done: boolean;
-}
+export type ContentBlock = HistoryBlock;
+export type ToolBlock = HistoryToolBlock;
+export type TextBlock = HistoryTextBlock;
+export type ThinkingBlock = HistoryThinkingBlock;
 
-export interface TextBlock {
-  id: string;
-  kind: "text";
-  content: string;
-  done: boolean;
-}
-
-export interface ToolBlock {
-  id: string;
-  kind: "tool";
-  toolCallId: string;
-  toolName: string;
-  args: unknown;
-  argDelta: string;
-  status: "calling" | "running" | "success" | "error";
-  output: unknown;
-  error?: string;
-  outputDelta: string;
-  done: boolean;
-}
-
-export type ContentBlock = ThinkingBlock | TextBlock | ToolBlock;
-
-export interface ChatMessage {
-  id: string;
-  role: "user" | "assistant";
-  blocks: ContentBlock[];
-  timestamp: number;
+export interface ChatMessage extends HistoryMessage {
   isStreaming?: boolean;
-  errorMessage?: string;
 }
 
-export interface Task {
-  id: string;
-  title: string;
-  type: "temp" | "workspace";
-  workspaceId?: string;
-  workspacePath?: string;
-  providerId?: string;
-  sessionDir: string;
+export interface Task extends TaskMeta {
   messages: ChatMessage[];
-  createdAt: string;
-  updatedAt: string;
   isStreaming?: boolean;
   /** 当前流式 assistant 消息 id */
   streamMessageId?: string | null;

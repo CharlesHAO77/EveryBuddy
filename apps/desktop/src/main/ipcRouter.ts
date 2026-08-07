@@ -8,12 +8,16 @@
 import { randomUUID } from "node:crypto";
 import { rm } from "node:fs/promises";
 import path from "node:path";
-import type { CreateTaskRequest, TaskMeta } from "@everybuddy/ipc-contract";
+import type { TaskMeta } from "@everybuddy/ipc-contract";
 import {
   abortRequestSchema,
+  createNamedWorkspaceRequestSchema,
   createTaskRequestSchema,
+  createWorkspaceRequestSchema,
   idRequestSchema,
+  openPathRequestSchema,
   promptRequestSchema,
+  renameTaskRequestSchema,
   saveModelRequestSchema,
   setApiKeyRequestSchema,
   setTaskProviderRequestSchema,
@@ -84,7 +88,7 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
   ipcMain.handle("task:list", () => configStore.listTasks());
 
   ipcMain.handle("task:create", async (_evt, raw) => {
-    const req = validate(createTaskRequestSchema, raw) as CreateTaskRequest;
+    const req = validate(createTaskRequestSchema, raw);
     const workspace = req.workspaceId ? configStore.getWorkspace(req.workspaceId) : undefined;
     if (req.type === "workspace" && !workspace) {
       throw new Error("工作空间任务需要有效的 workspaceId");
@@ -92,9 +96,7 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
     const { sessionDir } = resolveSessionLocation(req.type, workspace);
 
     // 默认使用第一个已配置的模型
-    const models = configStore.getModels();
-    const defaultProvider = models[0]?.id;
-    const providerId = req.providerId ?? defaultProvider;
+    const providerId = req.providerId ?? configStore.getDefaultProviderId();
 
     const now = new Date().toISOString();
     const task: TaskMeta = {
@@ -135,9 +137,10 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
     if (!task) throw new Error("任务不存在");
     // 已有活跃会话则跳过
     if (agentRuntime.hasSession(id)) return;
-    const models = configStore.getModels();
-    const defaultProvider = models[0]?.id;
-    await agentRuntime.createTaskSession(task, task.providerId ?? defaultProvider);
+    await agentRuntime.createTaskSession(
+      task,
+      task.providerId ?? configStore.getDefaultProviderId(),
+    );
   });
 
   ipcMain.handle("task:loadHistory", async (_evt, raw) => {
@@ -146,9 +149,8 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
   });
 
   ipcMain.handle("task:rename", (_evt, raw) => {
-    const parsed = raw as { id?: string; title?: string };
-    if (!parsed.id || !parsed.title) throw new Error("参数缺失");
-    configStore.updateTask(parsed.id, { title: parsed.title, updatedAt: new Date().toISOString() });
+    const { id, title } = validate(renameTaskRequestSchema, raw);
+    configStore.updateTask(id, { title, updatedAt: new Date().toISOString() });
   });
 
   ipcMain.handle("task:setProvider", (_evt, raw) => {
@@ -167,15 +169,13 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
   ipcMain.handle("workspace:list", () => configStore.listWorkspaces());
 
   ipcMain.handle("workspace:create", (_evt, raw) => {
-    const parsed = raw as { name?: string; dirPath?: string };
-    if (!parsed.name || !parsed.dirPath) throw new Error("参数缺失");
-    return createWorkspace(parsed.name, parsed.dirPath);
+    const { name, dirPath } = validate(createWorkspaceRequestSchema, raw);
+    return createWorkspace(name, dirPath);
   });
 
   ipcMain.handle("workspace:createNamed", (_evt, raw) => {
-    const parsed = raw as { name?: string };
-    if (!parsed.name) throw new Error("参数缺失");
-    return createNamedWorkspace(parsed.name);
+    const { name } = validate(createNamedWorkspaceRequestSchema, raw);
+    return createNamedWorkspace(name);
   });
 
   ipcMain.handle("workspace:remove", async (_evt, raw) => {
@@ -199,9 +199,8 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
   });
 
   ipcMain.handle("workspace:openDir", async (_evt, raw) => {
-    const parsed = raw as { path?: string };
-    if (!parsed.path) throw new Error("参数缺失");
-    await openInFinder(parsed.path);
+    const { path: targetPath } = validate(openPathRequestSchema, raw);
+    await openInFinder(targetPath);
   });
 
   // ── config:* ──────────────────────────────

@@ -266,6 +266,24 @@ export const setApiKeyRequestSchema = z.object({
 
 export const idRequestSchema = z.object({ id: z.string().min(1) });
 
+export const renameTaskRequestSchema = z.object({
+  id: z.string().min(1, "参数缺失"),
+  title: z.string().min(1, "参数缺失"),
+});
+
+export const createWorkspaceRequestSchema = z.object({
+  name: z.string().min(1, "参数缺失"),
+  dirPath: z.string().min(1, "参数缺失"),
+});
+
+export const createNamedWorkspaceRequestSchema = z.object({
+  name: z.string().min(1, "参数缺失"),
+});
+
+export const openPathRequestSchema = z.object({
+  path: z.string().min(1, "参数缺失"),
+});
+
 // ────────────────────────────────────────────────
 // Preload API 形状（见 §6.3）
 // ────────────────────────────────────────────────
