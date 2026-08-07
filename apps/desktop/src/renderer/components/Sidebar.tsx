@@ -121,11 +121,16 @@ export function Sidebar() {
     setConfirmError(null);
   };
 
+  // 删除任务的确认文案按类型区分：临时任务的工作目录（work-spaces 下）会一并清除，空间任务保留空间目录
+  const confirmTask = confirm?.kind === "task" ? allTasks.find((t) => t.id === confirm.id) : undefined;
   const confirmText =
     confirm?.kind === "task"
       ? {
           title: "删除任务",
-          description: `将删除任务「${confirm.title}」及其全部会话记录。\n磁盘上的会话文件（~/EveryBuddy/sessions 下）也会被一并清除，此操作不可恢复。`,
+          description:
+            confirmTask?.type === "temp"
+              ? `将删除任务「${confirm.title}」及其全部会话记录。\n磁盘上的会话文件（~/EveryBuddy/sessions 下）与临时工作目录也会被一并清除，此操作不可恢复。`
+              : `将删除任务「${confirm.title}」及其全部会话记录。\n磁盘上的会话文件（~/EveryBuddy/sessions 下）也会被一并清除，此操作不可恢复。`,
           confirmLabel: "删除",
         }
       : confirm?.kind === "workspace"

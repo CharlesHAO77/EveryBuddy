@@ -18,9 +18,9 @@ import type { TaskMeta, Workspace } from "@everybuddy/ipc-contract";
 
 /** 应用根目录 ~/EveryBuddy */
 export const APP_ROOT = path.join(homedir(), "EveryBuddy");
-/** 非空间任务会话目录 */
+/** 会话 JSONL 落盘目录（仅存会话信息） */
 export const SESSIONS_DIR = path.join(APP_ROOT, "sessions");
-/** 「新建空间」默认落盘目录 ~/EveryBuddy/work-spaces */
+/** 工作空间目录 ~/EveryBuddy/work-spaces：用户「新建空间」默认落盘 + 临时任务工作目录 */
 export const WORK_SPACES_DIR = path.join(APP_ROOT, "work-spaces");
 
 /** 确保应用根目录与 sessions 目录存在 */

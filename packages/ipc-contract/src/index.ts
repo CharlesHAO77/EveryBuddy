@@ -130,6 +130,8 @@ export interface TaskMeta {
   type: TaskType;
   workspaceId?: string;
   workspacePath?: string;
+  /** 临时任务的工作目录（app 托管，位于 work-spaces/ 下；空间任务无此字段） */
+  workDir?: string;
   /** 当前任务使用的模型 provider ID */
   providerId?: string;
   /** 会话 jsonl 落盘目录 */

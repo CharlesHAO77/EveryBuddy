@@ -5,7 +5,8 @@
  *  - 选择本地目录（Electron 原生 dialog）
  *  - 创建工作空间（仅注册元数据；会话统一存于 ~/EveryBuddy/sessions，不在工作空间内落盘）
  *  - 在 Finder/资源管理器中打开目录
- *  - 解析任务会话落盘目录（所有任务 -> ~/EveryBuddy/sessions/<datetime>-<short>；cwd 按任务类型：空间任务 -> workspacePath，临时任务 -> sessionDir）
+ *  - 解析任务目录：会话 JSONL 统一存于 ~/EveryBuddy/sessions/<datetime>-<short>；
+ *    cwd 按任务类型：空间任务 -> workspacePath，临时任务 -> work-spaces/<datetime>-<short>（工作目录与会话分离）
  */
 
 import { randomUUID } from "node:crypto";
@@ -67,24 +68,37 @@ export async function openInFinder(dirPath: string): Promise<void> {
 }
 
 /**
- * 为新任务解析会话落盘目录。
- * 所有任务的会话统一存放在 ~/EveryBuddy/sessions/<datetime>-<short>/，与工作空间路径解耦；
- * cwd 仍按任务类型确定：空间任务 -> workspacePath（agent 在工作空间内操作），
- * 临时任务 -> sessionDir（以会话目录为工作目录）。
+ * 为新任务解析目录。
+ * 所有任务的会话 JSONL 统一存放在 ~/EveryBuddy/sessions/<datetime>-<short>/，与工作目录解耦；
+ * cwd 按任务类型确定：空间任务 -> workspace.path（agent 在工作空间内操作），
+ * 临时任务 -> work-spaces/<datetime>-<short>（工作目录与会话目录拆分，共用同一 datetime 命名便于关联）。
  */
 export function resolveSessionLocation(
   type: TaskType,
   workspace?: Workspace,
-): { sessionDir: string; cwd: string } {
-  const sessionDir = path.join(SESSIONS_DIR, datetimeDir());
+): { sessionDir: string; cwd: string; workDir?: string } {
+  const stamp = datetimeDir();
+  const sessionDir = path.join(SESSIONS_DIR, stamp);
   if (!existsSync(sessionDir)) mkdirSync(sessionDir, { recursive: true });
-  const cwd = type === "workspace" && workspace ? workspace.path : sessionDir;
-  return { sessionDir, cwd };
+  let cwd = sessionDir;
+  let workDir: string | undefined;
+  if (type === "workspace" && workspace) {
+    cwd = workspace.path;
+  } else {
+    // 临时任务：工作目录从 sessions 拆分到 work-spaces/<stamp>
+    workDir = path.join(WORK_SPACES_DIR, stamp);
+    if (!existsSync(workDir)) mkdirSync(workDir, { recursive: true });
+    cwd = workDir;
+  }
+  return { sessionDir, cwd, workDir };
 }
 
-/** 获取任务的工作目录（用于 agent cwd） */
+/** 获取任务的工作目录（用于 agent cwd）。空间任务 -> workspacePath；临时任务 -> workDir */
 export function getTaskCwd(task: TaskMeta): string {
-  return task.workspacePath ?? task.sessionDir;
+  // 两者必有其一，缺失即异常（不做旧任务兜底——sessionDir 现在只存会话 JSONL，不再是 cwd）
+  const cwd = task.workspacePath ?? task.workDir;
+  if (!cwd) throw new Error(`任务缺少工作目录: ${task.id}`);
+  return cwd;
 }
 
 export { APP_ROOT };

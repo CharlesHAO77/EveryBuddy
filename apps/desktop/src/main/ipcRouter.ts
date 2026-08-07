@@ -24,11 +24,12 @@ import {
 } from "@everybuddy/ipc-contract";
 import { type BrowserWindow, ipcMain } from "electron";
 import { agentRuntime } from "./agentRuntime";
-import { configStore, SESSIONS_DIR } from "./configStore";
+import { configStore, SESSIONS_DIR, WORK_SPACES_DIR } from "./configStore";
 import * as modelStore from "./modelStore";
 import {
   createNamedWorkspace,
   createWorkspace,
+  getTaskCwd,
   openInFinder,
   resolveSessionLocation,
   selectDirectory,
@@ -40,27 +41,49 @@ function validate<T>(schema: { parse: (v: unknown) => T }, value: unknown): T {
 }
 
 /**
- * 删除任务的完整链路（task:delete 与 workspace:remove 级联共用）：
- * 中止并清理会话 -> 移除元数据 -> 删除磁盘 sessionDir。
- * sessionDir 必须落在 ~/EveryBuddy/sessions 直接子目录内，否则跳过并告警
+ * 仅当 target 是 root 的直接子目录时才递归删除，否则跳过并告警
  * （防 config.json 被篡改后误删任意目录）。
+ * @param mustMatchBasename 额外要求 target 的 basename 与它一致（用于校验同 stamp 关联目录）
+ */
+async function rmIfDirectChild(
+  target: string | undefined,
+  root: string,
+  label: string,
+  mustMatchBasename?: string,
+): Promise<void> {
+  if (!target) return;
+  const rel = path.relative(root, target);
+  const isSafe =
+    rel !== "" &&
+    !rel.startsWith("..") &&
+    !path.isAbsolute(rel) &&
+    rel.split(path.sep).length === 1 &&
+    (!mustMatchBasename || path.basename(target) === mustMatchBasename);
+  if (isSafe) {
+    await rm(target, { recursive: true, force: true });
+  } else {
+    console.warn(`[ipcRouter] 跳过非常规${label}，未删除: ${target}`);
+  }
+}
+
+/**
+ * 删除任务的完整链路（task:delete 与 workspace:remove 级联共用）：
+ * 中止并清理会话 -> 移除元数据 -> 删除磁盘目录。
+ * 会话目录删 ~/EveryBuddy/sessions 下直接子目录；临时任务额外删其工作目录
+ * （work-spaces 下的同 stamp 直接子目录，且 basename 须与会话目录一致，避免误删用户命名空间）。
  */
 async function deleteTaskCompletely(id: string): Promise<void> {
   const task = configStore.getTask(id); // 先取 meta，removeTask 后就拿不到了
   await agentRuntime.disposeSession(id);
   configStore.removeTask(id);
-  if (task?.sessionDir) {
-    const rel = path.relative(SESSIONS_DIR, task.sessionDir);
-    const isSafe =
-      rel !== "" &&
-      !rel.startsWith("..") &&
-      !path.isAbsolute(rel) &&
-      rel.split(path.sep).length === 1;
-    if (isSafe) {
-      await rm(task.sessionDir, { recursive: true, force: true });
-    } else {
-      console.warn(`[ipcRouter] 跳过非常规 sessionDir，未删除: ${task.sessionDir}`);
-    }
+  await rmIfDirectChild(task?.sessionDir, SESSIONS_DIR, "会话目录");
+  if (task?.type === "temp") {
+    await rmIfDirectChild(
+      task.workDir,
+      WORK_SPACES_DIR,
+      "临时工作目录",
+      task.sessionDir ? path.basename(task.sessionDir) : undefined,
+    );
   }
 }
 
@@ -94,7 +117,7 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
     if (req.type === "workspace" && !workspace) {
       throw new Error("工作空间任务需要有效的 workspaceId");
     }
-    const { sessionDir } = resolveSessionLocation(req.type, workspace);
+    const { sessionDir, workDir } = resolveSessionLocation(req.type, workspace);
 
     // 默认使用第一个已配置的模型
     const providerId = req.providerId ?? modelStore.getDefaultProviderId();
@@ -106,6 +129,7 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
       type: req.type,
       workspaceId: workspace?.id,
       workspacePath: workspace?.path,
+      workDir,
       providerId,
       sessionDir,
       createdAt: now,
@@ -163,7 +187,8 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
     const { id } = validate(idRequestSchema, raw);
     const task = configStore.getTask(id);
     if (!task) throw new Error("任务不存在");
-    await openInFinder(task.sessionDir);
+    // 打开工作目录（临时任务 -> work-spaces 下的工作目录，空间任务 -> 空间路径），而非 JSONL 会话目录
+    await openInFinder(getTaskCwd(task));
   });
 
   // ── workspace:* ──────────────────────────

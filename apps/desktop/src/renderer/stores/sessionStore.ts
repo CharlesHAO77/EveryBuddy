@@ -166,6 +166,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
       type: meta.type,
       workspaceId: meta.workspaceId,
       workspacePath: meta.workspacePath,
+      workDir: meta.workDir,
       providerId: meta.providerId,
       sessionDir: meta.sessionDir,
       messages: [],
