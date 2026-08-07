@@ -4,10 +4,12 @@ import { App } from "./App";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import "./styles/globals.css";
 
-// macOS 沉浸式标题栏（hiddenInset）：在 <html> 标记平台，
-// 供 CSS 为顶栏红绿灯让位（见 globals.css .titlebar-drag）
+// 沉浸式/自定义标题栏：在 <html> 标记平台，
+// 供 CSS 区分顶栏布局（mac 红绿灯让位；win 自定义标题栏拖动条；见 globals.css .titlebar-drag）
 if (navigator.userAgent.includes("Mac")) {
   document.documentElement.dataset.platform = "mac";
+} else if (navigator.userAgent.includes("Windows")) {
+  document.documentElement.dataset.platform = "win";
 }
 
 const rootElement = document.getElementById("root");

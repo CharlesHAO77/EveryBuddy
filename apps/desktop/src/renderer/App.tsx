@@ -21,10 +21,13 @@ export function App() {
     (s) => s.tasks.find((t) => t.id === s.currentTaskId)?.title ?? null,
   );
 
-  // 同步窗口标题（mac Mission Control / Win·Linux 系统标题栏显示对话名）
+  // Windows 已启用自定义标题栏，对话名在应用内标题区展示，系统标题固定为 EveryBuddy
+  //（避免任务栏/Alt+Tab 重复显示对话名）；macOS 保留「EveryBuddy · 对话名」供 Mission Control 使用。
+  const isWindows = document.documentElement.dataset.platform === "win";
   useEffect(() => {
-    document.title = currentTaskTitle ? `EveryBuddy · ${currentTaskTitle}` : "EveryBuddy";
-  }, [currentTaskTitle]);
+    document.title =
+      isWindows || !currentTaskTitle ? "EveryBuddy" : `EveryBuddy · ${currentTaskTitle}`;
+  }, [isWindows, currentTaskTitle]);
 
   useEffect(() => {
     // 加载任务/工作空间/模型配置

@@ -141,58 +141,76 @@ export function Sidebar() {
           }
         : null;
 
+  // Windows 自定义标题栏：原生窗口按钮在右上角，侧栏顶部无红绿灯让位需求，
+  // 工具栏并入顶部 40px 拖动条；macOS 保持红绿灯区 + 下方独立工具栏（见 globals.css .eb-top-spacer）。
+  const isWin = document.documentElement.dataset.platform === "win";
+
+  const toolbar = (
+    <>
+      {/* Collapse button（展开/折叠两态都固定在顶栏左侧 x=10；mac 红绿灯在标题栏内，不再冲突） */}
+      <button
+        type="button"
+        onClick={() => setCollapsed(!collapsed)}
+        className="titlebar-no-drag flex h-[30px] w-[30px] items-center justify-center rounded-s text-ink-2 transition hover:bg-hover hover:text-ink"
+        title={collapsed ? "展开侧栏" : "折叠侧栏"}
+      >
+        {collapsed ? <IconPanelLeftOpen /> : <IconPanelLeftClose />}
+      </button>
+
+      {/* Search icon / input (expanded only) */}
+      {!collapsed &&
+        (showSearch ? (
+          <div className="titlebar-no-drag flex flex-1 items-center gap-[6px] pl-[8px] text-ink-2">
+            <IconSearch />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="搜索任务或会话..."
+              className="w-full border-0 bg-transparent text-[14px] text-ink placeholder:text-ink-3 focus:outline-none"
+              // biome-ignore lint/a11y/noAutofocus: 点击搜索按钮展开后需立即聚焦输入
+              autoFocus
+              onBlur={() => {
+                if (!searchQuery) {
+                  setShowSearch(false);
+                }
+              }}
+            />
+          </div>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setShowSearch(true)}
+            className="titlebar-no-drag flex h-[30px] w-[30px] items-center justify-center rounded-s text-ink-2 transition hover:bg-hover hover:text-ink"
+            title="搜索任务"
+          >
+            <IconSearch />
+          </button>
+        ))}
+    </>
+  );
+
   return (
     <aside
       className={`flex h-full flex-col border-r border-line bg-paper-deep transition-all duration-200 ${
         collapsed ? "w-[50px]" : "w-[260px]"
       }`}
     >
-      {/* ── 标题栏拖动层·侧栏部分：与侧栏一体（纸深），mac 下 40px 拖动区，纯拖动无文字 ── */}
-      <div className="eb-top-spacer titlebar-drag shrink-0" />
-
-      {/* ── 标题栏下方的侧栏工具栏：折叠按钮常驻左侧固定位置，搜索仅展开态 ── */}
-      <div className="flex h-[40px] shrink-0 items-center justify-between px-[10px]">
-        {/* Collapse button（展开/折叠两态都固定在顶栏左侧 x=10；红绿灯在标题栏内，不再冲突） */}
-        <button
-          type="button"
-          onClick={() => setCollapsed(!collapsed)}
-          className="flex h-[30px] w-[30px] items-center justify-center rounded-s text-ink-2 transition hover:bg-hover hover:text-ink"
-          title={collapsed ? "展开侧栏" : "折叠侧栏"}
-        >
-          {collapsed ? <IconPanelLeftOpen /> : <IconPanelLeftClose />}
-        </button>
-
-        {/* Search icon / input (expanded only) */}
-        {!collapsed &&
-          (showSearch ? (
-            <div className="flex flex-1 items-center gap-[6px] pl-[8px] text-ink-2">
-              <IconSearch />
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="搜索任务或会话..."
-                className="w-full border-0 bg-transparent text-[14px] text-ink placeholder:text-ink-3 focus:outline-none"
-                // biome-ignore lint/a11y/noAutofocus: 点击搜索按钮展开后需立即聚焦输入
-                autoFocus
-                onBlur={() => {
-                  if (!searchQuery) {
-                    setShowSearch(false);
-                  }
-                }}
-              />
-            </div>
-          ) : (
-            <button
-              type="button"
-              onClick={() => setShowSearch(true)}
-              className="flex h-[30px] w-[30px] items-center justify-center rounded-s text-ink-2 transition hover:bg-hover hover:text-ink"
-              title="搜索任务"
-            >
-              <IconSearch />
-            </button>
-          ))}
+      {/* ── 标题栏拖动层·侧栏部分 ──
+       * win：40px 拖动条与工具栏合并（按钮 titlebar-no-drag 可交互，空隙可拖动窗口）；
+       * mac：纯 40px 拖动区让位红绿灯，工具栏在其下方独立 40px 行。 */}
+      <div
+        className={`eb-top-spacer titlebar-drag shrink-0 ${
+          isWin ? "flex items-center justify-between px-[10px]" : ""
+        }`}
+      >
+        {isWin && toolbar}
       </div>
+
+      {/* ── 标题栏下方的侧栏工具栏（仅 mac/Linux：win 已并入上方拖动条） ── */}
+      {!isWin && (
+        <div className="flex h-[40px] shrink-0 items-center justify-between px-[10px]">{toolbar}</div>
+      )}
 
       {collapsed ? (
         /* ── Collapsed State: 新建任务 + 底部设置 ── */

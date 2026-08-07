@@ -120,13 +120,14 @@ body {
   -webkit-app-region: no-drag;
 }
 
-/* 标题栏透明拖动层占位：mac 让出 40px 给拖动区，非 mac 不占位（有系统标题栏） */
+/* 标题栏透明拖动层占位：mac/win 让出 40px 给拖动区，其余平台不占位（有系统标题栏） */
 .eb-top-spacer {
   height: 0;
   overflow: hidden;
 }
 
-html[data-platform="mac"] .eb-top-spacer {
+html[data-platform="mac"] .eb-top-spacer,
+html[data-platform="win"] .eb-top-spacer {
   height: 40px;
 }
 

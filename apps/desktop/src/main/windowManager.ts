@@ -19,8 +19,21 @@ export function createMainWindow(): BrowserWindow {
     title: "EveryBuddy",
     // 暖纸感底色，避免启动时白屏闪烁；配色与 renderer globals.css --paper 保持一致
     backgroundColor: "#faf8f4",
-    // macOS 沉浸式标题栏：红绿灯嵌入侧边栏顶栏（Windows/Linux 保持默认标题栏）
+    // macOS 沉浸式标题栏：红绿灯嵌入侧边栏顶栏（保持不变）
     ...(process.platform === "darwin" ? { titleBarStyle: "hiddenInset" as const } : {}),
+    // Windows 自定义标题栏：隐藏原生标题栏与菜单，内容延伸到顶部；
+    // titleBarOverlay 保留原生最小化/最大化/关闭按钮（Window Controls Overlay）。
+    // 高度 40 与 renderer .eb-top-spacer 的 40px 拖动条对齐；仅 win32，macOS/Linux 不受影响
+    ...(process.platform === "win32"
+      ? {
+          titleBarStyle: "hidden" as const,
+          titleBarOverlay: {
+            color: "#faf8f4", // 与 globals.css --paper 一致
+            symbolColor: "#1f1c18", // 与 --ink 一致
+            height: 40,
+          },
+        }
+      : {}),
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
       contextIsolation: true,
