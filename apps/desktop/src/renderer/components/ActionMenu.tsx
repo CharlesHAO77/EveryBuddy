@@ -86,7 +86,7 @@ export function ActionMenu({ items }: ActionMenuProps) {
                 setOpen(false);
                 item.onSelect();
               }}
-              className={`flex w-full items-center px-3 py-[6px] text-left text-[13px] transition ${
+              className={`flex w-full items-center px-3 py-[6px] text-left text-[14px] transition ${
                 item.danger ? "text-danger hover:bg-danger/10" : "text-ink-2 hover:bg-hover"
               }`}
             >

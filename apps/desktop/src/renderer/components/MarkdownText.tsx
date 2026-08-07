@@ -22,16 +22,16 @@ function CodeBlock({ code, lang }: CodeBlockProps) {
   return (
     <div className="group relative my-2 overflow-hidden rounded-s bg-terminal">
       <div className="flex items-center justify-between border-b border-white/10 px-3 py-1">
-        <span className="text-[10px] text-white/40">{lang || "code"}</span>
+        <span className="text-[11px] text-white/40">{lang || "code"}</span>
         <button
           type="button"
           onClick={handleCopy}
-          className="text-[10px] text-white/40 transition hover:text-white/80"
+          className="text-[11px] text-white/40 transition hover:text-white/80"
         >
           {copied ? "已复制" : "复制"}
         </button>
       </div>
-      <pre className="overflow-x-auto px-3 py-2 text-[12px] leading-relaxed text-terminal-text">
+      <pre className="overflow-x-auto px-3 py-2 text-[13px] leading-relaxed text-terminal-text">
         <code>{code}</code>
       </pre>
     </div>
@@ -53,7 +53,7 @@ function renderInline(text: string, keyPrefix: string): ReactNode[] {
       nodes.push(
         <code
           key={`${keyPrefix}-c-${i}`}
-          className="rounded bg-hover px-1 py-0.5 text-[12px] text-ink"
+          className="rounded bg-hover px-1 py-0.5 text-[13px] text-ink"
         >
           {token.slice(1, -1)}
         </code>,
@@ -79,13 +79,13 @@ interface MarkdownTextProps {
 export function MarkdownText({ content }: MarkdownTextProps) {
   const blocks = useMemo(() => parseBlocks(content), [content]);
   return (
-    <div className="text-[14px] leading-relaxed text-ink">
+    <div className="text-[15px] leading-relaxed text-ink">
       {blocks.map((b, i) => {
         if (b.type === "code") {
           return <CodeBlock key={i} code={b.code} lang={b.lang} />;
         }
         if (b.type === "heading") {
-          const sizes = ["text-lg", "text-base", "text-[15px]"];
+          const sizes = ["text-lg", "text-base", "text-[16px]"];
           const cls = sizes[Math.min(b.level - 1, 2)];
           return (
             <div key={i} className={`mt-2 mb-1 font-semibold ${cls}`}>

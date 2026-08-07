@@ -7,6 +7,9 @@ interface UIState {
   activeCategory: CategoryId;
   setActiveCategory: (category: CategoryId) => void;
 
+  sidebarCollapsed: boolean;
+  setSidebarCollapsed: (collapsed: boolean) => void;
+
   isModelSettingsOpen: boolean;
   setModelSettingsOpen: (open: boolean) => void;
 
@@ -24,6 +27,9 @@ interface UIState {
 export const useUIStore = create<UIState>((set, get) => ({
   activeCategory: "daily",
   setActiveCategory: (category) => set({ activeCategory: category }),
+
+  sidebarCollapsed: false,
+  setSidebarCollapsed: (collapsed) => set({ sidebarCollapsed: collapsed }),
 
   isModelSettingsOpen: false,
   setModelSettingsOpen: (open) => set({ isModelSettingsOpen: open }),

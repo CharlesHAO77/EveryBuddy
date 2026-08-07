@@ -44,7 +44,9 @@ type ConfirmState =
   | { kind: "workspace"; id: string; name: string; taskCount: number };
 
 export function Sidebar() {
-  const [collapsed, setCollapsed] = useState(false);
+  // 折叠状态上提至 uiStore，供 MainView（对话区标题左内边距避让）联动订阅
+  const collapsed = useUIStore((s) => s.sidebarCollapsed);
+  const setCollapsed = useUIStore((s) => s.setSidebarCollapsed);
   const [tasksOpen, setTasksOpen] = useState(true);
   const [workspacesOpen, setWorkspacesOpen] = useState(true);
   const [openWorkspaceId, setOpenWorkspaceId] = useState<string | null>(null);
@@ -140,23 +142,20 @@ export function Sidebar() {
         collapsed ? "w-[50px]" : "w-[260px]"
       }`}
     >
-      {/* ── Fixed Top Bar: collapse button + new task icon ── */}
-      <div
-        className={`titlebar-drag flex h-[50px] shrink-0 items-center justify-between px-[10px] ${
-          collapsed ? "titlebar-drag--collapsed" : ""
-        }`}
-      >
-        {/* Collapse button（折叠态移到栏体内红绿灯下方，见下方 Collapsed State） */}
-        {!collapsed && (
-          <button
-            type="button"
-            onClick={() => setCollapsed((v) => !v)}
-            className="titlebar-no-drag flex h-[30px] w-[30px] items-center justify-center rounded-s text-ink-3 transition hover:bg-hover hover:text-ink-2"
-            title="折叠侧栏"
-          >
-            <IconPanelLeftClose />
-          </button>
-        )}
+      {/* ── 标题栏拖动层·侧栏部分：与侧栏一体（纸深），mac 下 40px 拖动区，纯拖动无文字 ── */}
+      <div className="eb-top-spacer titlebar-drag shrink-0" />
+
+      {/* ── 标题栏下方的侧栏工具栏：折叠按钮常驻左侧固定位置，搜索仅展开态 ── */}
+      <div className="flex h-[40px] shrink-0 items-center justify-between px-[10px]">
+        {/* Collapse button（展开/折叠两态都固定在顶栏左侧 x=10；红绿灯在标题栏内，不再冲突） */}
+        <button
+          type="button"
+          onClick={() => setCollapsed(!collapsed)}
+          className="flex h-[30px] w-[30px] items-center justify-center rounded-s text-ink-3 transition hover:bg-hover hover:text-ink-2"
+          title={collapsed ? "展开侧栏" : "折叠侧栏"}
+        >
+          {collapsed ? <IconPanelLeftOpen /> : <IconPanelLeftClose />}
+        </button>
 
         {/* Search icon / input (expanded only) */}
         {!collapsed &&
@@ -168,7 +167,7 @@ export function Sidebar() {
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="搜索任务或会话..."
-                className="titlebar-no-drag w-full border-0 bg-transparent text-[13px] text-ink placeholder:text-ink-3 focus:outline-none"
+                className="w-full border-0 bg-transparent text-[14px] text-ink placeholder:text-ink-3 focus:outline-none"
                 // biome-ignore lint/a11y/noAutofocus: 点击搜索按钮展开后需立即聚焦输入
                 autoFocus
                 onBlur={() => {
@@ -182,7 +181,7 @@ export function Sidebar() {
             <button
               type="button"
               onClick={() => setShowSearch(true)}
-              className="titlebar-no-drag flex h-[30px] w-[30px] items-center justify-center rounded-s text-ink-3 transition hover:bg-hover hover:text-ink-2"
+              className="flex h-[30px] w-[30px] items-center justify-center rounded-s text-ink-3 transition hover:bg-hover hover:text-ink-2"
               title="搜索任务"
             >
               <IconSearch />
@@ -191,17 +190,8 @@ export function Sidebar() {
       </div>
 
       {collapsed ? (
-        /* ── Collapsed State: 展开按钮（顶栏之下，避开红绿灯） + 新建任务 + 底部设置 ── */
+        /* ── Collapsed State: 新建任务 + 底部设置 ── */
         <div className="flex flex-1 flex-col items-center gap-[2px] pt-[2px]">
-          {/* 展开侧栏按钮：放在 50px 顶栏之下，正好避开红绿灯区域（y≈22-33） */}
-          <button
-            type="button"
-            onClick={() => setCollapsed((v) => !v)}
-            className="flex h-[30px] w-[30px] items-center justify-center rounded-s text-ink-3 transition hover:bg-hover hover:text-ink-2"
-            title="展开侧栏"
-          >
-            <IconPanelLeftOpen />
-          </button>
           <button
             type="button"
             onClick={handleNewTask}
@@ -234,7 +224,7 @@ export function Sidebar() {
             <button
               type="button"
               onClick={handleNewTask}
-              className="flex h-[40px] w-full items-center gap-[10px] rounded-s px-[12px] text-[14px] text-ink transition hover:bg-hover active:scale-[0.98]"
+              className="flex h-[40px] w-full items-center gap-[10px] rounded-s px-[12px] text-[15px] text-ink transition hover:bg-hover active:scale-[0.98]"
             >
               <IconPlus className="text-ink-3" />
               新建任务
@@ -251,8 +241,8 @@ export function Sidebar() {
                   key={item.id}
                   type="button"
                   onClick={() => setActiveNav(item.id)}
-                  className={`flex h-[40px] items-center gap-[10px] rounded-s px-[12px] text-[14px] transition ${
-                    isActive ? "bg-active font-medium text-ink" : "text-ink-2 hover:bg-hover"
+                  className={`flex h-[40px] items-center gap-[10px] rounded-s px-[12px] text-[15px] transition ${
+                    isActive ? "bg-active font-semibold text-ink" : "text-ink-2 hover:bg-hover"
                   }`}
                 >
                   <Icon className={isActive ? "text-ink-2" : "text-ink-3"} />
@@ -270,7 +260,7 @@ export function Sidebar() {
             <button
               type="button"
               onClick={() => setTasksOpen((v) => !v)}
-              className="flex h-[30px] w-full items-center justify-between rounded-s px-[10px] text-[11px] font-medium tracking-[0.08em] text-ink-3 transition hover:bg-hover"
+              className="flex h-[30px] w-full items-center justify-between rounded-s px-[10px] text-[12px] font-semibold tracking-[0.08em] text-ink-3 transition hover:bg-hover"
             >
               <span>任务 ({filteredTasks.length})</span>
               <IconChevronDown
@@ -302,7 +292,7 @@ export function Sidebar() {
             <button
               type="button"
               onClick={() => setWorkspacesOpen((v) => !v)}
-              className="flex h-[30px] w-full items-center justify-between rounded-s px-[10px] text-[11px] font-medium tracking-[0.08em] text-ink-3 transition hover:bg-hover"
+              className="flex h-[30px] w-full items-center justify-between rounded-s px-[10px] text-[12px] font-semibold tracking-[0.08em] text-ink-3 transition hover:bg-hover"
             >
               <span>空间 ({filteredWorkspaces.length})</span>
               <IconChevronDown
@@ -350,10 +340,10 @@ export function Sidebar() {
           {/* ── Bottom User Area ── */}
           <div className="flex shrink-0 items-center justify-between border-t border-line px-[14px] py-[10px]">
             <div className="flex items-center gap-[8px]">
-              <div className="h-[28px] w-[28px] rounded-full bg-accent text-[11px] font-medium text-white flex items-center justify-center">
+              <div className="h-[28px] w-[28px] rounded-full bg-accent text-[12px] font-semibold text-white flex items-center justify-center">
                 C
               </div>
-              <span className="text-[13px] text-ink-2">Charles.Hao</span>
+              <span className="text-[14px] text-ink-2">Charles.Hao</span>
             </div>
             <div className="flex items-center gap-[6px]">
               <button

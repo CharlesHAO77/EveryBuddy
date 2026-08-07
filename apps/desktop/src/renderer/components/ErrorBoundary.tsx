@@ -35,17 +35,17 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
     return (
       <div className="flex h-screen w-full flex-col items-center justify-center gap-3 bg-paper p-8 text-center">
         <IconAlertTriangle size={28} className="text-danger" />
-        <div className="text-sm font-medium text-ink">页面渲染出错</div>
-        <div className="max-w-md text-[13px] text-ink-2">{error.message}</div>
+        <div className="text-sm font-semibold text-ink">页面渲染出错</div>
+        <div className="max-w-md text-[14px] text-ink-2">{error.message}</div>
         {import.meta.env.DEV && error.stack && (
-          <pre className="max-h-64 max-w-2xl overflow-auto rounded-s bg-terminal px-4 py-3 text-left text-[11px] leading-relaxed text-terminal-text">
+          <pre className="max-h-64 max-w-2xl overflow-auto rounded-s bg-terminal px-4 py-3 text-left text-[12px] leading-relaxed text-terminal-text">
             {error.stack}
           </pre>
         )}
         <button
           type="button"
           onClick={this.handleReset}
-          className="mt-2 rounded-s bg-accent px-4 py-2 text-[13px] text-white transition hover:bg-accent-strong"
+          className="mt-2 rounded-s bg-accent px-4 py-2 text-[14px] text-white transition hover:bg-accent-strong"
         >
           重试
         </button>

@@ -45,25 +45,25 @@ export function ConfirmDialog({
   return (
     // biome-ignore lint/a11y/noStaticElementInteractions: 遮罩点击关闭是 Modal 通用模式，键盘侧由 Escape 处理
     <div
-      className="fixed inset-0 z-[70] flex items-center justify-center bg-black/40"
+      className="fixed inset-0 z-[70] flex items-center justify-center bg-ink/40"
       onMouseDown={(e) => {
         // 仅点击遮罩本身才关闭（点击卡片不穿透）
         if (e.target === e.currentTarget && !loading) onCancel();
       }}
     >
-      <div className="w-[360px] rounded-l bg-card p-5 shadow-modal">
-        <h3 className="text-[15px] font-medium text-ink">{title}</h3>
-        <p className="mt-2 whitespace-pre-line text-[13px] leading-[1.6] text-ink-2">
+      <div className="w-[360px] rounded-l bg-paper p-5 shadow-modal">
+        <h3 className="text-[16px] font-semibold text-ink">{title}</h3>
+        <p className="mt-2 whitespace-pre-line text-[14px] leading-[1.6] text-ink-2">
           {description}
         </p>
-        {error && <p className="mt-2 text-[12px] text-danger">{error}</p>}
+        {error && <p className="mt-2 text-[13px] text-danger">{error}</p>}
         <div className="mt-5 flex justify-end gap-2">
           <button
             ref={cancelRef}
             type="button"
             disabled={loading}
             onClick={onCancel}
-            className="rounded-s border border-line-strong px-3 py-[6px] text-[13px] text-ink-2 transition hover:bg-hover disabled:opacity-50"
+            className="rounded-s border border-line-strong px-3 py-[6px] text-[14px] text-ink-2 transition hover:bg-hover disabled:opacity-50"
           >
             {cancelLabel}
           </button>
@@ -71,7 +71,7 @@ export function ConfirmDialog({
             type="button"
             disabled={loading}
             onClick={onConfirm}
-            className="rounded-s bg-danger px-3 py-[6px] text-[13px] text-white transition hover:bg-danger-strong disabled:opacity-50"
+            className="rounded-s bg-danger px-3 py-[6px] text-[14px] text-white transition hover:bg-danger-strong disabled:opacity-50"
           >
             {loading ? "处理中…" : confirmLabel}
           </button>

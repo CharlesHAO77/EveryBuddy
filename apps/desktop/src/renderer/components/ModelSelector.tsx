@@ -53,7 +53,7 @@ export function ModelSelector({ selectedId, onSelect, onOpenSettings }: ModelSel
       <button
         type="button"
         onClick={handleTriggerClick}
-        className="flex items-center gap-[4px] rounded-s px-[8px] py-[4px] text-[12px] text-ink-3 transition hover:bg-hover hover:text-ink-2"
+        className="flex items-center gap-[4px] rounded-s px-[8px] py-[4px] text-[13px] text-ink-3 transition hover:bg-hover hover:text-ink-2"
       >
         {displayName}
         {models.length > 0 && <IconChevronDown size={10} strokeWidth={2} title="展开" />}
@@ -68,7 +68,7 @@ export function ModelSelector({ selectedId, onSelect, onOpenSettings }: ModelSel
                 key={m.id}
                 type="button"
                 onClick={() => handleSelect(m.id)}
-                className={`flex w-full items-center justify-between px-3 py-2 text-left text-[13px] transition ${
+                className={`flex w-full items-center justify-between px-3 py-2 text-left text-[14px] transition ${
                   isSelected ? "bg-accent-tint text-accent-strong" : "text-ink-2 hover:bg-hover"
                 }`}
               >

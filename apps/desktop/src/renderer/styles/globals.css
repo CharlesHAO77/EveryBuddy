@@ -100,7 +100,8 @@ body {
   color: var(--ink);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  font-size: 14px;
+  font-size: 15px;
+  font-weight: 500;
   line-height: 1.5;
 }
 
@@ -109,8 +110,8 @@ body {
 }
 
 /* ── macOS 沉浸式标题栏（hiddenInset）──
- * titlebar-drag 区域可拖动窗口；其上的交互控件需 titlebar-no-drag。
- * macOS 下顶栏左侧留出红绿灯空间（Tailwind px-[10px] 在后会被此规则覆盖）。 */
+ * 拖动层「两分」：侧栏顶部 spacer（纸深）与对话区顶部 spacer（纸色）各自可拖动窗口。
+ * 侧栏顶部为纯拖动区（无应用名）；对话区标题靠左显示，折叠态由 MainView 动态让位红绿灯。 */
 .titlebar-drag {
   -webkit-app-region: drag;
 }
@@ -119,10 +120,14 @@ body {
   -webkit-app-region: no-drag;
 }
 
-/* 仅展开态顶栏需要为红绿灯让位；折叠态（50px 窄条）红绿灯直接悬浮其上，
- * 展开按钮已移到栏体内红绿灯下方，故折叠态不推左内边距 */
-html[data-platform="mac"] .titlebar-drag:not(.titlebar-drag--collapsed) {
-  padding-left: 80px;
+/* 标题栏透明拖动层占位：mac 让出 40px 给拖动区，非 mac 不占位（有系统标题栏） */
+.eb-top-spacer {
+  height: 0;
+  overflow: hidden;
+}
+
+html[data-platform="mac"] .eb-top-spacer {
+  height: 40px;
 }
 
 ::-webkit-scrollbar {

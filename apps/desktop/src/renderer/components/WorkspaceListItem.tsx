@@ -32,7 +32,7 @@ export function WorkspaceListItem({
         onKeyDown={(e) => {
           if (e.key === "Enter" || e.key === " ") onToggle();
         }}
-        className="group flex h-[30px] w-full cursor-pointer items-center gap-[8px] rounded-s px-[10px] text-[13px] text-ink-2 transition hover:bg-hover"
+        className="group flex h-[30px] w-full cursor-pointer items-center gap-[8px] rounded-s px-[10px] text-[14px] text-ink-2 transition hover:bg-hover"
       >
         <IconFolder size={14} title="空间" className="shrink-0 text-ink-3" />
         <span className="flex-1 truncate text-left">{name}</span>

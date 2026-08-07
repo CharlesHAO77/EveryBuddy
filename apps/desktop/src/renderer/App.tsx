@@ -17,6 +17,15 @@ export function App() {
   const isModelSettingsOpen = useUIStore((s) => s.isModelSettingsOpen);
   const setModelSettingsOpen = useUIStore((s) => s.setModelSettingsOpen);
 
+  const currentTaskTitle = useSessionStore(
+    (s) => s.tasks.find((t) => t.id === s.currentTaskId)?.title ?? null,
+  );
+
+  // 同步窗口标题（mac Mission Control / Win·Linux 系统标题栏显示对话名）
+  useEffect(() => {
+    document.title = currentTaskTitle ? `EveryBuddy · ${currentTaskTitle}` : "EveryBuddy";
+  }, [currentTaskTitle]);
+
   useEffect(() => {
     // 加载任务/工作空间/模型配置
     Promise.all([window.electronAPI.task.list(), window.electronAPI.workspace.list()]).then(
@@ -35,9 +44,11 @@ export function App() {
   }, [sessionLoaded, uiLoaded, models.length, setModelSettingsOpen]);
 
   return (
-    <div className="flex h-screen w-full overflow-hidden bg-paper">
-      <Sidebar />
-      <MainView />
+    <div className="flex h-screen w-full flex-col overflow-hidden bg-paper">
+      <div className="flex min-h-0 flex-1 overflow-hidden">
+        <Sidebar />
+        <MainView />
+      </div>
       {isModelSettingsOpen && <ModelSettings onClose={() => setModelSettingsOpen(false)} />}
     </div>
   );

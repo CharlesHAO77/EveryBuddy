@@ -22,7 +22,7 @@ export function MessageBubble({ message }: MessageBubbleProps) {
   if (message.errorMessage) {
     return (
       <div className="flex justify-start">
-        <div className="flex items-start gap-1.5 rounded-m border border-danger/30 bg-danger/5 px-4 py-2 text-[13px] text-danger">
+        <div className="flex items-start gap-1.5 rounded-m border border-danger/30 bg-danger/5 px-4 py-2 text-[14px] text-danger">
           <IconAlertTriangle size={14} className="mt-[3px] shrink-0" />
           <span>{message.errorMessage}</span>
         </div>
@@ -35,7 +35,7 @@ export function MessageBubble({ message }: MessageBubbleProps) {
     <div className="flex w-full justify-end">
       <div className="max-w-[80%] rounded-l rounded-br-none bg-accent px-4 py-3 text-sm text-white shadow-card">
         <div className="whitespace-pre-wrap">{text}</div>
-        <div className="mt-1 text-right text-[10px] text-accent-tint">{time}</div>
+        <div className="mt-1 text-right text-[11px] text-accent-tint">{time}</div>
       </div>
     </div>
   );
@@ -67,7 +67,7 @@ export function AssistantGroup({ messages }: AssistantGroupProps) {
             return <ToolCallCard key={key} block={block} />;
           }),
         )}
-        {!isStreaming && <div className="mt-0.5 text-[10px] text-ink-3">{time}</div>}
+        {!isStreaming && <div className="mt-0.5 text-[11px] text-ink-3">{time}</div>}
       </div>
     </div>
   );

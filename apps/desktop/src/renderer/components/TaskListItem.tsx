@@ -73,7 +73,7 @@ export function TaskListItem({
           }}
           onClick={(e) => e.stopPropagation()}
           onMouseDown={(e) => e.stopPropagation()}
-          className="w-full rounded-sm border border-line-strong bg-card px-[4px] py-[1px] text-[13px] text-ink outline-none focus:border-accent"
+          className="w-full rounded-sm border border-line-strong bg-card px-[4px] py-[1px] text-[14px] text-ink outline-none focus:border-accent"
         />
       </div>
     );
@@ -92,11 +92,13 @@ export function TaskListItem({
         indent ? "pl-[32px]" : ""
       } ${active ? "bg-active" : "hover:bg-hover"}`}
     >
-      <span className={`truncate text-[13px] ${active ? "font-medium text-ink" : "text-ink-2"}`}>
+      <span
+        className={`min-w-0 flex-1 truncate text-[14px] ${active ? "font-semibold text-ink" : "text-ink-2"}`}
+      >
         {title}
       </span>
       {/* 时间戳 hover 时让位给 ⋯ 按钮 */}
-      <span className="shrink-0 text-[12px] text-ink-3 group-hover:hidden">{time}</span>
+      <span className="shrink-0 text-[13px] text-ink-3 group-hover:hidden">{time}</span>
       <ActionMenu
         items={[
           { label: "重命名", onSelect: startRename },

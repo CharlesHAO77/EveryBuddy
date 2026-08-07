@@ -62,10 +62,10 @@ export function ToolCallCard({ block }: ToolCallCardProps) {
       <button
         type="button"
         onClick={() => setExpanded((v) => !v)}
-        className="flex items-center gap-1.5 rounded-s bg-hover px-2 py-1 text-[11px] text-ink-2 transition hover:bg-active"
+        className="flex items-center gap-1.5 rounded-s bg-hover px-2 py-1 text-[12px] text-ink-2 transition hover:bg-active"
       >
         <IconWrench size={11} strokeWidth={2} className="text-ink-3" />
-        <span className="font-medium">{name}</span>
+        <span className="font-semibold">{name}</span>
         <span className={statusColor[block.status]}>
           <StatusIcon status={block.status} />
         </span>
@@ -81,8 +81,8 @@ export function ToolCallCard({ block }: ToolCallCardProps) {
         <div className="mt-1 ml-4 space-y-1.5 border-l border-line pl-3">
           {block.args !== undefined && (
             <div>
-              <div className="text-[10px] text-ink-3">参数</div>
-              <pre className="mt-0.5 overflow-x-auto rounded-s bg-hover px-2 py-1 text-[11px] text-ink-2">
+              <div className="text-[11px] text-ink-3">参数</div>
+              <pre className="mt-0.5 overflow-x-auto rounded-s bg-hover px-2 py-1 text-[12px] text-ink-2">
                 {safeStringify(block.args)}
               </pre>
             </div>
@@ -90,8 +90,8 @@ export function ToolCallCard({ block }: ToolCallCardProps) {
 
           {block.outputDelta && (
             <div>
-              <div className="text-[10px] text-ink-3">输出</div>
-              <pre className="mt-0.5 max-h-48 overflow-auto rounded-s bg-terminal px-2 py-1 text-[11px] leading-relaxed text-terminal-text">
+              <div className="text-[11px] text-ink-3">输出</div>
+              <pre className="mt-0.5 max-h-48 overflow-auto rounded-s bg-terminal px-2 py-1 text-[12px] leading-relaxed text-terminal-text">
                 {block.outputDelta}
               </pre>
             </div>
@@ -99,9 +99,9 @@ export function ToolCallCard({ block }: ToolCallCardProps) {
 
           {!block.outputDelta && block.output !== undefined && block.output !== "" && (
             <div>
-              <div className="text-[10px] text-ink-3">结果</div>
+              <div className="text-[11px] text-ink-3">结果</div>
               <pre
-                className={`mt-0.5 overflow-x-auto rounded-s px-2 py-1 text-[11px] ${
+                className={`mt-0.5 overflow-x-auto rounded-s px-2 py-1 text-[12px] ${
                   block.status === "error" ? "bg-danger/10 text-danger" : "bg-hover text-ink-2"
                 }`}
               >
@@ -110,7 +110,7 @@ export function ToolCallCard({ block }: ToolCallCardProps) {
             </div>
           )}
 
-          {block.error && <div className="text-[11px] text-danger">{block.error}</div>}
+          {block.error && <div className="text-[12px] text-danger">{block.error}</div>}
         </div>
       )}
     </div>

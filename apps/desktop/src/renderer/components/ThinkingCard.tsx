@@ -22,7 +22,7 @@ export function ThinkingCard({ block, streaming }: ThinkingCardProps) {
       <button
         type="button"
         onClick={() => setExpanded((v) => !v)}
-        className="flex items-center gap-1.5 rounded-s px-1.5 py-0.5 text-[11px] text-ink-3 transition hover:bg-hover hover:text-ink-2"
+        className="flex items-center gap-1.5 rounded-s px-1.5 py-0.5 text-[12px] text-ink-3 transition hover:bg-hover hover:text-ink-2"
       >
         <IconLightbulb size={11} strokeWidth={2} />
         {!done ? (
@@ -46,7 +46,7 @@ export function ThinkingCard({ block, streaming }: ThinkingCardProps) {
         )}
       </button>
       {expanded && (
-        <div className="mt-1 ml-5 whitespace-pre-wrap rounded-s bg-hover px-3 py-2 text-[12px] text-ink-2">
+        <div className="mt-1 ml-5 whitespace-pre-wrap rounded-s bg-hover px-3 py-2 text-[13px] text-ink-2">
           {done ? block.content || "（无内容）" : block.content}
         </div>
       )}

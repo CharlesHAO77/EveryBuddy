@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { type ChatMessage, useSessionStore } from "../stores/sessionStore";
 import { type CategoryId, useUIStore } from "../stores/uiStore";
+import { ConversationTitle } from "./ConversationTitle";
 import {
   IconArrowUp,
   IconCheck,
@@ -71,10 +72,28 @@ const codingTags = [
 
 export function MainView() {
   const currentTaskId = useSessionStore((s) => s.currentTaskId);
+  const currentTaskTitle = useSessionStore(
+    (s) => s.tasks.find((t) => t.id === s.currentTaskId)?.title ?? null,
+  );
+  // 侧栏折叠状态：折叠时标题左内边距让位红绿灯（50+30=80 > 红绿灯右缘 73）
+  const sidebarCollapsed = useUIStore((s) => s.sidebarCollapsed);
 
   return (
-    <main className="relative flex flex-1 flex-col overflow-hidden bg-paper">
-      {currentTaskId ? <ChatView taskId={currentTaskId} /> : <WelcomeView />}
+    <main className="flex flex-1 flex-col overflow-hidden bg-paper">
+      {/* ── 标题栏拖动层·对话区部分：与对话区一体（纸色），mac 下 40px 拖动区；对话标题可点击重命名靠左 ── */}
+      <div
+        className={`eb-top-spacer titlebar-drag flex shrink-0 items-center transition-[padding-left] duration-200 ${
+          sidebarCollapsed ? "pl-[30px]" : "pl-[12px]"
+        }`}
+      >
+        {currentTaskId && currentTaskTitle && (
+          <ConversationTitle taskId={currentTaskId} title={currentTaskTitle} />
+        )}
+      </div>
+      {/* 拖动层占位后的剩余高度交给 ChatView/WelcomeView（二者 root 用 h-full / min-h-full，需容器定高） */}
+      <div className="flex min-h-0 flex-1 flex-col">
+        {currentTaskId ? <ChatView taskId={currentTaskId} /> : <WelcomeView />}
+      </div>
     </main>
   );
 }
@@ -138,7 +157,7 @@ function WorkspaceSelector() {
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="flex items-center gap-[4px] text-[12px] text-ink-3 transition hover:text-ink-2"
+        className="flex items-center gap-[4px] text-[13px] text-ink-3 transition hover:text-ink-2"
       >
         {label}
         <IconChevronDown size={10} strokeWidth={2} />
@@ -153,7 +172,7 @@ function WorkspaceSelector() {
                 setPendingWorkspace(ws.id);
                 setOpen(false);
               }}
-              className={`flex w-full items-center gap-[8px] px-[12px] py-[7px] text-left text-[13px] transition hover:bg-hover ${
+              className={`flex w-full items-center gap-[8px] px-[12px] py-[7px] text-left text-[14px] transition hover:bg-hover ${
                 ws.id === pendingWorkspaceId ? "text-ink" : "text-ink-2"
               }`}
             >
@@ -170,7 +189,7 @@ function WorkspaceSelector() {
           <button
             type="button"
             onClick={handlePickFolder}
-            className="flex w-full items-center gap-[8px] px-[12px] py-[7px] text-left text-[13px] text-ink-2 transition hover:bg-hover"
+            className="flex w-full items-center gap-[8px] px-[12px] py-[7px] text-left text-[14px] text-ink-2 transition hover:bg-hover"
           >
             <IconFolder size={14} className="text-ink-3" />
             指定文件夹
@@ -195,14 +214,14 @@ function WorkspaceSelector() {
                   }
                 }}
                 placeholder="空间名称"
-                className="w-full rounded-s border border-line bg-card px-[8px] py-[5px] text-[13px] text-ink placeholder:text-ink-3 focus:border-accent focus:outline-none"
+                className="w-full rounded-s border border-line bg-card px-[8px] py-[5px] text-[14px] text-ink placeholder:text-ink-3 focus:border-accent focus:outline-none"
               />
               <div className="mt-[6px] flex gap-[6px]">
                 <button
                   type="button"
                   onClick={() => void handleCreateNamed()}
                   disabled={!name.trim()}
-                  className="rounded-s bg-accent px-[10px] py-[4px] text-[12px] text-white transition hover:bg-accent-strong disabled:opacity-30"
+                  className="rounded-s bg-accent px-[10px] py-[4px] text-[13px] text-white transition hover:bg-accent-strong disabled:opacity-30"
                 >
                   创建
                 </button>
@@ -212,7 +231,7 @@ function WorkspaceSelector() {
                     setCreating(false);
                     setName("");
                   }}
-                  className="rounded-s px-[10px] py-[4px] text-[12px] text-ink-3 transition hover:bg-hover"
+                  className="rounded-s px-[10px] py-[4px] text-[13px] text-ink-3 transition hover:bg-hover"
                 >
                   取消
                 </button>
@@ -222,7 +241,7 @@ function WorkspaceSelector() {
             <button
               type="button"
               onClick={() => setCreating(true)}
-              className="flex w-full items-center gap-[8px] px-[12px] py-[7px] text-left text-[13px] text-ink-2 transition hover:bg-hover"
+              className="flex w-full items-center gap-[8px] px-[12px] py-[7px] text-left text-[14px] text-ink-2 transition hover:bg-hover"
             >
               <IconPlus size={14} className="text-ink-3" />
               新建空间
@@ -237,7 +256,7 @@ function WorkspaceSelector() {
               setPendingWorkspace(null);
               setOpen(false);
             }}
-            className="flex w-full items-center gap-[8px] px-[12px] py-[7px] text-left text-[13px] text-ink-3 transition hover:bg-hover"
+            className="flex w-full items-center gap-[8px] px-[12px] py-[7px] text-left text-[14px] text-ink-3 transition hover:bg-hover"
           >
             <IconX size={12} />
             无工作空间
@@ -307,7 +326,7 @@ function WelcomeView() {
       {/* ── Centered Content ── */}
       <div className="flex w-full max-w-[600px] flex-col items-center pt-[130px]">
         {/* Title */}
-        <h1 className="font-display text-[34px] font-medium tracking-tight text-ink">
+        <h1 className="font-display text-[36px] font-semibold tracking-tight text-ink">
           EveryBuddy, 我帮你
         </h1>
 
@@ -320,7 +339,7 @@ function WelcomeView() {
                 key={mode.id}
                 type="button"
                 onClick={() => setActiveCategory(mode.id)}
-                className={`h-[36px] rounded-full px-[20px] text-[14px] font-medium transition active:scale-[0.97] ${
+                className={`h-[36px] rounded-full px-[20px] text-[15px] font-semibold transition active:scale-[0.97] ${
                   isActive ? "bg-ink text-card" : "bg-hover text-ink-2 hover:bg-active"
                 }`}
               >
@@ -339,7 +358,7 @@ function WelcomeView() {
                 <button
                   key={tag.id}
                   type="button"
-                  className="flex h-[32px] items-center gap-[6px] rounded-full border border-line bg-card px-[14px] text-[13px] text-ink-2 transition hover:border-line-strong hover:bg-hover"
+                  className="flex h-[32px] items-center gap-[6px] rounded-full border border-line bg-card px-[14px] text-[14px] text-ink-2 transition hover:border-line-strong hover:bg-hover"
                 >
                   <IconClock size={12} className="text-ink-3" />
                   {tag.label}
@@ -355,7 +374,7 @@ function WelcomeView() {
               onKeyDown={handleKeyDown}
               placeholder="今天帮你做些什么？"
               rows={3}
-              className="h-full w-full resize-none border-0 bg-transparent px-[20px] pt-[20px] text-[16px] text-ink placeholder:text-ink-3 focus:outline-none"
+              className="h-full w-full resize-none border-0 bg-transparent px-[20px] pt-[20px] text-[17px] text-ink placeholder:text-ink-3 focus:outline-none"
             />
 
             {/* Bottom toolbar */}
@@ -367,7 +386,7 @@ function WelcomeView() {
                 >
                   <IconPlus />
                 </button>
-                <span className="text-[13px] text-ink-3">@引用对话文件，/调用技能与指令</span>
+                <span className="text-[14px] text-ink-3">@引用对话文件，/调用技能与指令</span>
               </div>
 
               <div className="flex items-center gap-[8px]">
@@ -409,7 +428,7 @@ function WelcomeView() {
           <WorkspaceSelector />
           <button
             type="button"
-            className="flex items-center gap-[4px] text-[12px] text-ink-3 transition hover:text-ink-2"
+            className="flex items-center gap-[4px] text-[13px] text-ink-3 transition hover:text-ink-2"
           >
             默认权限
             <IconChevronDown size={10} strokeWidth={2} />
@@ -512,7 +531,7 @@ function ChatView({ taskId }: { taskId: string }) {
               onKeyDown={handleKeyDown}
               placeholder="今天帮你做些什么？ @引用对话文件，/调用技能与指令"
               rows={2}
-              className="h-full w-full resize-none border-0 bg-transparent px-[20px] pt-[16px] text-[16px] text-ink placeholder:text-ink-3 focus:outline-none"
+              className="h-full w-full resize-none border-0 bg-transparent px-[20px] pt-[16px] text-[17px] text-ink placeholder:text-ink-3 focus:outline-none"
             />
             <div className="absolute bottom-0 left-0 right-0 flex items-center justify-between px-[14px] pb-[10px]">
               <button
