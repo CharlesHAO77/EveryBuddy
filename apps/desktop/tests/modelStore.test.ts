@@ -17,6 +17,16 @@ import {
   setApiKey,
 } from "../src/main/modelStore";
 
+/**
+ * 校验 auth.json 权限为 0600（仅 POSIX 生效；Windows 使用 ACL，unix 权限位无意义，
+ * stat().mode 恒为 0o666，故跳过）。
+ */
+function expectAuthFileMode(p: string): void {
+  if (process.platform !== "win32") {
+    expect(statSync(p).mode & 0o777).toBe(0o600);
+  }
+}
+
 let tmpDir: string;
 let paths: ModelStorePaths;
 
@@ -123,7 +133,7 @@ describe("setApiKey / auth.json", () => {
     setApiKey("p1", "sk-secret", paths);
     const raw = JSON.parse(readFileSync(paths.authPath, "utf-8"));
     expect(raw.p1).toEqual({ type: "api_key", key: "sk-secret" });
-    expect(statSync(paths.authPath).mode & 0o777).toBe(0o600);
+    expectAuthFileMode(paths.authPath);
     expect(hasApiKey("p1", paths)).toBe(true);
     expect(listProviders(paths)[0]?.hasApiKey).toBe(true);
   });
@@ -189,7 +199,7 @@ describe("migrateFromLegacyConfig", () => {
     // 密钥进入 auth.json（0600）
     const authRaw = JSON.parse(readFileSync(paths.authPath, "utf-8"));
     expect(authRaw.p1).toEqual({ type: "api_key", key: "sk-legacy" });
-    expect(statSync(paths.authPath).mode & 0o777).toBe(0o600);
+    expectAuthFileMode(paths.authPath);
 
     // config.json 剥离 models，保留 workspaces/tasks
     const configRaw = JSON.parse(readFileSync(paths.configPath, "utf-8"));

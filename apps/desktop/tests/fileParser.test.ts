@@ -13,7 +13,7 @@ import {
   resolveInUploads,
   splitFileMarkers,
   stageAttachments,
-} from "./fileParser";
+} from "../src/main/fileParser";
 
 const PNG_1PX =
   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
