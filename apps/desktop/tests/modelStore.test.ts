@@ -15,7 +15,7 @@ import {
   removeProvider,
   saveProvider,
   setApiKey,
-} from "./modelStore";
+} from "../src/main/modelStore";
 
 let tmpDir: string;
 let paths: ModelStorePaths;

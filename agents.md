@@ -53,6 +53,7 @@ everyBuddy/
 - 共享包为 ESM（`"type": "module"`）；desktop 主进程为 CJS（兼容 Electron Forge）。
 - 共享包**以源码导出**（`exports.types/default` 指向 `src/index.ts`），desktop 通过 Vite alias 解析到源码——MVP 阶段无需预编译共享包。
 - 类型导入优先用 `import type`。
+- 测试类文件统一放到单独的tests文件夹下，不能混合在一起
 
 ### 4.2 共享物归属（每个概念只有一个家）
 
