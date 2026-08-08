@@ -14,7 +14,7 @@ import { randomUUID } from "node:crypto";
 import { existsSync, mkdirSync, readdirSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import type { SessionEntry } from "@earendil-works/pi-coding-agent";
+import type { SessionEntry, ToolDefinition } from "@earendil-works/pi-coding-agent";
 import type {
   AgentEvent,
   AttachmentRef,
@@ -31,6 +31,13 @@ import {
   stageAttachments,
 } from "./fileParser";
 import { AUTH_PATH, getProvider, MODELS_JSON_PATH } from "./modelStore";
+import { createFindOperations } from "./tools/findTool";
+import { createGrepToolDefinition } from "./tools/grepTool";
+import {
+  buildToolPlan,
+  detectToolAvailability,
+  type ToolAvailability,
+} from "./tools/toolAvailability";
 import { getTaskCwd } from "./workspaceManager";
 
 // 类型导入（编译期擦除）；运行时通过动态 import() 加载 ESM 包
@@ -65,6 +72,8 @@ class AgentRuntime {
   private sessions = new Map<string, RuntimeState>();
   /** 事件输出回调（由 ipcRouter 注入，广播到渲染进程） */
   private emitter: ((event: AgentEvent) => void) | null = null;
+  /** 工具可用性机器级快照（探测一次，进程内缓存；见 tools/toolAvailability.ts） */
+  private availability: ToolAvailability | null = null;
 
   setEmitter(fn: (event: AgentEvent) => void): void {
     this.emitter = fn;
@@ -73,6 +82,12 @@ class AgentRuntime {
   /** 向渲染进程推送错误事件（供 ipcRouter 在会话初始化失败时调用） */
   emitError(streamId: string, message: string): void {
     this.emit(streamId, { type: "error", payload: { message } });
+  }
+
+  /** 探测并缓存本机工具可用性（bash 真实路径、rg/fd 是否可用的机器级快照） */
+  private getAvailability(): ToolAvailability {
+    if (!this.availability) this.availability = detectToolAvailability();
+    return this.availability;
   }
 
   /** 动态加载 ESM 包 */
@@ -147,13 +162,35 @@ class AgentRuntime {
       throw new Error("未配置可用模型，请先在设置中添加模型并配置 API Key");
     }
 
+    // 平台化工具配置：bash 在 Windows 上覆盖为真实 Git Bash（SDK 会误选 WSL stub），
+    // grep/find 在缺 rg/fd 时降级为纯 Node 实现（见 tools/toolAvailability.ts）
+    const plan = buildToolPlan(this.getAvailability());
+    const customTools: ToolDefinition[] = [await this.buildParseAttachmentTool(cwd)];
+    if (plan.bashShellPath) {
+      // 同名 "bash" 定义经 customTools 覆盖内置 bash（agent-session 注册表按名覆盖），
+      // 让其用我们解析的真实 Git Bash，而非 SDK where 命中的 WSL stub
+      customTools.push(
+        sdk.createBashToolDefinition(cwd, { shellPath: plan.bashShellPath }) as ToolDefinition,
+      );
+    }
+    if (plan.useNodeFind) {
+      // fd 缺失：纯 Node glob 兜底覆盖内置 find
+      customTools.push(
+        sdk.createFindToolDefinition(cwd, { operations: createFindOperations() }) as ToolDefinition,
+      );
+    }
+    if (plan.useNodeGrep) {
+      // rg 缺失：纯 Node 搜索兜底覆盖内置 grep
+      customTools.push(await createGrepToolDefinition(cwd));
+    }
+
     const { session } = await sdk.createAgentSession({
       cwd,
       model,
       modelRuntime: this.modelRuntime ?? undefined,
       sessionManager,
-      tools: ["read", "write", "edit", "bash", "grep", "find", "ls", "parse_attachment"],
-      customTools: [await this.buildParseAttachmentTool(cwd)],
+      tools: plan.tools,
+      customTools,
     });
 
     const unsubscribe = session.subscribe((event: unknown) => {

@@ -16,6 +16,10 @@
     "vite.main.config.ts",
     "vite.preload.config.ts",
     "vite.renderer.config.ts",
-    "playwright.config.ts"
-, "tests/modelStore.test.ts"  ]
+    "playwright.config.ts",
+    "tests/modelStore.test.ts",
+    "tests/toolAvailability.test.ts",
+    "tests/grepTool.test.ts",
+    "tests/findTool.test.ts"
+  ]
 }

@@ -140,6 +140,10 @@ everyBuddy/
         │   │   ├── windowManager.ts      # BrowserWindow 工厂
         │   │   ├── ipcRouter.ts          # IPC 路由与校验
         │   │   ├── agentRuntime.ts       # pi-coding-agent 运行时集成
+        │   │   ├── tools/                # 平台化工具配置（见 §5.1）
+        │   │   │   ├── toolAvailability.ts # 探测 bash（真实 Git Bash）/ rg / fd，组装动态工具清单
+        │   │   │   ├── grepTool.ts       # 纯 Node grep 兜底（rg 缺失时覆盖内置）
+        │   │   │   └── findTool.ts       # 纯 Node find 兜底（fd 缺失时覆盖内置）
         │   │   ├── modelStore.ts         # 模型维护唯一模块（models.json + auth.json，SDK 原生格式）
         │   │   ├── apiGatewayBridge.ts   # 主进程 ↔ API Gateway 桥接
         │   │   ├── configStore.ts        # 非敏感配置（workspaces + tasks）
@@ -231,6 +235,26 @@ export class AgentRuntime {
 
 > **关于 TUI**：pi-coding-agent 内置 TUI 界面。桌面端 React UI 是默认界面，TUI 可作为备选或调试工具使用，不参与桌面端主交互流程。
 
+**工具可用性探测（平台化工具配置）：**
+
+`main/tools/` 目录实现平台化的 Agent 工具配置（见 `toolAvailability.ts`）：
+
+- **bash（Windows 关键修复）**：SDK 的 `getShellConfig` 在 Windows 上只查
+  `%ProgramFiles%\Git\bin\bash.exe`（新版 Git 的 bash 在 `usr\bin\`，会漏），随后
+  `where bash.exe` 取第一个匹配，Electron 主进程 PATH 中 System32 靠前会命中
+  `C:\Windows\System32\bash.exe`（WSL stub）。`toolAvailability` 改为优先枚举
+  `bin\` + `usr\bin\` 的 Git Bash 已知路径，再对 `where` 输出逐条跳过 WSL stub；
+  命中后用 `createBashToolDefinition(cwd, { shellPath })` 经 customTools 同名覆盖
+  内置 bash，让命令走真实 Git Bash。未命中则静默排除 bash 工具。
+- **grep/find（纯 Node 兜底）**：SDK 内置 grep/find 分别硬依赖外部 rg/fd 二进制
+  （首次使用从 GitHub 自动下载，国内/离线网络易失败）。`toolAvailability` 探测
+  rg/fd 是否在 PATH 或 `~/.pi/agent/bin`；缺失时注入纯 Node 实现覆盖内置——
+  grep 用 `grepTool.ts`（tinyglobby 枚举 + Node 正则逐行匹配），find 用
+  `findTool.ts` 的 `FindOperations`（SDK `createFindToolDefinition` 原生支持
+  customOps.glob 纯 Node 路径）。grep/find 因此永不缺失，且不触发下载。
+- 探测结果为机器级快照，进程内缓存一次；`agentRuntime.createTaskSession` 据此
+  组装动态 `tools` allowlist 与 `customTools`。
+
 ### 5.2 Electron 主进程
 
 Electron 主进程职责：
@@ -249,6 +273,9 @@ Electron 主进程职责：
 | `windowManager.ts` | BrowserWindow 创建、显示/隐藏、平台适配 |
 | `ipcRouter.ts` | IPC channel 注册、Zod 校验、错误统一处理 |
 | `agentRuntime.ts` | pi-coding-agent 运行时封装，直接调用 |
+| `tools/toolAvailability.ts` | 探测 bash（真实 Git Bash）/ rg / fd，生成动态工具清单 |
+| `tools/grepTool.ts` | 纯 Node grep 兜底（rg 缺失时覆盖内置，见 §5.1） |
+| `tools/findTool.ts` | 纯 Node find 兜底（fd 缺失时覆盖内置，见 §5.1） |
 | `apiGatewayBridge.ts` | 将 API Gateway 请求路由到 AgentRuntime |
 | `apiKeyDialog.ts` | 调用 Electron 原生 dialog 输入 API Key，委托 AuthStorage 存储 |
 | `toolConfirmDialog.ts` | 调用 Electron dialog 展示工具确认 |

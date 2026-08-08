@@ -46,7 +46,7 @@
 | ID | 功能模块 | 优先级 | 需求描述 |
 |----|----------|--------|----------|
 | F1 | 对话式交互 | P0 | 支持多轮文本对话，助手回复流式展示，用户可中断生成 |
-| F2 | 代码工具调用 | P0 | 复用 pi-coding-agent 默认工具：`read`、`write`、`edit`、`bash`、`grep`、`find`、`ls` |
+| F2 | 代码工具调用 | P0 | 复用 pi-coding-agent 工具：`read`、`write`、`edit`、`ls`；`bash`/`grep`/`find` 可用性按平台探测——Windows 的 bash 解析真实 Git Bash（避免 WSL stub），缺失时静默排除；`grep`/`find` 依赖 rg/fd，缺失时自动降级为内置 Node 实现 |
 | F3 | 会话管理 | P0 | 新建、切换、重命名、删除会话；会话以 JSONL 树结构持久化 |
 | F4 | 多模型支持 | P0 | 通过 `@earendil-works/pi-ai` 接入 Anthropic / OpenAI / OpenRouter 等供应商 |
 | F5 | API 密钥管理 | P0 | 首次启动引导配置；密钥安全存储于系统钥匙串，不进入渲染进程 |
