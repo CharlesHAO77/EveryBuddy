@@ -34,6 +34,7 @@ export function ModelSettings({ onClose }: ModelSettingsProps) {
       baseUrl: "https://api.openai.com/v1",
       model: "",
       isOpenAiCompatible: true,
+      capabilities: { vision: false, imageGen: false },
     });
     setEditingId(id);
   };
@@ -45,6 +46,7 @@ export function ModelSettings({ onClose }: ModelSettingsProps) {
       baseUrl: m.baseUrl,
       model: m.model,
       isOpenAiCompatible: m.isOpenAiCompatible,
+      capabilities: m.capabilities ?? { vision: false, imageGen: false },
     });
     setEditingId(m.id);
   };
@@ -111,11 +113,21 @@ export function ModelSettings({ onClose }: ModelSettingsProps) {
                         onClick={() => setCurrentModel(m.id)}
                         className="flex-1 text-left"
                       >
-                        <div className="flex items-center gap-2">
+                        <div className="flex flex-wrap items-center gap-2">
                           <span className="font-semibold text-ink">{m.name}</span>
                           {currentModelId === m.id && (
                             <span className="rounded-full bg-accent px-2 py-0.5 text-[11px] font-semibold text-white">
                               当前
+                            </span>
+                          )}
+                          {m.capabilities?.vision && (
+                            <span className="rounded-full bg-accent-tint px-2 py-0.5 text-[11px] text-accent-strong">
+                              视觉
+                            </span>
+                          )}
+                          {m.capabilities?.imageGen && (
+                            <span className="rounded-full bg-accent-tint px-2 py-0.5 text-[11px] text-accent-strong">
+                              生图
                             </span>
                           )}
                         </div>
@@ -221,8 +233,11 @@ function ModelForm({ draft, onChange, onSave, onCancel }: ModelFormProps) {
   return (
     <div className="space-y-2.5">
       <div>
-        <label className={label}>显示名称</label>
+        <label htmlFor="model-name" className={label}>
+          显示名称
+        </label>
         <input
+          id="model-name"
           className={field}
           value={draft.name}
           onChange={(e) => onChange({ ...draft, name: e.target.value })}
@@ -230,8 +245,11 @@ function ModelForm({ draft, onChange, onSave, onCancel }: ModelFormProps) {
         />
       </div>
       <div>
-        <label className={label}>Base URL</label>
+        <label htmlFor="model-base-url" className={label}>
+          Base URL
+        </label>
         <input
+          id="model-base-url"
           className={field}
           value={draft.baseUrl}
           onChange={(e) => onChange({ ...draft, baseUrl: e.target.value })}
@@ -239,8 +257,11 @@ function ModelForm({ draft, onChange, onSave, onCancel }: ModelFormProps) {
         />
       </div>
       <div>
-        <label className={label}>Model</label>
+        <label htmlFor="model-id" className={label}>
+          Model
+        </label>
         <input
+          id="model-id"
           className={field}
           value={draft.model}
           onChange={(e) => onChange({ ...draft, model: e.target.value })}
@@ -256,6 +277,36 @@ function ModelForm({ draft, onChange, onSave, onCancel }: ModelFormProps) {
         />
         OpenAI 兼容格式
       </label>
+      <div className="flex items-center gap-4 pt-1">
+        <label className="flex items-center gap-2 text-[14px] text-ink">
+          <input
+            type="checkbox"
+            checked={draft.capabilities.vision}
+            onChange={(e) =>
+              onChange({
+                ...draft,
+                capabilities: { ...draft.capabilities, vision: e.target.checked },
+              })
+            }
+            className="h-4 w-4 rounded border-line-strong text-accent"
+          />
+          视觉理解
+        </label>
+        <label className="flex items-center gap-2 text-[14px] text-ink">
+          <input
+            type="checkbox"
+            checked={draft.capabilities.imageGen}
+            onChange={(e) =>
+              onChange({
+                ...draft,
+                capabilities: { ...draft.capabilities, imageGen: e.target.checked },
+              })
+            }
+            className="h-4 w-4 rounded border-line-strong text-accent"
+          />
+          生图
+        </label>
+      </div>
       <div className="flex justify-end gap-2 pt-1">
         <button
           type="button"

@@ -72,7 +72,19 @@ export function ModelSelector({ selectedId, onSelect, onOpenSettings }: ModelSel
                   isSelected ? "bg-accent-tint text-accent-strong" : "text-ink-2 hover:bg-hover"
                 }`}
               >
-                <span className="truncate">{m.name}</span>
+                <span className="flex min-w-0 items-center gap-1.5">
+                  <span className="truncate">{m.name}</span>
+                  {m.capabilities?.vision && (
+                    <span className="shrink-0 rounded-full bg-accent-tint px-1.5 py-px text-[10px] text-accent-strong">
+                      视觉
+                    </span>
+                  )}
+                  {m.capabilities?.imageGen && (
+                    <span className="shrink-0 rounded-full bg-accent-tint px-1.5 py-px text-[10px] text-accent-strong">
+                      生图
+                    </span>
+                  )}
+                </span>
                 {isSelected && <IconCheck size={12} strokeWidth={2} title="已选" />}
               </button>
             );

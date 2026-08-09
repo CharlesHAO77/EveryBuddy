@@ -12,10 +12,15 @@
  * 安全：单文件解析失败永不抛出；路径严格限定在 uploads 目录内（防 Agent 工具逃逸）。
  */
 
-import type { AttachmentRef, HistoryBlock, HistoryFileBlock, HistoryTextBlock } from "@everybuddy/ipc-contract";
-import { copyFile, mkdir, readFile, stat } from "node:fs/promises";
 import { existsSync } from "node:fs";
+import { copyFile, mkdir, readFile, stat } from "node:fs/promises";
 import path from "node:path";
+import type {
+  AttachmentRef,
+  HistoryBlock,
+  HistoryFileBlock,
+  HistoryTextBlock,
+} from "@everybuddy/ipc-contract";
 
 /** 解析结果内容块（与 pi-ai TextContent/ImageContent 形状一致） */
 export type ParseContent =
@@ -61,11 +66,59 @@ const IMAGE_MAX_BYTES = 4_000_000;
 // ────────────────────────────────────────────────
 
 const TEXT_EXTENSIONS = new Set([
-  "txt", "md", "markdown", "json", "jsonl", "csv", "tsv", "yaml", "yml", "toml",
-  "ini", "cfg", "conf", "xml", "html", "htm", "css", "scss", "less", "js", "jsx",
-  "ts", "tsx", "mjs", "cjs", "py", "java", "c", "cpp", "h", "hpp", "cs", "go",
-  "rs", "rb", "php", "sh", "bash", "zsh", "sql", "graphql", "proto", "kt", "kts",
-  "swift", "r", "lua", "pl", "dart", "vue", "svelte", "dockerfile", "log",
+  "txt",
+  "md",
+  "markdown",
+  "json",
+  "jsonl",
+  "csv",
+  "tsv",
+  "yaml",
+  "yml",
+  "toml",
+  "ini",
+  "cfg",
+  "conf",
+  "xml",
+  "html",
+  "htm",
+  "css",
+  "scss",
+  "less",
+  "js",
+  "jsx",
+  "ts",
+  "tsx",
+  "mjs",
+  "cjs",
+  "py",
+  "java",
+  "c",
+  "cpp",
+  "h",
+  "hpp",
+  "cs",
+  "go",
+  "rs",
+  "rb",
+  "php",
+  "sh",
+  "bash",
+  "zsh",
+  "sql",
+  "graphql",
+  "proto",
+  "kt",
+  "kts",
+  "swift",
+  "r",
+  "lua",
+  "pl",
+  "dart",
+  "vue",
+  "svelte",
+  "dockerfile",
+  "log",
 ]);
 
 const IMAGE_EXTENSIONS = new Set(["png", "jpg", "jpeg", "gif", "webp"]);
@@ -85,8 +138,18 @@ export function categoryFromName(name: string): FileCategory {
 }
 
 /** 魔数探测图片 MIME（png/jpg/gif/webp），失败返回 null */
-function detectImageMimeType(buf: Uint8Array): string | null {
-  if (buf.length >= 8 && buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4e && buf[3] === 0x47 && buf[4] === 0x0d && buf[5] === 0x0a && buf[6] === 0x1a && buf[7] === 0x0a) {
+export function detectImageMimeType(buf: Uint8Array): string | null {
+  if (
+    buf.length >= 8 &&
+    buf[0] === 0x89 &&
+    buf[1] === 0x50 &&
+    buf[2] === 0x4e &&
+    buf[3] === 0x47 &&
+    buf[4] === 0x0d &&
+    buf[5] === 0x0a &&
+    buf[6] === 0x1a &&
+    buf[7] === 0x0a
+  ) {
     return "image/png";
   }
   if (buf.length >= 3 && buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff) {
@@ -95,7 +158,17 @@ function detectImageMimeType(buf: Uint8Array): string | null {
   if (buf.length >= 4 && buf[0] === 0x47 && buf[1] === 0x49 && buf[2] === 0x46 && buf[3] === 0x38) {
     return "image/gif";
   }
-  if (buf.length >= 12 && buf[0] === 0x52 && buf[1] === 0x49 && buf[2] === 0x46 && buf[3] === 0x46 && buf[8] === 0x57 && buf[9] === 0x45 && buf[10] === 0x42 && buf[11] === 0x50) {
+  if (
+    buf.length >= 12 &&
+    buf[0] === 0x52 &&
+    buf[1] === 0x49 &&
+    buf[2] === 0x46 &&
+    buf[3] === 0x46 &&
+    buf[8] === 0x57 &&
+    buf[9] === 0x45 &&
+    buf[10] === 0x42 &&
+    buf[11] === 0x50
+  ) {
     return "image/webp";
   }
   return null;
@@ -186,12 +259,17 @@ export async function stageAttachments(
   return results;
 }
 
+export interface ManifestOptions {
+  /** 有图片且主模型无视觉时：替换默认图片提示行（如「图片已由视觉理解模型自动分析」） */
+  imageHint?: string;
+}
+
 /**
  * 由暂存结果生成用户消息中的文件清单文本。
  * 每个附件一行自闭合 <file name="uploads/x" size="n"/> 标记（回放时拆回 chips），
- * 附带让 Agent 决定读取方式的提示。
+ * 附带让 Agent 决定读取方式的提示。options.imageHint 可替换默认图片提示行。
  */
-export function buildManifestText(staged: StagedFile[]): string {
+export function buildManifestText(staged: StagedFile[], options?: ManifestOptions): string {
   const lines: string[] = [`用户附带 ${staged.length} 个文件（已复制到工作目录 uploads/ 下）：`];
   const cats = new Set<FileCategory>();
   for (const s of staged) {
@@ -204,11 +282,26 @@ export function buildManifestText(staged: StagedFile[]): string {
   }
   const hints: string[] = [];
   if (cats.has("text")) hints.push("文本文件可用 read 工具读取内容（支持 offset/limit 分页）");
-  if (cats.has("image")) hints.push("图片文件可用 read 工具读取（会以视觉方式展示）");
+  if (cats.has("image")) {
+    hints.push(options?.imageHint ?? "图片文件可用 read 工具读取（会以视觉方式展示）");
+  }
   const office = ["pdf", "docx", "xlsx", "pptx"].filter((c) => cats.has(c as FileCategory));
-  if (office.length > 0) hints.push(`${office.join("/")} 等办公文档可用 parse_attachment 工具解析为文本`);
+  if (office.length > 0)
+    hints.push(`${office.join("/")} 等办公文档可用 parse_attachment 工具解析为文本`);
   if (hints.length > 0) lines.push(`提示：${hints.join("；")}。`);
   return lines.join("\n");
+}
+
+/** 由视觉模型生成的图片描述构建注入文本块（主模型无视觉时自动调度用） */
+export function buildImageDescriptionBlock(
+  descs: Array<{ name: string; description: string }>,
+): string {
+  if (descs.length === 0) return "";
+  return descs
+    .map(
+      (d) => `<image-description name="uploads/${d.name}">\n${d.description}\n</image-description>`,
+    )
+    .join("\n\n");
 }
 
 // ────────────────────────────────────────────────
@@ -368,7 +461,8 @@ async function parsePptx(filePath: string, max: number): Promise<string> {
     const texts = [...xml.matchAll(/<a:t[^>]*>([^<]*)<\/a:t>/g)]
       .map((m) => decodeXmlEntity(m[1] ?? ""))
       .filter((t) => t.trim().length > 0);
-    if (texts.length > 0) pages.push(`--- Slide ${f.match(/slide(\d+)/)?.[1] ?? ""} ---\n${texts.join("\n")}`);
+    if (texts.length > 0)
+      pages.push(`--- Slide ${f.match(/slide(\d+)/)?.[1] ?? ""} ---\n${texts.join("\n")}`);
   }
   if (pages.length === 0) throw new Error("PPT 中没有可抽取的文本");
   return truncate(pages.join("\n\n"), max);
@@ -422,7 +516,12 @@ export function splitFileMarkers(text: string): HistoryBlock[] {
   }
   const tail = text.slice(lastIndex);
   if (tail.trim().length > 0) {
-    const tb: HistoryTextBlock = { id: `t${textIndex}`, kind: "text", content: tail.trim(), done: true };
+    const tb: HistoryTextBlock = {
+      id: `t${textIndex}`,
+      kind: "text",
+      content: tail.trim(),
+      done: true,
+    };
     blocks.push(tb);
   }
   return blocks;

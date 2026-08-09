@@ -138,10 +138,15 @@ export interface Workspace {
 
 export type TaskType = "temp" | "workspace";
 
+/** Agent 模式：日常办公 / 代码开发（对应 uiStore.activeCategory；决定使用哪份 agent 配置） */
+export type AgentMode = "daily" | "coding";
+
 export interface TaskMeta {
   id: string;
   title: string;
   type: TaskType;
+  /** 任务所属 agent 模式（缺省 "daily"；决定 createTaskSession 使用 office/coding 配置） */
+  mode?: AgentMode;
   workspaceId?: string;
   workspacePath?: string;
   /** 临时任务的工作目录（app 托管，位于 work-spaces/ 下；空间任务无此字段） */
@@ -157,6 +162,8 @@ export interface TaskMeta {
 export interface CreateTaskRequest {
   title?: string;
   type: TaskType;
+  /** 创建任务时指定的 agent 模式 */
+  mode?: AgentMode;
   workspaceId?: string;
   /** 创建任务时指定的模型 provider ID */
   providerId?: string;
@@ -223,6 +230,16 @@ export interface HistoryMessage {
 // Config（模型配置，不含 API Key 明文）
 // ────────────────────────────────────────────────
 
+/**
+ * 模型能力标签：
+ *  - vision   视觉理解（映射 SDK models[].input = ["text","image"]，决定是否把图片发给该模型）
+ *  - imageGen 生图（供 generate_image 工具调度）
+ */
+export interface ModelCapabilities {
+  vision: boolean;
+  imageGen: boolean;
+}
+
 /** 模型配置（回传渲染进程时 hasApiKey 替代明文，见 §0.2） */
 export interface ModelProviderConfig {
   id: string;
@@ -231,6 +248,7 @@ export interface ModelProviderConfig {
   model: string;
   isOpenAiCompatible: boolean;
   hasApiKey: boolean;
+  capabilities: ModelCapabilities;
 }
 
 export interface SaveModelRequest {
@@ -239,6 +257,7 @@ export interface SaveModelRequest {
   baseUrl: string;
   model: string;
   isOpenAiCompatible: boolean;
+  capabilities: ModelCapabilities;
 }
 
 export interface SetApiKeyRequest {
@@ -285,6 +304,7 @@ export const abortRequestSchema = z.object({
 export const createTaskRequestSchema = z.object({
   title: z.string().optional(),
   type: z.enum(["temp", "workspace"]),
+  mode: z.enum(["daily", "coding"]).optional(),
   workspaceId: z.string().optional(),
   providerId: z.string().optional(),
 });
@@ -300,6 +320,10 @@ export const saveModelRequestSchema = z.object({
   baseUrl: z.string().min(1),
   model: z.string().min(1),
   isOpenAiCompatible: z.boolean(),
+  capabilities: z.object({
+    vision: z.boolean(),
+    imageGen: z.boolean(),
+  }),
 });
 
 export const setApiKeyRequestSchema = z.object({

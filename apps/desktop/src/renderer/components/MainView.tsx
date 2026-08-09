@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
+import { useAttachments } from "../hooks/useAttachments";
 import { type ChatMessage, useSessionStore } from "../stores/sessionStore";
 import { type CategoryId, useUIStore } from "../stores/uiStore";
-import { useAttachments } from "../hooks/useAttachments";
 import { AttachmentPreview } from "./AttachmentPreview";
 import { ConversationTitle } from "./ConversationTitle";
 import {
@@ -306,12 +306,14 @@ function WelcomeView() {
           pendingWorkspaceId
             ? {
                 type: "workspace",
+                mode: activeCategory,
                 workspaceId: pendingWorkspaceId,
                 title: trimmed.slice(0, 30) || "新任务",
                 providerId: effectiveProviderId ?? undefined,
               }
             : {
                 type: "temp",
+                mode: activeCategory,
                 title: trimmed.slice(0, 30) || "新任务",
                 providerId: effectiveProviderId ?? undefined,
               },

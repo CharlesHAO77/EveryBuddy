@@ -127,6 +127,7 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
       id: randomUUID(),
       title: req.title?.trim() || "新任务",
       type: req.type,
+      mode: req.mode,
       workspaceId: workspace?.id,
       workspacePath: workspace?.path,
       workDir,

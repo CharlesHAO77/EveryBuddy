@@ -7,6 +7,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
+  buildImageDescriptionBlock,
   buildManifestText,
   categoryFromName,
   parseFileContent,
@@ -264,5 +265,39 @@ describe("buildManifestText + splitFileMarkers", () => {
   it("splitFileMarkers 纯文本 → 单个文本块", () => {
     const blocks = splitFileMarkers("只有一句话");
     expect(blocks).toEqual([{ id: "t0", kind: "text", content: "只有一句话", done: true }]);
+  });
+
+  it("imageHint 替换默认图片提示行（主模型无视觉时）", async () => {
+    const img = write("pic.png", Buffer.from(PNG_1PX, "base64"));
+    const txt = write("note.txt", "hi");
+    const staged = await stageAttachments(
+      [
+        { name: "pic.png", path: img, size: 68 },
+        { name: "note.txt", path: txt, size: 2 },
+      ],
+      root,
+    );
+    const manifest = buildManifestText(staged, {
+      imageHint: "图片已由视觉理解模型自动分析，内容见 <image-description> 块",
+    });
+    expect(manifest).toContain("图片已由视觉理解模型自动分析");
+    expect(manifest).not.toContain("会以视觉方式展示");
+    // 其余提示保留
+    expect(manifest).toContain("文本文件可用 read");
+  });
+
+  it("buildImageDescriptionBlock 生成 <image-description> 块", () => {
+    const block = buildImageDescriptionBlock([
+      { name: "a.png", description: "柱状图，Q2 营收 12 万" },
+      { name: "b.png", description: "折线图" },
+    ]);
+    expect(block).toContain('<image-description name="uploads/a.png">');
+    expect(block).toContain("柱状图，Q2 营收 12 万");
+    expect(block).toContain('<image-description name="uploads/b.png">');
+    expect(block).toContain("折线图");
+  });
+
+  it("buildImageDescriptionBlock 空数组 → 空串", () => {
+    expect(buildImageDescriptionBlock([])).toBe("");
   });
 });

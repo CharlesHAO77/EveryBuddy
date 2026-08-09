@@ -22,22 +22,35 @@ import type {
   HistoryMessage,
   TaskMeta,
 } from "@everybuddy/ipc-contract";
+import { getAgentConfig } from "./agentConfigStore";
 import { configStore } from "./configStore";
 import {
+  buildImageDescriptionBlock,
   buildManifestText,
   parseFileContent,
   resolveInUploads,
   splitFileMarkers,
   stageAttachments,
 } from "./fileParser";
-import { AUTH_PATH, getProvider, MODELS_JSON_PATH } from "./modelStore";
+import {
+  AUTH_PATH,
+  getApiKey,
+  getImageGenModel,
+  getProvider,
+  getVisionModel,
+  MODELS_JSON_PATH,
+} from "./modelStore";
 import { createFindOperations } from "./tools/findTool";
+import { createGenerateImageToolDefinition } from "./tools/generateImageTool";
 import { createGrepToolDefinition } from "./tools/grepTool";
 import {
   buildToolPlan,
   detectToolAvailability,
   type ToolAvailability,
 } from "./tools/toolAvailability";
+import { buildToolAllowlist } from "./tools/toolAllowlist";
+import { createUnderstandImageToolDefinition } from "./tools/understandImageTool";
+import { type DescribeImageRuntime, describeImage } from "./vision";
 import { getTaskCwd } from "./workspaceManager";
 
 // 类型导入（编译期擦除）；运行时通过动态 import() 加载 ESM 包
@@ -137,6 +150,10 @@ class AgentRuntime {
     const sessionDir = task.sessionDir;
     if (!existsSync(sessionDir)) mkdirSync(sessionDir, { recursive: true });
 
+    // 按任务模式读取办公/编码 agent 配置（旧任务缺省 daily，行为不回归）
+    const mode = task.mode ?? "daily";
+    const cfg = getAgentConfig(mode);
+
     // 恢复已有会话或新建（SDK 声明了 findMostRecentSession 但运行时未导出，自行按 mtime 取最近 .jsonl）
     const recentFile = findMostRecentSessionFile(sessionDir);
     let sessionManager: SessionManagerInstance;
@@ -150,9 +167,10 @@ class AgentRuntime {
       sessionManager = sdk.SessionManager.create(cwd, sessionDir) as SessionManagerInstance;
     }
 
-    // 解析模型
+    // 解析模型：调用方指定 → 模式配置默认 → 第一个可用（与旧逻辑一致）
     let model: PiModel | undefined;
     if (providerId) model = this.resolveModel(providerId);
+    if (!model && cfg.defaultModelProviderId) model = this.resolveModel(cfg.defaultModelProviderId);
     if (!model) {
       // 回退：取第一个可用模型
       const available = await this.modelRuntime?.getAvailable();
@@ -161,6 +179,13 @@ class AgentRuntime {
     if (!model) {
       throw new Error("未配置可用模型，请先在设置中添加模型并配置 API Key");
     }
+
+    // 视觉/生图 provider 实时解析：agent 配置优先，其次能力标签；
+    // 每次调用重新解析，新打标签的模型无需重建会话即可生效
+    const resolveVisionProviderId = (): string | undefined =>
+      getAgentConfig(task.mode ?? "daily").visionModelProviderId ?? getVisionModel();
+    const resolveImageGenProviderId = (): string | undefined =>
+      getAgentConfig(task.mode ?? "daily").imageGenModelProviderId ?? getImageGenModel();
 
     // 平台化工具配置：bash 在 Windows 上覆盖为真实 Git Bash（SDK 会误选 WSL stub），
     // grep/find 在缺 rg/fd 时降级为纯 Node 实现（见 tools/toolAvailability.ts）
@@ -184,13 +209,61 @@ class AgentRuntime {
       customTools.push(await createGrepToolDefinition(cwd));
     }
 
+    // 视觉理解 / 生图自定义工具（办公模式能力；工具内部按需解析视觉/生图模型）
+    customTools.push(
+      await createUnderstandImageToolDefinition(cwd, {
+        resolveVisionModel: () => {
+          const pid = resolveVisionProviderId();
+          return pid ? this.resolveModel(pid) : undefined;
+        },
+        describeImage: (model, image, question) =>
+          describeImage(
+            this.modelRuntime as unknown as DescribeImageRuntime,
+            model,
+            image,
+            question,
+          ),
+        visionProviderId: resolveVisionProviderId,
+      }),
+    );
+    customTools.push(
+      await createGenerateImageToolDefinition(cwd, {
+        resolveImageGenProvider: () => {
+          const pid = resolveImageGenProviderId();
+          if (!pid) return undefined;
+          const provider = getProvider(pid);
+          if (!provider) return undefined;
+          return {
+            providerId: pid,
+            baseUrl: provider.baseUrl,
+            model: provider.models[0]?.id ?? "",
+          };
+        },
+        getApiKey,
+      }),
+    );
+
+    // 模式级 system prompt：createAgentSession 不会 reload 调用方提供的 loader，须自行 reload
+    const resourceLoader = new sdk.DefaultResourceLoader({
+      cwd,
+      agentDir: sdk.getAgentDir(),
+      systemPrompt: cfg.systemPrompt ?? undefined,
+      appendSystemPrompt: cfg.appendSystemPrompt ?? undefined,
+    });
+    await resourceLoader.reload();
+
+    // tools allowlist 会过滤所有工具（含 customTools，见 SDK agent-session _refreshToolRegistry），
+    // 视觉理解/生图工具必须显式并入（buildToolAllowlist），否则注册了也不会暴露给模型。
+    const toolAllowlist = buildToolAllowlist(plan.tools, cfg.tools);
+
     const { session } = await sdk.createAgentSession({
       cwd,
       model,
       modelRuntime: this.modelRuntime ?? undefined,
       sessionManager,
-      tools: plan.tools,
+      tools: toolAllowlist,
       customTools,
+      resourceLoader,
     });
 
     const unsubscribe = session.subscribe((event: unknown) => {
@@ -266,7 +339,7 @@ class AgentRuntime {
     if (attachments && attachments.length > 0) {
       const task = configStore.getTask(taskId);
       const cwd = task ? getTaskCwd(task) : undefined;
-      if (!cwd) {
+      if (!task || !cwd) {
         this.emitError(taskId, "无法定位任务工作目录");
         return;
       }
@@ -277,8 +350,56 @@ class AgentRuntime {
           this.emitError(taskId, `附件暂存失败：${staged[0]?.error ?? "未知错误"}`);
           return;
         }
-        const manifest = buildManifestText(staged);
-        fullText = text.trim() ? `${text}\n\n${manifest}` : manifest;
+
+        // 视觉自动调度：当前模型无视觉 + 图片附件 → 用视觉模型描述并注入文本，不把裸图发给非视觉模型
+        const providerIdEffective = providerId ?? task.providerId;
+        const currentModel = providerIdEffective
+          ? this.resolveModel(providerIdEffective)
+          : undefined;
+        const supportsVision = Boolean(currentModel?.input?.includes("image"));
+        const imageFiles = staged.filter((s) => !s.skipped && s.category === "image");
+
+        let manifest: string;
+        let descBlock = "";
+        if (imageFiles.length > 0 && !supportsVision) {
+          const visionProviderId =
+            getAgentConfig(task.mode ?? "daily").visionModelProviderId ?? getVisionModel();
+          const visionModel = visionProviderId ? this.resolveModel(visionProviderId) : undefined;
+          if (!visionModel) {
+            this.emitError(
+              taskId,
+              "当前模型不支持图片，且未配置视觉理解模型。请在模型设置中为视觉模型勾选「视觉理解」，或切换支持视觉的模型。",
+            );
+            return;
+          }
+          // 逐张图片：解析（缩放）→ 视觉模型描述
+          const descs: Array<{ name: string; description: string }> = [];
+          for (const f of imageFiles) {
+            const { content } = await parseFileContent(f.uploadPath, { resizeImages: true });
+            const img = content.find(
+              (c): c is { type: "image"; data: string; mimeType: string } => c.type === "image",
+            );
+            if (img) {
+              const description = await describeImage(
+                this.modelRuntime as unknown as DescribeImageRuntime,
+                visionModel,
+                img,
+              );
+              descs.push({ name: f.uploadName, description });
+            }
+          }
+          manifest = buildManifestText(staged, {
+            imageHint:
+              "图片已由视觉理解模型自动分析，内容见下方 <image-description> 块（如需针对图片追问，可用 understand_image 工具）",
+          });
+          descBlock = buildImageDescriptionBlock(descs);
+        } else {
+          manifest = buildManifestText(staged);
+        }
+
+        fullText = text.trim()
+          ? `${text}\n\n${manifest}${descBlock ? `\n\n${descBlock}` : ""}`
+          : `${manifest}${descBlock ? `\n\n${descBlock}` : ""}`;
       } catch (err) {
         this.emitError(taskId, `附件处理失败: ${err instanceof Error ? err.message : String(err)}`);
         return;

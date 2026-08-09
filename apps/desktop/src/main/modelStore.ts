@@ -14,11 +14,18 @@
 
 import { chmodSync, existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import path from "node:path";
-import type { ModelProviderConfig, SaveModelRequest } from "@everybuddy/ipc-contract";
+import type {
+  ModelCapabilities,
+  ModelProviderConfig,
+  SaveModelRequest,
+} from "@everybuddy/ipc-contract";
 import { APP_ROOT, CONFIG_PATH } from "./configStore";
 
 export const MODELS_JSON_PATH = path.join(APP_ROOT, "models.json");
 export const AUTH_PATH = path.join(APP_ROOT, "auth.json");
+
+/** 缺省能力标签（未打标签 = 纯文本模型） */
+export const DEFAULT_CAPABILITIES: ModelCapabilities = { vision: false, imageGen: false };
 
 /** SDK ProviderConfigSchema 的应用子集（见 model-config.js ProviderConfigSchema） */
 export interface ProviderEntry {
@@ -26,7 +33,10 @@ export interface ProviderEntry {
   baseUrl: string;
   api?: string;
   compat: { supportsDeveloperRole: boolean; supportsReasoningEffort: boolean };
-  models: Array<{ id: string }>;
+  /** models[].input 声明模型输入模态（vision → ["text","image"]，SDK 据此决定是否发送图片） */
+  models: Array<{ id: string; input?: Array<"text" | "image"> }>;
+  /** 应用层能力标签（SDK 忽略未知键，无破坏） */
+  capabilities?: ModelCapabilities;
 }
 
 type ProvidersRecord = Record<string, ProviderEntry>;
@@ -51,6 +61,9 @@ const DEFAULT_PATHS: ModelStorePaths = {
 
 /** SaveModelRequest → SDK provider 条目；不含 apiKey（密钥只进 auth.json） */
 export function providerEntryFromSaveRequest(req: SaveModelRequest): ProviderEntry {
+  // vision 能力映射 SDK input 模态：非 vision 不写 input（JSON.stringify 会丢弃，provider-composer 默认 ["text"]）
+  const model: { id: string; input?: Array<"text" | "image"> } = { id: req.model };
+  if (req.capabilities?.vision) model.input = ["text", "image"];
   return {
     name: req.name,
     baseUrl: req.baseUrl,
@@ -59,7 +72,8 @@ export function providerEntryFromSaveRequest(req: SaveModelRequest): ProviderEnt
       supportsDeveloperRole: false,
       supportsReasoningEffort: false,
     },
-    models: [{ id: req.model }],
+    models: [model],
+    capabilities: req.capabilities ?? { ...DEFAULT_CAPABILITIES },
   };
 }
 
@@ -102,32 +116,36 @@ function writeAuth(entries: AuthRecord, paths = DEFAULT_PATHS): void {
 
 // ── 公开 API ────────────────────────────────
 
-/** 模型列表（UI 契约：密钥只以 hasApiKey 布尔透出） */
-export function listProviders(paths = DEFAULT_PATHS): ModelProviderConfig[] {
-  const providers = readProviders(paths);
-  return Object.entries(providers).map(([id, entry]) => ({
+/** 单 provider 的 UI 契约（能力标签缺省 {vision:false,imageGen:false}） */
+function toModelProviderConfig(
+  id: string,
+  entry: ProviderEntry,
+  paths: ModelStorePaths,
+): ModelProviderConfig {
+  return {
     id,
     name: entry.name ?? "",
     baseUrl: entry.baseUrl ?? "",
     model: entry.models?.[0]?.id ?? "",
     isOpenAiCompatible: entry.api === "openai-completions",
     hasApiKey: hasApiKey(id, paths),
-  }));
+    capabilities: entry.capabilities ?? { ...DEFAULT_CAPABILITIES },
+  };
+}
+
+/** 模型列表（UI 契约：密钥只以 hasApiKey 布尔透出） */
+export function listProviders(paths = DEFAULT_PATHS): ModelProviderConfig[] {
+  const providers = readProviders(paths);
+  return Object.entries(providers).map(([id, entry]) => toModelProviderConfig(id, entry, paths));
 }
 
 /** 新增/更新 provider（upsert 到 models.json） */
 export function saveProvider(req: SaveModelRequest, paths = DEFAULT_PATHS): ModelProviderConfig {
   const providers = readProviders(paths);
-  providers[req.id] = providerEntryFromSaveRequest(req);
+  const entry = providerEntryFromSaveRequest(req);
+  providers[req.id] = entry;
   writeProviders(providers, paths);
-  return {
-    id: req.id,
-    name: req.name,
-    baseUrl: req.baseUrl,
-    model: req.model,
-    isOpenAiCompatible: req.isOpenAiCompatible,
-    hasApiKey: hasApiKey(req.id, paths),
-  };
+  return toModelProviderConfig(req.id, entry, paths);
 }
 
 /** 删除 provider：models.json 删条目 + auth.json 删密钥 */
@@ -173,6 +191,30 @@ export function getDefaultProviderId(paths = DEFAULT_PATHS): string | undefined 
   return Object.keys(readProviders(paths))[0];
 }
 
+/** provider 是否带指定能力标签（缺省 false） */
+export function hasCapability(
+  providerId: string,
+  cap: keyof ModelCapabilities,
+  paths = DEFAULT_PATHS,
+): boolean {
+  return readProviders(paths)[providerId]?.capabilities?.[cap] ?? false;
+}
+
+/** 第一个带 vision 标签的 provider（供视觉理解调度） */
+export function getVisionModel(paths = DEFAULT_PATHS): string | undefined {
+  return Object.entries(readProviders(paths)).find(([, e]) => e.capabilities?.vision)?.[0];
+}
+
+/** 第一个带 imageGen 标签的 provider（供生图调度） */
+export function getImageGenModel(paths = DEFAULT_PATHS): string | undefined {
+  return Object.entries(readProviders(paths)).find(([, e]) => e.capabilities?.imageGen)?.[0];
+}
+
+/** 读取 provider 的 API Key（auth.json；生图 HTTP 直连需要） */
+export function getApiKey(providerId: string, paths = DEFAULT_PATHS): string | undefined {
+  return readAuth(paths)[providerId]?.key;
+}
+
 // ── 迁移（一次性、幂等） ─────────────────────
 
 /**
@@ -212,6 +254,7 @@ export function migrateFromLegacyConfig(paths = DEFAULT_PATHS): void {
       api: m.isOpenAiCompatible === false ? undefined : "openai-completions",
       compat: { supportsDeveloperRole: false, supportsReasoningEffort: false },
       models: [{ id: m.model ?? m.id }],
+      capabilities: { ...DEFAULT_CAPABILITIES },
     };
     delete (providers[m.id] as { apiKey?: string }).apiKey;
     if (m.apiKey) auth[m.id] = { type: "api_key", key: m.apiKey };

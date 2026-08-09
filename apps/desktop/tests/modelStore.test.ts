@@ -6,8 +6,12 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
+  getApiKey,
   getDefaultProviderId,
+  getImageGenModel,
+  getVisionModel,
   hasApiKey,
+  hasCapability,
   listProviders,
   type ModelStorePaths,
   migrateFromLegacyConfig,
@@ -16,6 +20,9 @@ import {
   saveProvider,
   setApiKey,
 } from "../src/main/modelStore";
+
+/** 无能力标签的完整 SaveModelRequest（贴近旧测试语义） */
+const PLAIN_CAP = { vision: false, imageGen: false };
 
 /**
  * 校验 auth.json 权限为 0600（仅 POSIX 生效；Windows 使用 ACL，unix 权限位无意义，
@@ -51,6 +58,7 @@ describe("providerEntryFromSaveRequest", () => {
       baseUrl: "https://api.deepseek.com/v1",
       model: "deepseek-v4-flash",
       isOpenAiCompatible: true,
+      capabilities: { vision: false, imageGen: false },
     });
     expect(entry).toEqual({
       name: "DeepSeek",
@@ -58,6 +66,7 @@ describe("providerEntryFromSaveRequest", () => {
       api: "openai-completions",
       compat: { supportsDeveloperRole: false, supportsReasoningEffort: false },
       models: [{ id: "deepseek-v4-flash" }],
+      capabilities: { vision: false, imageGen: false },
     });
     expect(entry).not.toHaveProperty("apiKey");
   });
@@ -69,8 +78,91 @@ describe("providerEntryFromSaveRequest", () => {
       baseUrl: "https://x.example",
       model: "m",
       isOpenAiCompatible: false,
+      capabilities: { vision: false, imageGen: false },
     });
     expect(entry.api).toBeUndefined();
+  });
+});
+
+describe("capabilities", () => {
+  const visionReq = {
+    id: "v1",
+    name: "Doubao Vision",
+    baseUrl: "https://ark.cn-beijing.volces.com/api/v3",
+    model: "doubao-vision",
+    isOpenAiCompatible: true,
+    capabilities: { vision: true, imageGen: false },
+  };
+  const genReq = {
+    id: "g1",
+    name: "Seedream",
+    baseUrl: "https://ark.cn-beijing.volces.com/api/v3",
+    model: "seedream-3-0",
+    isOpenAiCompatible: true,
+    capabilities: { vision: false, imageGen: true },
+  };
+
+  it("writes models[].input for vision; omits for non-vision", () => {
+    const vision = providerEntryFromSaveRequest(visionReq);
+    expect(vision.models).toEqual([{ id: "doubao-vision", input: ["text", "image"] }]);
+    const plain = providerEntryFromSaveRequest({
+      ...visionReq,
+      id: "p",
+      capabilities: { vision: false, imageGen: false },
+    });
+    expect(plain.models).toEqual([{ id: "doubao-vision" }]);
+    expect(JSON.stringify(plain.models)).not.toContain("input");
+  });
+
+  it("round-trips capabilities through save/list", () => {
+    saveProvider(visionReq, paths);
+    saveProvider(genReq, paths);
+    const list = listProviders(paths);
+    expect(list.find((m) => m.id === "v1")?.capabilities).toEqual({
+      vision: true,
+      imageGen: false,
+    });
+    expect(list.find((m) => m.id === "g1")?.capabilities).toEqual({
+      vision: false,
+      imageGen: true,
+    });
+  });
+
+  it("defaults missing capabilities to false", () => {
+    // 手写旧格式 models.json（无 capabilities 字段）
+    writeFileSync(
+      paths.modelsPath,
+      JSON.stringify({
+        providers: {
+          old: {
+            name: "Old",
+            baseUrl: "https://x.example",
+            compat: { supportsDeveloperRole: false, supportsReasoningEffort: false },
+            models: [{ id: "m" }],
+          },
+        },
+      }),
+      "utf-8",
+    );
+    expect(listProviders(paths)[0]?.capabilities).toEqual({ vision: false, imageGen: false });
+  });
+
+  it("getVisionModel / getImageGenModel pick first tagged provider", () => {
+    saveProvider({ ...visionReq, id: "a" }, paths);
+    saveProvider({ ...genReq, id: "b" }, paths);
+    saveProvider({ ...genReq, id: "c" }, paths);
+    expect(getVisionModel(paths)).toBe("a");
+    expect(getImageGenModel(paths)).toBe("b");
+    expect(hasCapability("a", "vision", paths)).toBe(true);
+    expect(hasCapability("a", "imageGen", paths)).toBe(false);
+    expect(getVisionModel(paths)).toBe("a");
+  });
+
+  it("getApiKey reads auth.json", () => {
+    saveProvider(visionReq, paths);
+    setApiKey("v1", "sk-vision", paths);
+    expect(getApiKey("v1", paths)).toBe("sk-vision");
+    expect(getApiKey("ghost", paths)).toBeUndefined();
   });
 });
 
@@ -81,6 +173,7 @@ describe("save / list providers", () => {
     baseUrl: "https://api.deepseek.com/v1",
     model: "deepseek-v4-flash",
     isOpenAiCompatible: true,
+    capabilities: { ...PLAIN_CAP },
   };
 
   it("round-trips saveProvider -> listProviders", () => {
@@ -126,6 +219,7 @@ describe("setApiKey / auth.json", () => {
     baseUrl: "https://api.deepseek.com/v1",
     model: "deepseek-v4-flash",
     isOpenAiCompatible: true,
+    capabilities: { ...PLAIN_CAP },
   };
 
   it("writes SDK AuthStorage format with mode 0600", () => {

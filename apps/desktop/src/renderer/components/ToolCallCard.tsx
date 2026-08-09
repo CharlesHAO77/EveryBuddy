@@ -45,6 +45,89 @@ function safeStringify(value: unknown): string {
   }
 }
 
+type ToolResultBlock =
+  | { type: "image"; data: string; mimeType?: string }
+  | { type: "text"; text: string };
+
+/**
+ * 从工具结果 { content: [...], details } 提取可渲染的文本/图片块。
+ * 返回 null 表示不是标准的 content 结构（走 JSON 展示兜底）。
+ */
+function extractResultBlocks(output: unknown): {
+  blocks: ToolResultBlock[];
+  paths?: string[];
+} | null {
+  if (!output || typeof output !== "object") return null;
+  const obj = output as { content?: unknown; details?: { paths?: unknown } };
+  if (!Array.isArray(obj.content)) return null;
+
+  const blocks: ToolResultBlock[] = [];
+  for (const c of obj.content) {
+    if (!c || typeof c !== "object") continue;
+    const block = c as { type?: unknown; data?: unknown; mimeType?: unknown; text?: unknown };
+    if (block.type === "image" && typeof block.data === "string" && block.data.length > 0) {
+      blocks.push({
+        type: "image",
+        data: block.data,
+        mimeType: typeof block.mimeType === "string" ? block.mimeType : undefined,
+      });
+    } else if (block.type === "text" && typeof block.text === "string") {
+      blocks.push({ type: "text", text: block.text });
+    }
+  }
+  if (blocks.length === 0) return null;
+
+  const rawPaths = obj.details?.paths;
+  const paths = Array.isArray(rawPaths)
+    ? rawPaths.filter((p): p is string => typeof p === "string")
+    : undefined;
+  return { blocks, paths: paths && paths.length > 0 ? paths : undefined };
+}
+
+/** 工具结果主体：图片块渲染 <img>，文本块渲染文本，其余回退 JSON */
+function ToolResultBody({ output }: { output: unknown }) {
+  const parsed = extractResultBlocks(output);
+  if (!parsed) {
+    return (
+      <pre className="mt-0.5 overflow-x-auto rounded-s bg-hover px-2 py-1 text-[12px] text-ink-2">
+        {safeStringify(output)}
+      </pre>
+    );
+  }
+  return (
+    <div className="mt-0.5 space-y-1.5">
+      {parsed.paths && (
+        <div className="overflow-x-auto rounded-s bg-hover px-2 py-1 text-[12px] text-ink-2">
+          {parsed.paths.map((p) => (
+            <div key={p} className="truncate">
+              📎 {p}
+            </div>
+          ))}
+        </div>
+      )}
+      {parsed.blocks.map((b, i) => {
+        // 工具结果块执行后静态不变，索引即可作 key
+        const key = i;
+        if (b.type === "image") {
+          return (
+            <img
+              key={key}
+              src={`data:${b.mimeType ?? "image/png"};base64,${b.data}`}
+              alt="生成的图片"
+              className="max-h-64 rounded-s border border-line bg-card"
+            />
+          );
+        }
+        return (
+          <div key={key} className="whitespace-pre-wrap text-[12px] text-ink-2">
+            {b.text}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 export function ToolCallCard({ block }: ToolCallCardProps) {
   const [expanded, setExpanded] = useState(false);
   const name = block.toolName || "工具";
@@ -100,13 +183,7 @@ export function ToolCallCard({ block }: ToolCallCardProps) {
           {!block.outputDelta && block.output !== undefined && block.output !== "" && (
             <div>
               <div className="text-[11px] text-ink-3">结果</div>
-              <pre
-                className={`mt-0.5 overflow-x-auto rounded-s px-2 py-1 text-[12px] ${
-                  block.status === "error" ? "bg-danger/10 text-danger" : "bg-hover text-ink-2"
-                }`}
-              >
-                {safeStringify(block.output)}
-              </pre>
+              <ToolResultBody output={block.output} />
             </div>
           )}
 
