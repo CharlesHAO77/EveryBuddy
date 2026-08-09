@@ -1,6 +1,7 @@
 /**
  * ThinkingCard - 思考卡片（弱化，见 §0.4 / §6.5）。
  * 默认折叠，流式时显示「思考中…」，完成后可点击展开。
+ * 展开后直接展示内容（无标题头、无复制按钮），带边框卡片 + 左缘 accent 色条。
  */
 import { useState } from "react";
 import type { ThinkingBlock } from "../stores/sessionStore";
@@ -18,11 +19,11 @@ export function ThinkingCard({ block, streaming }: ThinkingCardProps) {
   const done = block.done || !streaming;
 
   return (
-    <div className="select-none">
+    <div>
       <button
         type="button"
         onClick={() => setExpanded((v) => !v)}
-        className="flex items-center gap-1.5 rounded-s px-1.5 py-0.5 text-[12px] text-ink-3 transition hover:bg-hover hover:text-ink-2"
+        className="select-none flex items-center gap-1.5 rounded-s px-1.5 py-0.5 text-[12px] text-ink-3 transition hover:bg-hover hover:text-ink-2"
       >
         <IconLightbulb size={11} strokeWidth={2} />
         {!done ? (
@@ -46,8 +47,10 @@ export function ThinkingCard({ block, streaming }: ThinkingCardProps) {
         )}
       </button>
       {expanded && (
-        <div className="mt-1 ml-5 whitespace-pre-wrap rounded-s bg-hover px-3 py-2 text-[13px] text-ink-2">
-          {done ? block.content || "（无内容）" : block.content}
+        <div className="mt-1 ml-5 rounded-m border border-line bg-card shadow-card">
+          <div className="max-h-96 overflow-y-auto whitespace-pre-wrap border-l-2 border-l-accent/40 px-3 py-2 text-[13px] text-ink-2">
+            {done ? block.content || "（无内容）" : block.content}
+          </div>
         </div>
       )}
     </div>

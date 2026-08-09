@@ -6,23 +6,52 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
+  getActiveModelOfType,
   getApiKey,
   getDefaultProviderId,
   getImageGenModel,
   getVisionModel,
   hasApiKey,
   hasCapability,
+  isChatModelProviderId,
   listProviders,
   type ModelStorePaths,
   migrateFromLegacyConfig,
   providerEntryFromSaveRequest,
   removeProvider,
   saveProvider,
+  setActiveModel,
   setApiKey,
+  typeFromCapabilities,
 } from "../src/main/modelStore";
 
 /** 无能力标签的完整 SaveModelRequest（贴近旧测试语义） */
-const PLAIN_CAP = { vision: false, imageGen: false };
+const LLM_REQ = {
+  id: "p1",
+  name: "DeepSeek",
+  baseUrl: "https://api.deepseek.com/v1",
+  model: "deepseek-v4-flash",
+  isOpenAiCompatible: true,
+  type: "llm" as const,
+};
+
+const VISION_REQ = {
+  id: "v1",
+  name: "Doubao Vision",
+  baseUrl: "https://ark.cn-beijing.volces.com/api/v3",
+  model: "doubao-vision",
+  isOpenAiCompatible: true,
+  type: "vlm" as const,
+};
+
+const GEN_REQ = {
+  id: "g1",
+  name: "Seedream",
+  baseUrl: "https://ark.cn-beijing.volces.com/api/v3",
+  model: "seedream-3-0",
+  isOpenAiCompatible: true,
+  type: "image" as const,
+};
 
 /**
  * 校验 auth.json 权限为 0600（仅 POSIX 生效；Windows 使用 ACL，unix 权限位无意义，
@@ -52,14 +81,7 @@ afterEach(() => {
 
 describe("providerEntryFromSaveRequest", () => {
   it("maps SaveModelRequest to SDK provider entry without apiKey", () => {
-    const entry = providerEntryFromSaveRequest({
-      id: "p1",
-      name: "DeepSeek",
-      baseUrl: "https://api.deepseek.com/v1",
-      model: "deepseek-v4-flash",
-      isOpenAiCompatible: true,
-      capabilities: { vision: false, imageGen: false },
-    });
+    const entry = providerEntryFromSaveRequest(LLM_REQ);
     expect(entry).toEqual({
       name: "DeepSeek",
       baseUrl: "https://api.deepseek.com/v1",
@@ -67,69 +89,49 @@ describe("providerEntryFromSaveRequest", () => {
       compat: { supportsDeveloperRole: false, supportsReasoningEffort: false },
       models: [{ id: "deepseek-v4-flash" }],
       capabilities: { vision: false, imageGen: false },
+      type: "llm",
     });
     expect(entry).not.toHaveProperty("apiKey");
   });
 
   it("omits api for non-OpenAI-compatible", () => {
-    const entry = providerEntryFromSaveRequest({
-      id: "p1",
-      name: "X",
-      baseUrl: "https://x.example",
-      model: "m",
-      isOpenAiCompatible: false,
-      capabilities: { vision: false, imageGen: false },
-    });
+    const entry = providerEntryFromSaveRequest({ ...LLM_REQ, isOpenAiCompatible: false });
     expect(entry.api).toBeUndefined();
   });
 });
 
-describe("capabilities", () => {
-  const visionReq = {
-    id: "v1",
-    name: "Doubao Vision",
-    baseUrl: "https://ark.cn-beijing.volces.com/api/v3",
-    model: "doubao-vision",
-    isOpenAiCompatible: true,
-    capabilities: { vision: true, imageGen: false },
-  };
-  const genReq = {
-    id: "g1",
-    name: "Seedream",
-    baseUrl: "https://ark.cn-beijing.volces.com/api/v3",
-    model: "seedream-3-0",
-    isOpenAiCompatible: true,
-    capabilities: { vision: false, imageGen: true },
-  };
-
-  it("writes models[].input for vision; omits for non-vision", () => {
-    const vision = providerEntryFromSaveRequest(visionReq);
-    expect(vision.models).toEqual([{ id: "doubao-vision", input: ["text", "image"] }]);
-    const plain = providerEntryFromSaveRequest({
-      ...visionReq,
-      id: "p",
-      capabilities: { vision: false, imageGen: false },
-    });
-    expect(plain.models).toEqual([{ id: "doubao-vision" }]);
+describe("type → capabilities", () => {
+  it("writes models[].input for vlm; omits for llm/image", () => {
+    expect(providerEntryFromSaveRequest(VISION_REQ).models).toEqual([
+      { id: "doubao-vision", input: ["text", "image"] },
+    ]);
+    const plain = providerEntryFromSaveRequest(LLM_REQ);
+    expect(plain.models).toEqual([{ id: "deepseek-v4-flash" }]);
     expect(JSON.stringify(plain.models)).not.toContain("input");
+    expect(providerEntryFromSaveRequest(GEN_REQ).models).toEqual([{ id: "seedream-3-0" }]);
   });
 
-  it("round-trips capabilities through save/list", () => {
-    saveProvider(visionReq, paths);
-    saveProvider(genReq, paths);
+  it("derives capabilities from type through save/list", () => {
+    saveProvider(VISION_REQ, paths);
+    saveProvider(GEN_REQ, paths);
+    saveProvider(LLM_REQ, paths);
     const list = listProviders(paths);
-    expect(list.find((m) => m.id === "v1")?.capabilities).toEqual({
-      vision: true,
-      imageGen: false,
-    });
-    expect(list.find((m) => m.id === "g1")?.capabilities).toEqual({
-      vision: false,
-      imageGen: true,
-    });
+    expect(list.find((m) => m.id === "v1")?.capabilities).toEqual({ vision: true, imageGen: false });
+    expect(list.find((m) => m.id === "g1")?.capabilities).toEqual({ vision: false, imageGen: true });
+    expect(list.find((m) => m.id === "p1")?.capabilities).toEqual({ vision: false, imageGen: false });
+    expect(list.find((m) => m.id === "v1")?.type).toBe("vlm");
+    expect(list.find((m) => m.id === "g1")?.type).toBe("image");
   });
 
-  it("defaults missing capabilities to false", () => {
-    // 手写旧格式 models.json（无 capabilities 字段）
+  it("typeFromCapabilities: vision 优先于 imageGen", () => {
+    expect(typeFromCapabilities({ vision: false, imageGen: false })).toBe("llm");
+    expect(typeFromCapabilities({ vision: true, imageGen: false })).toBe("vlm");
+    expect(typeFromCapabilities({ vision: false, imageGen: true })).toBe("image");
+    expect(typeFromCapabilities({ vision: true, imageGen: true })).toBe("vlm");
+  });
+
+  it("infers type for legacy models.json without type field", () => {
+    // 手写旧格式 models.json（无 type，部分带 capabilities）
     writeFileSync(
       paths.modelsPath,
       JSON.stringify({
@@ -140,26 +142,35 @@ describe("capabilities", () => {
             compat: { supportsDeveloperRole: false, supportsReasoningEffort: false },
             models: [{ id: "m" }],
           },
+          vision: {
+            name: "Vision",
+            baseUrl: "https://x.example",
+            compat: { supportsDeveloperRole: false, supportsReasoningEffort: false },
+            models: [{ id: "m" }],
+            capabilities: { vision: true, imageGen: false },
+          },
         },
       }),
       "utf-8",
     );
-    expect(listProviders(paths)[0]?.capabilities).toEqual({ vision: false, imageGen: false });
+    const list = listProviders(paths);
+    expect(list.find((m) => m.id === "old")?.type).toBe("llm");
+    expect(list.find((m) => m.id === "old")?.capabilities).toEqual({ vision: false, imageGen: false });
+    expect(list.find((m) => m.id === "vision")?.type).toBe("vlm");
   });
 
   it("getVisionModel / getImageGenModel pick first tagged provider", () => {
-    saveProvider({ ...visionReq, id: "a" }, paths);
-    saveProvider({ ...genReq, id: "b" }, paths);
-    saveProvider({ ...genReq, id: "c" }, paths);
+    saveProvider({ ...VISION_REQ, id: "a" }, paths);
+    saveProvider({ ...GEN_REQ, id: "b" }, paths);
+    saveProvider({ ...GEN_REQ, id: "c" }, paths);
     expect(getVisionModel(paths)).toBe("a");
     expect(getImageGenModel(paths)).toBe("b");
     expect(hasCapability("a", "vision", paths)).toBe(true);
     expect(hasCapability("a", "imageGen", paths)).toBe(false);
-    expect(getVisionModel(paths)).toBe("a");
   });
 
   it("getApiKey reads auth.json", () => {
-    saveProvider(visionReq, paths);
+    saveProvider(VISION_REQ, paths);
     setApiKey("v1", "sk-vision", paths);
     expect(getApiKey("v1", paths)).toBe("sk-vision");
     expect(getApiKey("ghost", paths)).toBeUndefined();
@@ -167,23 +178,21 @@ describe("capabilities", () => {
 });
 
 describe("save / list providers", () => {
-  const req = {
-    id: "p1",
-    name: "DeepSeek",
-    baseUrl: "https://api.deepseek.com/v1",
-    model: "deepseek-v4-flash",
-    isOpenAiCompatible: true,
-    capabilities: { ...PLAIN_CAP },
-  };
-
   it("round-trips saveProvider -> listProviders", () => {
-    saveProvider(req, paths);
-    expect(listProviders(paths)).toEqual([{ ...req, hasApiKey: false }]);
+    saveProvider(LLM_REQ, paths);
+    expect(listProviders(paths)).toEqual([
+      {
+        ...LLM_REQ,
+        hasApiKey: false,
+        capabilities: { vision: false, imageGen: false },
+        active: false,
+      },
+    ]);
   });
 
   it("upserts existing provider", () => {
-    saveProvider(req, paths);
-    saveProvider({ ...req, name: "DeepSeek2", model: "deepseek-v4-flash2" }, paths);
+    saveProvider(LLM_REQ, paths);
+    saveProvider({ ...LLM_REQ, name: "DeepSeek2", model: "deepseek-v4-flash2" }, paths);
     const list = listProviders(paths);
     expect(list).toHaveLength(1);
     expect(list[0]?.model).toBe("deepseek-v4-flash2");
@@ -191,19 +200,34 @@ describe("save / list providers", () => {
   });
 
   it("writes no apiKey field into models.json", () => {
-    saveProvider(req, paths);
+    saveProvider(LLM_REQ, paths);
     const raw = JSON.parse(readFileSync(paths.modelsPath, "utf-8"));
     expect(raw.providers.p1).not.toHaveProperty("apiKey");
   });
 
-  it("getDefaultProviderId returns first provider", () => {
-    saveProvider({ ...req, id: "a" }, paths);
-    saveProvider({ ...req, id: "b" }, paths);
-    expect(getDefaultProviderId(paths)).toBe("a");
+  it("getDefaultProviderId returns first non-image provider", () => {
+    saveProvider({ ...GEN_REQ, id: "img" }, paths);
+    saveProvider({ ...LLM_REQ, id: "chat" }, paths);
+    saveProvider({ ...VISION_REQ, id: "vis" }, paths);
+    // image 在前，应跳过取第一个可对话模型
+    expect(getDefaultProviderId(paths)).toBe("chat");
+  });
+
+  it("getDefaultProviderId returns undefined when only image providers exist", () => {
+    saveProvider({ ...GEN_REQ, id: "img" }, paths);
+    expect(getDefaultProviderId(paths)).toBeUndefined();
+  });
+
+  it("isChatModelProviderId: image 专用不可对话", () => {
+    saveProvider(GEN_REQ, paths);
+    saveProvider(LLM_REQ, paths);
+    expect(isChatModelProviderId("g1", paths)).toBe(false);
+    expect(isChatModelProviderId("p1", paths)).toBe(true);
+    expect(isChatModelProviderId("ghost", paths)).toBe(false);
   });
 
   it("removeProvider clears both models.json and auth.json", () => {
-    saveProvider(req, paths);
+    saveProvider(LLM_REQ, paths);
     setApiKey("p1", "sk-secret", paths);
     removeProvider("p1", paths);
     expect(listProviders(paths)).toEqual([]);
@@ -212,18 +236,78 @@ describe("save / list providers", () => {
   });
 });
 
-describe("setApiKey / auth.json", () => {
-  const req = {
-    id: "p1",
-    name: "DeepSeek",
-    baseUrl: "https://api.deepseek.com/v1",
-    model: "deepseek-v4-flash",
-    isOpenAiCompatible: true,
-    capabilities: { ...PLAIN_CAP },
-  };
+describe("setActiveModel / 每类型激活模型", () => {
+  it("激活一个模型并清空同类型其余 active，不同类型互不影响", () => {
+    saveProvider({ ...LLM_REQ, id: "a" }, paths);
+    saveProvider({ ...LLM_REQ, id: "b" }, paths);
+    saveProvider({ ...VISION_REQ, id: "v1" }, paths);
+    saveProvider({ ...GEN_REQ, id: "g1" }, paths);
 
+    setActiveModel("b", paths);
+    const list = listProviders(paths);
+    expect(list.find((m) => m.id === "a")?.active).toBe(false);
+    expect(list.find((m) => m.id === "b")?.active).toBe(true);
+    // 不同类型不受影响
+    expect(list.find((m) => m.id === "v1")?.active).toBe(false);
+    expect(list.find((m) => m.id === "g1")?.active).toBe(false);
+
+    // 再激活 vlm：llm 的 active 保留
+    setActiveModel("v1", paths);
+    const list2 = listProviders(paths);
+    expect(list2.find((m) => m.id === "b")?.active).toBe(true);
+    expect(list2.find((m) => m.id === "v1")?.active).toBe(true);
+    expect(getActiveModelOfType("llm", paths)).toBe("b");
+    expect(getActiveModelOfType("vlm", paths)).toBe("v1");
+  });
+
+  it("throws for unknown provider", () => {
+    expect(() => setActiveModel("ghost", paths)).toThrow("模型不存在");
+  });
+
+  it("saveProvider preserves active on upsert", () => {
+    saveProvider({ ...LLM_REQ, id: "a" }, paths);
+    setActiveModel("a", paths);
+    saveProvider({ ...LLM_REQ, id: "a", name: "Renamed" }, paths);
+    expect(listProviders(paths).find((m) => m.id === "a")?.active).toBe(true);
+  });
+});
+
+describe("激活模型优先作为默认", () => {
+  it("getDefaultProviderId：无 active 回退第一个非 image", () => {
+    saveProvider({ ...LLM_REQ, id: "llmA" }, paths);
+    saveProvider({ ...LLM_REQ, id: "llmB" }, paths);
+    expect(getDefaultProviderId(paths)).toBe("llmA");
+    setActiveModel("llmB", paths);
+    expect(getDefaultProviderId(paths)).toBe("llmB");
+  });
+
+  it("getDefaultProviderId：无 active LLM 时回退 active VLM", () => {
+    saveProvider({ ...VISION_REQ, id: "vis" }, paths);
+    saveProvider({ ...LLM_REQ, id: "llm" }, paths);
+    setActiveModel("vis", paths);
+    expect(getDefaultProviderId(paths)).toBe("vis");
+  });
+
+  it("getVisionModel prefers active VLM", () => {
+    saveProvider({ ...VISION_REQ, id: "visA" }, paths);
+    saveProvider({ ...VISION_REQ, id: "visB" }, paths);
+    expect(getVisionModel(paths)).toBe("visA");
+    setActiveModel("visB", paths);
+    expect(getVisionModel(paths)).toBe("visB");
+  });
+
+  it("getImageGenModel prefers active Image", () => {
+    saveProvider({ ...GEN_REQ, id: "genA" }, paths);
+    saveProvider({ ...GEN_REQ, id: "genB" }, paths);
+    expect(getImageGenModel(paths)).toBe("genA");
+    setActiveModel("genB", paths);
+    expect(getImageGenModel(paths)).toBe("genB");
+  });
+});
+
+describe("setApiKey / auth.json", () => {
   it("writes SDK AuthStorage format with mode 0600", () => {
-    saveProvider(req, paths);
+    saveProvider(LLM_REQ, paths);
     setApiKey("p1", "sk-secret", paths);
     const raw = JSON.parse(readFileSync(paths.authPath, "utf-8"));
     expect(raw.p1).toEqual({ type: "api_key", key: "sk-secret" });
@@ -233,8 +317,8 @@ describe("setApiKey / auth.json", () => {
   });
 
   it("merges without clobbering other providers", () => {
-    saveProvider({ ...req, id: "a" }, paths);
-    saveProvider({ ...req, id: "b" }, paths);
+    saveProvider({ ...LLM_REQ, id: "a" }, paths);
+    saveProvider({ ...LLM_REQ, id: "b" }, paths);
     setApiKey("a", "sk-a", paths);
     setApiKey("b", "sk-b", paths);
     const raw = JSON.parse(readFileSync(paths.authPath, "utf-8"));
@@ -247,7 +331,7 @@ describe("setApiKey / auth.json", () => {
   });
 
   it("leaves no .tmp file behind after write", () => {
-    saveProvider(req, paths);
+    saveProvider(LLM_REQ, paths);
     setApiKey("p1", "sk-secret", paths);
     const leftovers = readdirSync(tmpDir).filter((f) => f.endsWith(".tmp"));
     expect(leftovers).toEqual([]);

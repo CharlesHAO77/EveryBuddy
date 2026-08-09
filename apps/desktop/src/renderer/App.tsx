@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { MainView } from "./components/MainView";
-import { ModelSettings } from "./components/ModelSettings";
+import { SettingsPanel } from "./components/SettingsPanel";
 import { Sidebar } from "./components/Sidebar";
 import { useAgentStream } from "./hooks/useAgentStream";
 import { useSessionStore } from "./stores/sessionStore";
@@ -14,8 +14,9 @@ export function App() {
   const loadModels = useUIStore((s) => s.loadModels);
   const models = useUIStore((s) => s.models);
   const uiLoaded = useUIStore((s) => s.loaded);
-  const isModelSettingsOpen = useUIStore((s) => s.isModelSettingsOpen);
-  const setModelSettingsOpen = useUIStore((s) => s.setModelSettingsOpen);
+  const isSettingsOpen = useUIStore((s) => s.isSettingsOpen);
+  const setSettingsOpen = useUIStore((s) => s.setSettingsOpen);
+  const setSettingsSection = useUIStore((s) => s.setSettingsSection);
 
   const currentTaskTitle = useSessionStore(
     (s) => s.tasks.find((t) => t.id === s.currentTaskId)?.title ?? null,
@@ -39,12 +40,13 @@ export function App() {
     void loadModels();
   }, [initFromBackend, loadModels]);
 
-  // 若没有任何模型配置，自动打开模型设置面板，避免发送消息后无回复
+  // 若没有任何可对话（聊天）模型，自动打开设置并落到「模型设置」，避免发送消息后无回复
   useEffect(() => {
-    if (sessionLoaded && uiLoaded && models.length === 0) {
-      setModelSettingsOpen(true);
+    if (sessionLoaded && uiLoaded && models.filter((m) => m.type !== "image").length === 0) {
+      setSettingsSection("models");
+      setSettingsOpen(true);
     }
-  }, [sessionLoaded, uiLoaded, models.length, setModelSettingsOpen]);
+  }, [sessionLoaded, uiLoaded, models, setSettingsSection, setSettingsOpen]);
 
   return (
     <div className="flex h-screen w-full flex-col overflow-hidden bg-paper">
@@ -52,7 +54,7 @@ export function App() {
         <Sidebar />
         <MainView />
       </div>
-      {isModelSettingsOpen && <ModelSettings onClose={() => setModelSettingsOpen(false)} />}
+      {isSettingsOpen && <SettingsPanel onClose={() => setSettingsOpen(false)} />}
     </div>
   );
 }

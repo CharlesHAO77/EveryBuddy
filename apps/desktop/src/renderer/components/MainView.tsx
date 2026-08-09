@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { useAttachments } from "../hooks/useAttachments";
 import { type ChatMessage, useSessionStore } from "../stores/sessionStore";
-import { type CategoryId, useUIStore } from "../stores/uiStore";
+import { getChatDefaultId, type CategoryId, useUIStore } from "../stores/uiStore";
 import { AttachmentPreview } from "./AttachmentPreview";
 import { ConversationTitle } from "./ConversationTitle";
 import {
@@ -22,10 +22,7 @@ import { ModelSelector } from "./ModelSelector";
 /* ── Model Selector Helpers ───────────────────── */
 
 function useDefaultProviderId() {
-  return useUIStore((s) => {
-    if (s.currentModelId) return s.currentModelId;
-    return s.models[0]?.id ?? null;
-  });
+  return useUIStore((s) => getChatDefaultId(s.models));
 }
 
 type MessageGroup =
@@ -277,7 +274,7 @@ function WelcomeView() {
   const currentTaskId = useSessionStore((s) => s.currentTaskId);
   const createTask = useSessionStore((s) => s.createTask);
   const sendMessage = useSessionStore((s) => s.sendMessage);
-  const setModelSettingsOpen = useUIStore((s) => s.setModelSettingsOpen);
+  const setSettingsOpen = useUIStore((s) => s.setSettingsOpen);
   const defaultProviderId = useDefaultProviderId();
   const [welcomeProviderId, setWelcomeProviderId] = useState<string | null>(defaultProviderId);
   const {
@@ -421,10 +418,10 @@ function WelcomeView() {
                   selectedId={effectiveProviderId}
                   onSelect={(id) => {
                     setWelcomeProviderId(id);
-                    // 同步 uiStore 的默认值，使新建任务默认使用该模型
-                    useUIStore.getState().setCurrentModel(id);
+                    // 选择聊天模型即设为该类型的激活模型，新建任务默认使用
+                    void useUIStore.getState().setActiveModel(id);
                   }}
-                  onOpenSettings={() => setModelSettingsOpen(true)}
+                  onOpenSettings={() => setSettingsOpen(true)}
                 />
 
                 {/* Mic */}
@@ -479,7 +476,7 @@ function ChatView({ taskId }: { taskId: string }) {
   const sendMessage = useSessionStore((s) => s.sendMessage);
   const abortTask = useSessionStore((s) => s.abortTask);
   const setTaskProvider = useSessionStore((s) => s.setTaskProvider);
-  const setModelSettingsOpen = useUIStore((s) => s.setModelSettingsOpen);
+  const setSettingsOpen = useUIStore((s) => s.setSettingsOpen);
   const defaultProviderId = useDefaultProviderId();
   const {
     attachments,
@@ -591,7 +588,7 @@ function ChatView({ taskId }: { taskId: string }) {
                 <ModelSelector
                   selectedId={taskProviderId}
                   onSelect={(id) => setTaskProvider(taskId, id)}
-                  onOpenSettings={() => setModelSettingsOpen(true)}
+                  onOpenSettings={() => setSettingsOpen(true)}
                 />
                 <button
                   type="button"

@@ -231,7 +231,7 @@ export function Sidebar() {
           <div className="pb-[12px]">
             <button
               type="button"
-              onClick={() => useUIStore.getState().setModelSettingsOpen(true)}
+              onClick={() => useUIStore.getState().setSettingsOpen(true)}
               className="flex h-[30px] w-[30px] items-center justify-center rounded-s text-ink-2 transition hover:bg-hover hover:text-ink"
               title="设置"
             >
@@ -379,9 +379,9 @@ export function Sidebar() {
               </button>
               <button
                 type="button"
-                onClick={() => useUIStore.getState().setModelSettingsOpen(true)}
+                onClick={() => useUIStore.getState().setSettingsOpen(true)}
                 className="flex h-[28px] w-[28px] items-center justify-center rounded-s text-ink-2 transition hover:bg-hover hover:text-ink"
-                title="模型设置"
+                title="设置"
               >
                 <IconSettings />
               </button>

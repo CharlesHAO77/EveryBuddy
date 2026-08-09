@@ -251,4 +251,10 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
     modelStore.setApiKey(req.providerId, req.apiKey);
     await agentRuntime.refreshModel();
   });
+
+  ipcMain.handle("config:setActiveModel", async (_evt, raw) => {
+    const { id } = validate(idRequestSchema, raw);
+    modelStore.setActiveModel(id);
+    await agentRuntime.refreshModel();
+  });
 }

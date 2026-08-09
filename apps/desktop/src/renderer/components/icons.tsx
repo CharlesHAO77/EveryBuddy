@@ -278,3 +278,30 @@ export function IconLightbulb(props: IconProps) {
     </Svg>
   );
 }
+
+/* ── 复制 / 设置 ── */
+
+export function IconCopy(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <rect x="9" y="9" width="13" height="13" rx="2" />
+      <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1" />
+    </Svg>
+  );
+}
+
+export function IconSlidersHorizontal(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <line x1="4" y1="21" x2="4" y2="14" />
+      <line x1="4" y1="10" x2="4" y2="3" />
+      <line x1="12" y1="21" x2="12" y2="12" />
+      <line x1="12" y1="8" x2="12" y2="3" />
+      <line x1="20" y1="21" x2="20" y2="16" />
+      <line x1="20" y1="12" x2="20" y2="3" />
+      <line x1="1" y1="14" x2="7" y2="14" />
+      <line x1="9" y1="8" x2="15" y2="8" />
+      <line x1="17" y1="16" x2="23" y2="16" />
+    </Svg>
+  );
+}

@@ -44,6 +44,7 @@ const api: ElectronAPI = {
     saveModel: (req) => ipcRenderer.invoke("config:saveModel", req),
     removeModel: (id) => ipcRenderer.invoke("config:removeModel", { id }),
     setApiKey: (req) => ipcRenderer.invoke("config:setApiKey", req),
+    setActiveModel: (id) => ipcRenderer.invoke("config:setActiveModel", { id }),
   },
   system: {
     // 仅在 preload（拥有 node/electron 环境）中可调；contextBridge 支持 File 对象跨桥传递

@@ -230,8 +230,11 @@ export interface HistoryMessage {
 // Config（模型配置，不含 API Key 明文）
 // ────────────────────────────────────────────────
 
+/** 模型类型：llm 纯对话 / vlm 视觉理解（可对话+识图）/ image 生图（不可对话） */
+export type ModelType = "llm" | "vlm" | "image";
+
 /**
- * 模型能力标签：
+ * 模型能力标签（由 ModelType 派生，保留供 SDK 调度兼容）：
  *  - vision   视觉理解（映射 SDK models[].input = ["text","image"]，决定是否把图片发给该模型）
  *  - imageGen 生图（供 generate_image 工具调度）
  */
@@ -249,6 +252,10 @@ export interface ModelProviderConfig {
   isOpenAiCompatible: boolean;
   hasApiKey: boolean;
   capabilities: ModelCapabilities;
+  /** 显式类型；读取时对缺省条目由 capabilities 推断，故恒有值 */
+  type: ModelType;
+  /** 该类型下的激活（默认）模型，每类型至多一个 */
+  active: boolean;
 }
 
 export interface SaveModelRequest {
@@ -257,7 +264,8 @@ export interface SaveModelRequest {
   baseUrl: string;
   model: string;
   isOpenAiCompatible: boolean;
-  capabilities: ModelCapabilities;
+  /** 唯一类型来源；capabilities 由主进程据此派生（不再从渲染进程收） */
+  type: ModelType;
 }
 
 export interface SetApiKeyRequest {
@@ -314,16 +322,15 @@ export const setTaskProviderRequestSchema = z.object({
   providerId: z.string().min(1),
 });
 
+export const modelTypeSchema = z.enum(["llm", "vlm", "image"]);
+
 export const saveModelRequestSchema = z.object({
   id: z.string().min(1),
   name: z.string().min(1),
   baseUrl: z.string().min(1),
   model: z.string().min(1),
   isOpenAiCompatible: z.boolean(),
-  capabilities: z.object({
-    vision: z.boolean(),
-    imageGen: z.boolean(),
-  }),
+  type: modelTypeSchema,
 });
 
 export const setApiKeyRequestSchema = z.object({
@@ -384,6 +391,8 @@ export interface ElectronAPI {
     saveModel: (req: SaveModelRequest) => Promise<ModelProviderConfig>;
     removeModel: (id: string) => Promise<void>;
     setApiKey: (req: SetApiKeyRequest) => Promise<void>;
+    /** 将某模型设为该类型下的激活模型（每类型一个），持久化到 models.json */
+    setActiveModel: (id: string) => Promise<void>;
   };
   system: {
     /** 从渲染进程 File 对象取得本地绝对路径（Electron 32+ 移除 File.path） */

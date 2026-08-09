@@ -9,9 +9,11 @@ import {
   createTaskRequestSchema,
   createWorkspaceRequestSchema,
   idRequestSchema,
+  modelTypeSchema,
   openPathRequestSchema,
   promptRequestSchema,
   renameTaskRequestSchema,
+  saveModelRequestSchema,
 } from "./index";
 
 describe("renameTaskRequestSchema", () => {
@@ -101,6 +103,46 @@ describe("回归：既有 schema", () => {
     expect(
       promptRequestSchema.safeParse({ sessionId: "a", text: "", attachments: [] }).success,
     ).toBe(false);
+  });
+});
+
+describe("saveModelRequestSchema", () => {
+  const valid = {
+    id: "a",
+    name: "n",
+    baseUrl: "https://x.example",
+    model: "m",
+    isOpenAiCompatible: true,
+  };
+
+  it("accepts valid request with type", () => {
+    expect(saveModelRequestSchema.safeParse({ ...valid, type: "vlm" }).success).toBe(true);
+  });
+
+  it("modelTypeSchema accepts all three types", () => {
+    for (const type of ["llm", "vlm", "image"]) {
+      expect(modelTypeSchema.safeParse(type).success).toBe(true);
+    }
+  });
+
+  it("rejects missing type", () => {
+    expect(saveModelRequestSchema.safeParse(valid).success).toBe(false);
+  });
+
+  it("rejects invalid type", () => {
+    expect(saveModelRequestSchema.safeParse({ ...valid, type: "bogus" }).success).toBe(false);
+  });
+
+  it("strips unknown capabilities key (旧渲染进程载荷兼容)", () => {
+    const result = saveModelRequestSchema.safeParse({
+      ...valid,
+      type: "llm",
+      capabilities: { vision: true, imageGen: false },
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data).not.toHaveProperty("capabilities");
+    }
   });
 });
 

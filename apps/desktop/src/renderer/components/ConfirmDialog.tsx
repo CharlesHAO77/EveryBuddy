@@ -15,7 +15,7 @@ interface ConfirmDialogProps {
   onCancel: () => void;
 }
 
-/** 通用确认弹窗（删除任务/移除空间等危险操作）。样式范式参照 ModelSettings 的 Modal。 */
+/** 通用确认弹窗（删除任务/移除空间等危险操作）。样式范式参照 SettingsPanel 全屏覆盖层。 */
 export function ConfirmDialog({
   open,
   title,

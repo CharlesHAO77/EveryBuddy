@@ -38,6 +38,7 @@ import {
   getImageGenModel,
   getProvider,
   getVisionModel,
+  isChatModelProviderId,
   MODELS_JSON_PATH,
 } from "./modelStore";
 import { createFindOperations } from "./tools/findTool";
@@ -167,14 +168,16 @@ class AgentRuntime {
       sessionManager = sdk.SessionManager.create(cwd, sessionDir) as SessionManagerInstance;
     }
 
-    // 解析模型：调用方指定 → 模式配置默认 → 第一个可用（与旧逻辑一致）
+    // 解析模型：调用方指定 → 模式配置默认 → 第一个可用（与旧逻辑一致）；
+    // 每处都过滤 image 专用 provider（SDK 把无 input 的模型默认按 text 处理，会误选生图模型做对话）
     let model: PiModel | undefined;
-    if (providerId) model = this.resolveModel(providerId);
-    if (!model && cfg.defaultModelProviderId) model = this.resolveModel(cfg.defaultModelProviderId);
+    if (providerId && isChatModelProviderId(providerId)) model = this.resolveModel(providerId);
+    if (!model && cfg.defaultModelProviderId && isChatModelProviderId(cfg.defaultModelProviderId))
+      model = this.resolveModel(cfg.defaultModelProviderId);
     if (!model) {
-      // 回退：取第一个可用模型
+      // 回退：取第一个可对话的可用模型
       const available = await this.modelRuntime?.getAvailable();
-      model = available && available.length > 0 ? (available[0] as PiModel) : undefined;
+      model = available?.find((m) => isChatModelProviderId(m.provider)) as PiModel | undefined;
     }
     if (!model) {
       throw new Error("未配置可用模型，请先在设置中添加模型并配置 API Key");
@@ -319,7 +322,8 @@ class AgentRuntime {
       return;
     }
 
-    if (providerId) {
+    // 仅当目标是可对话模型时才切换（任务里残留的 image providerId 保持会话原模型）
+    if (providerId && isChatModelProviderId(providerId)) {
       const model = this.resolveModel(providerId);
       if (model && typeof state.session.setModel === "function") {
         try {

@@ -13,9 +13,11 @@ export function ModelSelector({ selectedId, onSelect, onOpenSettings }: ModelSel
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  const selectedModel = models.find((m) => m.id === selectedId);
-  const effectiveId = selectedModel ? selectedModel.id : models[0]?.id;
-  const displayName = selectedModel?.name ?? models[0]?.name ?? "请先配置模型";
+  // 聊天下拉只列可对话模型（LLM + VLM），image 专用不可作为聊天模型
+  const chatModels = models.filter((m) => m.type !== "image");
+  const selectedModel = chatModels.find((m) => m.id === selectedId);
+  const effectiveId = selectedModel ? selectedModel.id : chatModels[0]?.id;
+  const displayName = selectedModel?.name ?? chatModels[0]?.name ?? "请先配置模型";
 
   useEffect(() => {
     if (!open) return;
@@ -36,7 +38,7 @@ export function ModelSelector({ selectedId, onSelect, onOpenSettings }: ModelSel
   }, [open]);
 
   const handleTriggerClick = () => {
-    if (models.length === 0) {
+    if (chatModels.length === 0) {
       onOpenSettings();
       return;
     }
@@ -56,12 +58,12 @@ export function ModelSelector({ selectedId, onSelect, onOpenSettings }: ModelSel
         className="flex items-center gap-[4px] rounded-s px-[8px] py-[4px] text-[13px] text-ink-3 transition hover:bg-hover hover:text-ink-2"
       >
         {displayName}
-        {models.length > 0 && <IconChevronDown size={10} strokeWidth={2} title="展开" />}
+        {chatModels.length > 0 && <IconChevronDown size={10} strokeWidth={2} title="展开" />}
       </button>
 
-      {open && models.length > 0 && (
+      {open && chatModels.length > 0 && (
         <div className="absolute bottom-full right-0 z-50 mb-1 w-[180px] rounded-m border border-line bg-card py-1 shadow-pop">
-          {models.map((m) => {
+          {chatModels.map((m) => {
             const isSelected = m.id === effectiveId;
             return (
               <button

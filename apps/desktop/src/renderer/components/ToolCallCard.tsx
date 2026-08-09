@@ -1,9 +1,10 @@
 /**
  * ToolCallCard - 工具调用卡片（弱化，见 §0.4 / §6.6）。
- * 折叠态单行芯片：工具名 + 状态图标；展开态显示参数与输出（含 bash 增量）。
+ * 折叠态单行芯片：工具名 + 状态图标；展开态分节显示参数/输出/结果，各带复制按钮。
  */
 import { useState } from "react";
 import type { ToolBlock } from "../stores/sessionStore";
+import { CopyButton } from "./CopyButton";
 import {
   IconCheck,
   IconChevronDown,
@@ -84,6 +85,21 @@ function extractResultBlocks(output: unknown): {
   return { blocks, paths: paths && paths.length > 0 ? paths : undefined };
 }
 
+/** 工具结果复制文本：文本块逐条拼接、路径列出、图片只记数量（不复制兆字节 base64） */
+function serializeToolResultForCopy(output: unknown): string {
+  const parsed = extractResultBlocks(output);
+  if (!parsed) return safeStringify(output);
+  const lines: string[] = [];
+  if (parsed.paths?.length) lines.push(...parsed.paths.map((p) => `📎 ${p}`));
+  let imageCount = 0;
+  for (const b of parsed.blocks) {
+    if (b.type === "text") lines.push(b.text);
+    else imageCount += 1;
+  }
+  if (imageCount > 0) lines.push(`（含 ${imageCount} 张图片，图片数据未复制）`);
+  return lines.join("\n");
+}
+
 /** 工具结果主体：图片块渲染 <img>，文本块渲染文本，其余回退 JSON */
 function ToolResultBody({ output }: { output: unknown }) {
   const parsed = extractResultBlocks(output);
@@ -128,6 +144,16 @@ function ToolResultBody({ output }: { output: unknown }) {
   );
 }
 
+/** 展开区小节头：标签 + 复制按钮 */
+function Section({ label, copyText }: { label: string; copyText: string }) {
+  return (
+    <div className="flex items-center justify-between">
+      <span className="text-[11px] text-ink-3">{label}</span>
+      <CopyButton text={copyText} />
+    </div>
+  );
+}
+
 export function ToolCallCard({ block }: ToolCallCardProps) {
   const [expanded, setExpanded] = useState(false);
   const name = block.toolName || "工具";
@@ -141,11 +167,11 @@ export function ToolCallCard({ block }: ToolCallCardProps) {
           : "失败";
 
   return (
-    <div className="select-none">
+    <div>
       <button
         type="button"
         onClick={() => setExpanded((v) => !v)}
-        className="flex items-center gap-1.5 rounded-s bg-hover px-2 py-1 text-[12px] text-ink-2 transition hover:bg-active"
+        className="select-none flex items-center gap-1.5 rounded-s border border-line bg-card px-2 py-1 text-[12px] text-ink-2 transition hover:bg-hover"
       >
         <IconWrench size={11} strokeWidth={2} className="text-ink-3" />
         <span className="font-semibold">{name}</span>
@@ -162,32 +188,46 @@ export function ToolCallCard({ block }: ToolCallCardProps) {
 
       {expanded && (
         <div className="mt-1 ml-4 space-y-1.5 border-l border-line pl-3">
-          {block.args !== undefined && (
+          {/* 参数（流式拼参时 args 未定、argDelta 累积，展示与复制同一字符串） */}
+          {(block.args !== undefined || block.argDelta) && (
             <div>
-              <div className="text-[11px] text-ink-3">参数</div>
+              <Section
+                label="参数"
+                copyText={block.args !== undefined ? safeStringify(block.args) : block.argDelta}
+              />
               <pre className="mt-0.5 overflow-x-auto rounded-s bg-hover px-2 py-1 text-[12px] text-ink-2">
-                {safeStringify(block.args)}
+                {block.args !== undefined ? safeStringify(block.args) : block.argDelta}
               </pre>
             </div>
           )}
 
+          {/* 输出（bash 增量，终端样式） */}
           {block.outputDelta && (
             <div>
-              <div className="text-[11px] text-ink-3">输出</div>
+              <Section label="输出" copyText={block.outputDelta} />
               <pre className="mt-0.5 max-h-48 overflow-auto rounded-s bg-terminal px-2 py-1 text-[12px] leading-relaxed text-terminal-text">
                 {block.outputDelta}
               </pre>
             </div>
           )}
 
+          {/* 最终结果（结构化/图片渲染，可滚动） */}
           {!block.outputDelta && block.output !== undefined && block.output !== "" && (
             <div>
-              <div className="text-[11px] text-ink-3">结果</div>
-              <ToolResultBody output={block.output} />
+              <Section label="结果" copyText={serializeToolResultForCopy(block.output)} />
+              <div className="mt-0.5 max-h-64 overflow-y-auto">
+                <ToolResultBody output={block.output} />
+              </div>
             </div>
           )}
 
-          {block.error && <div className="text-[12px] text-danger">{block.error}</div>}
+          {/* 错误 */}
+          {block.error && (
+            <div>
+              <Section label="错误" copyText={block.error} />
+              <div className="mt-0.5 text-[12px] text-danger">{block.error}</div>
+            </div>
+          )}
         </div>
       )}
     </div>
