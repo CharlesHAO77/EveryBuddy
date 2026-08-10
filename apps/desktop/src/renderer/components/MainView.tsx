@@ -513,6 +513,9 @@ function ChatView({ taskId }: { taskId: string }) {
   const taskProviderId = task?.providerId ?? defaultProviderId;
   const isStreaming = task?.isStreaming ?? false;
   const hydrating = useSessionStore((s) => s.hydratingIds.includes(taskId));
+  const chatNotices = useSessionStore((s) => s.chatNotices[taskId]);
+  const notices = chatNotices ?? [];
+  const dismissChatNotice = useSessionStore((s) => s.dismissChatNotice);
 
   // 自动滚动到底部：仅当用户已在底部附近时，避免打断查看历史
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -557,6 +560,28 @@ function ChatView({ taskId }: { taskId: string }) {
     <div className="flex h-full flex-col">
       {/* Messages */}
       <div ref={scrollRef} onScroll={handleScroll} className="flex-1 overflow-y-auto px-6 py-6">
+        {/* 对话内居中提示条（计划模式切换等 extension_notify，4s 自动消失） */}
+        {notices.length > 0 && (
+          <div className="mx-auto mb-3 flex w-full max-w-3xl flex-col items-center gap-2">
+            {notices.map((n) => (
+              <div
+                key={n.id}
+                role="status"
+                className="flex items-center gap-2 rounded-full border border-line bg-card px-4 py-1.5 text-[12px] text-ink-2 shadow-card"
+              >
+                <span className="whitespace-pre-wrap">{n.message}</span>
+                <button
+                  type="button"
+                  onClick={() => dismissChatNotice(taskId, n.id)}
+                  aria-label="关闭"
+                  className="shrink-0 rounded-full px-1 text-ink-3 transition hover:bg-hover hover:text-ink"
+                >
+                  ✕
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
         {messages.length === 0 ? (
           <div className="flex min-h-full flex-col items-center justify-center">
             <p className="text-sm text-ink-3">

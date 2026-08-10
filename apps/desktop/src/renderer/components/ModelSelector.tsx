@@ -55,14 +55,15 @@ export function ModelSelector({ selectedId, onSelect, onOpenSettings }: ModelSel
       <button
         type="button"
         onClick={handleTriggerClick}
-        className="flex items-center gap-[4px] rounded-s px-[8px] py-[4px] text-[13px] text-ink-3 transition hover:bg-hover hover:text-ink-2"
+        className="flex items-center gap-[5px] rounded-s px-2 py-[5px] text-[12px] transition bg-hover text-ink-2 hover:bg-active hover:text-ink"
       >
         {displayName}
         {chatModels.length > 0 && <IconChevronDown size={10} strokeWidth={2} title="展开" />}
       </button>
 
       {open && chatModels.length > 0 && (
-        <div className="absolute bottom-full right-0 z-50 mb-1 w-[180px] rounded-m border border-line bg-card py-1 shadow-pop">
+        <div className="absolute bottom-full right-0 z-50 mb-[6px] w-[180px] rounded-m border border-line bg-card py-1 shadow-pop">
+          <div className="px-3 pb-1 pt-1 text-[11px] tracking-wide text-ink-3">模型</div>
           {chatModels.map((m) => {
             const isSelected = m.id === effectiveId;
             return (
@@ -70,11 +71,13 @@ export function ModelSelector({ selectedId, onSelect, onOpenSettings }: ModelSel
                 key={m.id}
                 type="button"
                 onClick={() => handleSelect(m.id)}
-                className={`flex w-full items-center justify-between px-3 py-2 text-left text-[14px] transition ${
-                  isSelected ? "bg-accent-tint text-accent-strong" : "text-ink-2 hover:bg-hover"
+                className={`flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-[13px] transition ${
+                  isSelected
+                    ? "bg-accent-tint font-semibold text-accent-strong"
+                    : "text-ink-2 hover:bg-hover"
                 }`}
               >
-                <span className="flex min-w-0 items-center gap-1.5">
+                <span className="flex min-w-0 items-center gap-2">
                   <span className="truncate">{m.name}</span>
                   {m.capabilities?.vision && (
                     <span className="shrink-0 rounded-full bg-accent-tint px-1.5 py-px text-[10px] text-accent-strong">
@@ -87,7 +90,9 @@ export function ModelSelector({ selectedId, onSelect, onOpenSettings }: ModelSel
                     </span>
                   )}
                 </span>
-                {isSelected && <IconCheck size={12} strokeWidth={2} title="已选" />}
+                {isSelected && (
+                  <IconCheck size={12} strokeWidth={2.5} className="shrink-0" title="已选" />
+                )}
               </button>
             );
           })}

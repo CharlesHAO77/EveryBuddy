@@ -3,7 +3,6 @@ import { MainView } from "./components/MainView";
 import { RightPanel } from "./components/RightPanel";
 import { SettingsPanel } from "./components/SettingsPanel";
 import { Sidebar } from "./components/Sidebar";
-import { ToastHost } from "./components/ToastHost";
 import { useAgentStream } from "./hooks/useAgentStream";
 import { useSessionStore } from "./stores/sessionStore";
 import { useUIStore } from "./stores/uiStore";
@@ -58,7 +57,6 @@ export function App() {
         <RightPanel />
       </div>
       {isSettingsOpen && <SettingsPanel onClose={() => setSettingsOpen(false)} />}
-      <ToastHost />
     </div>
   );
 }

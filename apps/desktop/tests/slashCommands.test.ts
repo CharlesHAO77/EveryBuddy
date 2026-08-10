@@ -34,7 +34,8 @@ describe("filterSlashCommands", () => {
     expect(filterSlashCommands("zzz", ctx)).toHaveLength(0);
   });
 
-  it("无任务时命令被 when 拦截（欢迎页不出现）", () => {
-    expect(filterSlashCommands("", { taskId: null, mode: null })).toHaveLength(0);
+  it("欢迎页无任务时 plan 仍可用（切换 pendingMode）", () => {
+    const items = filterSlashCommands("", { taskId: null, mode: null });
+    expect(items.map((c) => c.id)).toContain("plan");
   });
 });

@@ -100,6 +100,18 @@ export function isSafeCommand(command: string): boolean {
   return !isDestructive && isSafe;
 }
 
+/**
+ * 从系统提示词移除可用工具清单中的写入/编辑工具行（行格式 `- name: desc`）。
+ * plan 模式下 setActiveTools 已从运行时注册表移除 edit/write，但应用侧 customPrompt
+ * 文本是静态的全量清单，需在 before_agent_start 时据此剔除，避免模型误以为写入工具仍可用。
+ */
+export function sanitizePlanPrompt(prompt: string): string {
+  return prompt
+    .split("\n")
+    .filter((line) => !/^-\s*(edit|write):/.test(line.trim()))
+    .join("\n");
+}
+
 export interface TodoItem {
   step: number;
   text: string;

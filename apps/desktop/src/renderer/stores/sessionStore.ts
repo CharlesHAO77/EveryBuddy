@@ -50,6 +50,13 @@ export interface PendingToolApproval {
   isDangerous?: boolean;
 }
 
+/** 对话内居中提示条（extension_notify 负载，4s 自动消失） */
+export interface ChatNotice {
+  id: string;
+  message: string;
+  level: "info" | "warn" | "error";
+}
+
 // ────────────────────────────────────────────────
 // Store
 // ────────────────────────────────────────────────
@@ -74,6 +81,10 @@ interface SessionState {
   pendingApprovals: Record<string, PendingToolApproval[]>;
   /** 本会话总是允许的工具：taskId -> 工具名集合 */
   alwaysAllowedTools: Record<string, string[]>;
+  /** 对话内居中提示条：taskId -> 通知队列（extension_notify，4s 自动消失） */
+  chatNotices: Record<string, ChatNotice[]>;
+  pushChatNotice: (taskId: string, message: string, level?: ChatNotice["level"]) => void;
+  dismissChatNotice: (taskId: string, id: string) => void;
 
   initFromBackend: (tasks: TaskMeta[], workspaces: Workspace[]) => void;
   upsertTask: (task: Task) => void;
@@ -174,6 +185,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
   pendingMode: "auto",
   pendingApprovals: {},
   alwaysAllowedTools: {},
+  chatNotices: {},
 
   initFromBackend: (tasks, workspaces) =>
     set({
@@ -668,4 +680,35 @@ export const useSessionStore = create<SessionState>((set, get) => ({
 
   isToolAlwaysAllowed: (taskId, toolName) =>
     (get().alwaysAllowedTools[taskId] ?? []).includes(toolName),
+
+  pushChatNotice: (taskId, message, level) => {
+    const id = crypto.randomUUID();
+    set((s) => ({
+      chatNotices: {
+        ...s.chatNotices,
+        [taskId]: [
+          ...(s.chatNotices[taskId] ?? []),
+          { id, message, level: level ?? "info" },
+        ],
+      },
+    }));
+    setTimeout(() => {
+      if (get().chatNotices[taskId]?.some((n) => n.id === id)) {
+        set((s) => ({
+          chatNotices: {
+            ...s.chatNotices,
+            [taskId]: (s.chatNotices[taskId] ?? []).filter((n) => n.id !== id),
+          },
+        }));
+      }
+    }, 4000);
+  },
+
+  dismissChatNotice: (taskId, id) =>
+    set((s) => ({
+      chatNotices: {
+        ...s.chatNotices,
+        [taskId]: (s.chatNotices[taskId] ?? []).filter((n) => n.id !== id),
+      },
+    })),
 }));

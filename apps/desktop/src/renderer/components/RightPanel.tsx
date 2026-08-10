@@ -48,6 +48,7 @@ function TodoPlanView() {
 
   const planOn = plan?.state === "plan" || plan?.state === "ready" || plan?.state === "executing";
   const showTodo = Boolean(todo?.value || (todo?.lines?.length ?? 0) > 0);
+  const todoLines = todo?.lines ?? [];
 
   if (!taskId) return <Empty text="选择或新建对话查看计划 / 待办" />;
 
@@ -66,6 +67,7 @@ function TodoPlanView() {
   });
 
   const executing = plan?.state === "executing";
+  const planReady = plan?.state === "ready";
 
   const executePlan = () => {
     if (!taskId) return;
@@ -79,11 +81,16 @@ function TodoPlanView() {
   return (
     <div className="flex flex-col gap-3">
       {planOn && (
-        <>
+        <section className="flex flex-col gap-2">
+          <div className="flex items-center gap-1.5 text-[11px] font-semibold tracking-wide text-accent-strong">
+            <IconClipboardCheck size={12} className="shrink-0" />
+            计划
+          </div>
           <div className="flex items-center justify-between rounded-m border border-line bg-card px-3 py-2 shadow-card">
             <span className="flex min-w-0 items-center gap-2 text-[12px] font-semibold text-ink">
-              <IconClipboardCheck size={14} className="shrink-0" />
-              <span className="truncate">{executing ? "计划执行中" : "计划已就绪"}</span>
+              <span className="truncate">
+                {executing ? "计划执行中" : planReady ? "计划已就绪" : "等待生成计划"}
+              </span>
             </span>
             {steps.length > 0 && (
               <span className="shrink-0 rounded-full bg-accent-tint px-2 py-0.5 text-[10.5px] font-semibold text-accent-strong">
@@ -91,6 +98,11 @@ function TodoPlanView() {
               </span>
             )}
           </div>
+          {steps.length === 0 && !executing && (
+            <p className="px-1 text-[11.5px] leading-snug text-ink-3">
+              发送消息，模型会在回复中给出「Plan:」编号计划
+            </p>
+          )}
           <div className="flex flex-col gap-0.5">
             {steps.map((s) => (
               <div
@@ -135,17 +147,47 @@ function TodoPlanView() {
               执行计划
             </button>
           )}
-        </>
+        </section>
       )}
 
       {showTodo && (
-        <>
-          {planOn && <hr className="border-line" />}
-          <div className="flex items-center gap-2 rounded-m border border-line bg-card px-3 py-2 text-[12px] text-ink-2 shadow-card">
-            <span>📝</span>
-            <span className="truncate">{todo?.value ?? "待办"}</span>
+        <section className="flex flex-col gap-2">
+          <div className="flex items-center justify-between">
+            <span className="flex items-center gap-1.5 text-[11px] font-semibold tracking-wide text-ink-2">
+              <span>📝</span>
+              待办
+            </span>
+            {todo?.value && (
+              <span className="shrink-0 rounded-full border border-line bg-card px-2 py-0.5 text-[10.5px] font-semibold text-ink-2">
+                {todo.value.replace(/^📝\s*/, "")}
+              </span>
+            )}
           </div>
-        </>
+          {todoLines.length > 0 && (
+            <div className="flex flex-col gap-0.5">
+              {todoLines.map((l) => {
+                const done = l.startsWith("☑");
+                return (
+                  <div
+                    key={l}
+                    className="flex items-start gap-2 rounded-s border-l-2 border-transparent px-2 py-1 text-[12px] leading-snug"
+                  >
+                    <span
+                      className={`shrink-0 text-[11px] leading-[1.6] ${
+                        done ? "text-accent" : "text-ink-3"
+                      }`}
+                    >
+                      {done ? "☑" : "☐"}
+                    </span>
+                    <span className={done ? "text-ink-3 line-through" : "text-ink-2"}>
+                      {l.replace(/^[☑☐]\s*/, "")}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </section>
       )}
 
       {!planOn && !showTodo && <Empty text="开启计划模式后这里显示计划步骤" />}
@@ -157,10 +199,13 @@ export function RightPanel() {
   const open = useUIStore((s) => s.rightPanelOpen);
   const setOpen = useUIStore((s) => s.setRightPanelOpen);
   const [view, setView] = useState<RightPanelViewId>("todo-plan");
+  // 仅 Windows 需要顶部拖动占位：WCO 原生窗口按钮悬浮在右上角 40px（macOS 红绿灯在左上角，不占位）
+  const isWin = document.documentElement.dataset.platform === "win";
 
   if (!open) {
     return (
       <div className="flex h-full w-[28px] shrink-0 flex-col items-center border-l border-line bg-paper-deep">
+        {isWin && <div className="eb-top-spacer titlebar-drag shrink-0" />}
         <button
           type="button"
           onClick={() => setOpen(true)}
@@ -175,6 +220,8 @@ export function RightPanel() {
 
   return (
     <div className="flex h-full w-[250px] shrink-0 flex-col border-l border-line bg-paper-deep">
+      {/* 标题栏拖动层占位：仅 Windows 让出 40px，避免待办标签行被原生窗口按钮遮挡；macOS 不占用 */}
+      {isWin && <div className="eb-top-spacer titlebar-drag shrink-0" />}
       <div className="flex items-center gap-1 px-3 pb-1 pt-2.5">
         {VIEWS.map((v) => (
           <button

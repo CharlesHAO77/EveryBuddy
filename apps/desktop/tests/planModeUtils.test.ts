@@ -9,6 +9,7 @@ import {
   extractTodoItems,
   isSafeCommand,
   markCompletedSteps,
+  sanitizePlanPrompt,
 } from "../src/main/extensions/plan-mode/utils";
 
 describe("isSafeCommand", () => {
@@ -75,6 +76,37 @@ describe("extractDoneSteps / markCompletedSteps", () => {
     expect(items[0]?.completed).toBe(true);
     expect(items[1]?.completed).toBe(false);
     expect(items[2]?.completed).toBe(false);
+  });
+});
+
+describe("sanitizePlanPrompt", () => {
+  it("移除可用工具清单中的 edit/write 行，保留其余工具", () => {
+    const prompt = `你是 EveryBuddy 办公助理。
+
+可用工具：
+- read: 读取文件内容(文本/图片)
+- bash: 执行 shell 命令
+- edit: 精确替换编辑文件
+- write: 写入/创建文件
+- todo: 管理待办列表
+
+行为准则：
+- 修改文件前先确认`;
+    const out = sanitizePlanPrompt(prompt);
+    expect(out).not.toContain("edit: 精确替换编辑文件");
+    expect(out).not.toContain("write: 写入/创建文件");
+    expect(out).toContain("read: 读取文件内容(文本/图片)");
+    expect(out).toContain("todo: 管理待办列表");
+    expect(out).toContain("行为准则");
+  });
+
+  it("无写入工具时原样保留", () => {
+    const prompt = "可用工具：\n- read: x\n- grep: y";
+    expect(sanitizePlanPrompt(prompt)).toBe(prompt);
+  });
+
+  it("空串安全", () => {
+    expect(sanitizePlanPrompt("")).toBe("");
   });
 });
 

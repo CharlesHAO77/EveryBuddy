@@ -7,7 +7,6 @@
 import type { AgentEvent } from "@everybuddy/ipc-contract";
 import { useEffect } from "react";
 import { useSessionStore } from "../stores/sessionStore";
-import { useToastStore } from "../stores/toastStore";
 
 export function useAgentStream(): void {
   useEffect(() => {
@@ -123,12 +122,9 @@ export function useAgentStream(): void {
             state: event.payload.state,
           });
           break;
-        // 扩展通知（瞬时提示）
+        // 扩展通知（瞬时提示）：放入当前对话消息区居中显示（4s 自动消失），替代右上角 toast
         case "extension_notify":
-          useToastStore.getState().push({
-            message: event.payload.message,
-            level: event.payload.level,
-          });
+          store.pushChatNotice(taskId, event.payload.message, event.payload.level);
           break;
       }
     });

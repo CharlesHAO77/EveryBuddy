@@ -43,9 +43,9 @@ export function ModeSelect({ taskId }: { taskId: string | null }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
-  // 派生当前模式：计划模式真实开启时无论存储值如何都显示「计划」；
-  // 否则回到手动/自动（计划经 /plan 等路径开启时存储值不写回，避免 effect 写 store 造成重渲染循环）
-  const effective: ExecutionMode = planOn ? "plan" : storedMode === "manual" ? "manual" : "auto";
+  // 派生当前模式：计划真实开启时显示「计划」；否则直接采纳存储值。
+  // 进入/退出计划均由 /plan 与下拉写回 modes[taskId]，按钮不再只依赖异步 extension_status 事件
+  const effective: ExecutionMode = planOn ? "plan" : storedMode ?? "auto";
 
   useEffect(() => {
     if (!open) return;

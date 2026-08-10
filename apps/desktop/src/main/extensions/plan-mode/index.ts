@@ -10,7 +10,13 @@
 import type { AssistantMessage, TextContent } from "@earendil-works/pi-ai";
 import type { ContextEvent, ExtensionAPI, ExtensionFactory } from "@earendil-works/pi-coding-agent";
 import type { Emit, ExtensionHandle } from "../types";
-import { extractTodoItems, isSafeCommand, markCompletedSteps, type TodoItem } from "./utils";
+import {
+  extractTodoItems,
+  isSafeCommand,
+  markCompletedSteps,
+  sanitizePlanPrompt,
+  type TodoItem,
+} from "./utils";
 
 /** pi 消息类型（AgentMessage 经 SDK 事件类型间接取得，避免直接依赖 pi-agent-core） */
 type ExtensionMessage = ContextEvent["messages"][number];
@@ -205,9 +211,16 @@ After completing a step, include a [DONE:n] tag in your response.`;
       default: false,
     });
 
-    // 计划模式下拦截危险 bash
+    // 计划模式下拦截写入工具 + 危险 bash（防御纵深：setActiveTools 已从注册表移除 edit/write，此处兜底）
     pi.on("tool_call", async (event) => {
-      if (!planModeEnabled || event.toolName !== "bash") return;
+      if (!planModeEnabled) return;
+      if (PLAN_MODE_DISABLED_TOOLS.has(event.toolName)) {
+        return {
+          block: true,
+          reason: `Plan mode: ${event.toolName} 已禁用（只读探索），退出计划模式后可用`,
+        };
+      }
+      if (event.toolName !== "bash") return;
       const command = event.input.command as string;
       if (!isSafeCommand(command)) {
         return {
@@ -240,9 +253,12 @@ After completing a step, include a [DONE:n] tag in your response.`;
     });
 
     // agent 开始前注入计划/执行上下文
-    pi.on("before_agent_start", async () => {
+    pi.on("before_agent_start", async (event) => {
       if (planModeEnabled) {
+        // 同步剔除系统提示词里的 edit/write 工具行，避免与「已禁用」的计划上下文自相矛盾
+        const sanitized = sanitizePlanPrompt(event.systemPrompt);
         return {
+          systemPrompt: sanitized,
           message: {
             customType: "plan-mode-context",
             content: `[PLAN MODE ACTIVE]
