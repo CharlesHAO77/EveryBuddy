@@ -22,6 +22,9 @@
     "tests/grepTool.test.ts",
     "tests/findTool.test.ts",
     "tests/planModeUtils.test.ts",
-    "tests/prompts.test.ts"
+    "tests/prompts.test.ts",
+    "tests/slashCommands.test.ts",
+    "tests/permission.test.ts",
+    "tests/ipcContract.test.ts"
   ]
 }

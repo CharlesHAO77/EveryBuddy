@@ -10,27 +10,34 @@
 
 import type { InlineExtension } from "@earendil-works/pi-coding-agent";
 import type { AgentMode } from "@everybuddy/ipc-contract";
+import { createPermissionExtension } from "./permission";
 import { createPlanModeExtension } from "./plan-mode/index";
 import { createTodoExtension } from "./todo";
-import type { Emit, ExtensionHandle } from "./types";
+import type { Emit, ExtensionDeps, ExtensionHandle } from "./types";
 
-export const EXTENSION_REGISTRY: Record<string, (emit: Emit) => ExtensionHandle> = {
+export const EXTENSION_REGISTRY: Record<
+  string,
+  (emit: Emit, deps: ExtensionDeps) => ExtensionHandle
+> = {
   "plan-mode": (emit) => createPlanModeExtension(emit),
   todo: (emit) => createTodoExtension(emit),
+  permission: (emit, deps) => createPermissionExtension(emit, deps.getMode ?? (() => "auto")),
 };
 
-/** 各模式默认加载的扩展（agent-*.json 未配 extensions 时使用） */
+/** 各模式默认加载的扩展（agent-*.json 未配 extensions 时使用；permission 恒在 buildExtensionFactories 强制加入） */
 export const DEFAULT_EXTENSIONS: Record<AgentMode, string[]> = {
-  daily: ["todo"],
+  daily: ["plan-mode", "todo"],
   coding: ["plan-mode", "todo"],
 };
 
-export function buildExtensionFactories(names: string[], emit: Emit) {
+export function buildExtensionFactories(names: string[], emit: Emit, deps: ExtensionDeps = {}) {
   const factories: InlineExtension[] = [];
   const controllers: Record<string, unknown> = {};
   const tools: string[] = [];
-  for (const name of names) {
-    const handle = EXTENSION_REGISTRY[name]?.(emit);
+  // 权限扩展恒在（不随 agent-*.json extensions 关闭），作为工具调用门禁
+  const effective = Array.from(new Set(["permission", ...names]));
+  for (const name of effective) {
+    const handle = EXTENSION_REGISTRY[name]?.(emit, deps);
     if (!handle) continue;
     factories.push(handle.factory);
     if (handle.controller) controllers[name] = handle.controller;

@@ -95,6 +95,26 @@ export function useAgentStream(): void {
           );
           break;
 
+        // 工具权限确认（手动模式下副作用工具调用前暂停，等待人工应答）
+        case "tool_approval_required":
+          store.pushToolApproval(taskId, {
+            requestId: event.payload.requestId,
+            toolCallId: event.payload.toolCallId,
+            toolName: event.payload.toolName,
+            args: event.payload.args,
+            isDangerous: event.payload.isDangerous,
+          });
+          // 本会话已「总是允许」该工具 → 直接自动批准，不再弹提示条
+          if (store.isToolAlwaysAllowed(taskId, event.payload.toolName)) {
+            void window.electronAPI.agent.approveTool({
+              taskId,
+              requestId: event.payload.requestId,
+              approved: true,
+            });
+            store.removeToolApproval(taskId, event.payload.requestId);
+          }
+          break;
+
         // 扩展状态（plan-mode 的 value/lines/state，todo 的待办列表）
         case "extension_status":
           store.setExtensionStatus(taskId, event.payload.key, {

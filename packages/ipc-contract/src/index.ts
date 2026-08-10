@@ -120,6 +120,19 @@ export type AgentEvent =
         error?: string;
       };
     }
+  // 工具权限确认（手动模式下副作用工具调用前，主进程暂停并推送）
+  | {
+      streamId: string;
+      type: "tool_approval_required";
+      payload: {
+        requestId: string;
+        toolCallId: string;
+        toolName: string;
+        args: unknown;
+        /** bash 等任意命令执行标记为危险，供渲染端警示 */
+        isDangerous?: boolean;
+      };
+    }
   // 扩展事件（plan-mode / todo 等桌面适配扩展经 IPC 推送到渲染进程）
   | {
       streamId: string;
@@ -383,6 +396,25 @@ export const extensionCommandRequestSchema = z.object({
 });
 export type ExtensionCommandRequest = z.infer<typeof extensionCommandRequestSchema>;
 
+/** 执行模式：auto 自动执行 / manual 手动确认 / plan 计划模式 */
+export const executionModeSchema = z.enum(["auto", "manual", "plan"]);
+export type ExecutionMode = z.infer<typeof executionModeSchema>;
+
+/** agent:set-mode 请求：切换某任务的执行模式 */
+export const setModeRequestSchema = z.object({
+  taskId: z.string().min(1, "参数缺失"),
+  mode: executionModeSchema,
+});
+export type SetModeRequest = z.infer<typeof setModeRequestSchema>;
+
+/** agent:approveTool 请求：应答工具权限确认（requestId 来自 tool_approval_required 事件） */
+export const approveToolRequestSchema = z.object({
+  taskId: z.string().min(1, "参数缺失"),
+  requestId: z.string().min(1, "参数缺失"),
+  approved: z.boolean(),
+});
+export type ApproveToolRequest = z.infer<typeof approveToolRequestSchema>;
+
 // ────────────────────────────────────────────────
 // Preload API 形状（见 §6.3）
 // ────────────────────────────────────────────────
@@ -393,6 +425,10 @@ export interface ElectronAPI {
     abort: (streamId: string) => Promise<void>;
     onEvent: (cb: (event: AgentEvent) => void) => () => void;
     extensionCommand: (req: ExtensionCommandRequest) => Promise<void>;
+    /** 切换任务执行模式（auto/manual/plan） */
+    setMode: (req: SetModeRequest) => Promise<void>;
+    /** 应答工具权限确认 */
+    approveTool: (req: ApproveToolRequest) => Promise<void>;
   };
   task: {
     list: () => Promise<TaskMeta[]>;

@@ -7,13 +7,19 @@
  */
 
 import type { ExtensionFactory } from "@earendil-works/pi-coding-agent";
-import type { AgentEvent } from "@everybuddy/ipc-contract";
+import type { AgentEvent, ExecutionMode } from "@everybuddy/ipc-contract";
 
 /** 去掉 streamId 的事件（agentRuntime 注入时补上 task.streamId） */
 type WithoutStreamId<T> = T extends { streamId: string } ? Omit<T, "streamId"> : T;
 
 /** 扩展向渲染进程推送事件（由 agentRuntime 创建工厂时注入） */
 export type Emit = (evt: WithoutStreamId<AgentEvent>) => void;
+
+/** 构建扩展工厂时注入的任务级依赖 */
+export interface ExtensionDeps {
+  /** 当前任务执行模式（auto/manual/plan），供权限扩展在 tool_call 时实时读取 */
+  getMode?: () => ExecutionMode;
+}
 
 /** 扩展注册产物 */
 export interface ExtensionHandle {

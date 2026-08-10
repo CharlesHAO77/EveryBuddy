@@ -23,6 +23,13 @@ interface UIState {
   sidebarCollapsed: boolean;
   setSidebarCollapsed: (collapsed: boolean) => void;
 
+  /** 右侧面板（待办/计划 + 预览区）开合 */
+  rightPanelOpen: boolean;
+  setRightPanelOpen: (open: boolean) => void;
+  /** 右侧面板宽度（v1 固定默认，预留拖拽） */
+  rightPanelWidth: number;
+  setRightPanelWidth: (w: number) => void;
+
   isSettingsOpen: boolean;
   setSettingsOpen: (open: boolean) => void;
   settingsSection: SettingsSectionId;
@@ -45,6 +52,11 @@ export const useUIStore = create<UIState>((set) => ({
 
   sidebarCollapsed: false,
   setSidebarCollapsed: (collapsed) => set({ sidebarCollapsed: collapsed }),
+
+  rightPanelOpen: true,
+  setRightPanelOpen: (open) => set({ rightPanelOpen: open }),
+  rightPanelWidth: 250,
+  setRightPanelWidth: (w) => set({ rightPanelWidth: w }),
 
   isSettingsOpen: false,
   setSettingsOpen: (open) => set({ isSettingsOpen: open }),

@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import { MainView } from "./components/MainView";
+import { RightPanel } from "./components/RightPanel";
 import { SettingsPanel } from "./components/SettingsPanel";
 import { Sidebar } from "./components/Sidebar";
 import { ToastHost } from "./components/ToastHost";
@@ -54,6 +55,7 @@ export function App() {
       <div className="flex min-h-0 flex-1 overflow-hidden">
         <Sidebar />
         <MainView />
+        <RightPanel />
       </div>
       {isSettingsOpen && <SettingsPanel onClose={() => setSettingsOpen(false)} />}
       <ToastHost />

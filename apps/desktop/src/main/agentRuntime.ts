@@ -18,6 +18,7 @@ import type { SessionEntry, ToolDefinition } from "@earendil-works/pi-coding-age
 import type {
   AgentEvent,
   AttachmentRef,
+  ExecutionMode,
   HistoryBlock,
   HistoryMessage,
   TaskMeta,
@@ -92,6 +93,18 @@ class AgentRuntime {
   private emitter: ((event: AgentEvent) => void) | null = null;
   /** 工具可用性机器级快照（探测一次，进程内缓存；见 tools/toolAvailability.ts） */
   private availability: ToolAvailability | null = null;
+  /** 任务执行模式（auto/manual/plan），由渲染进程经 agent:set-mode 下发，供权限扩展实时读取 */
+  private taskModes = new Map<string, ExecutionMode>();
+
+  /** 切换某任务的执行模式 */
+  setTaskMode(taskId: string, mode: ExecutionMode): void {
+    this.taskModes.set(taskId, mode);
+  }
+
+  /** 读取某任务执行模式（缺省 auto，保持既有自动执行行为） */
+  getTaskMode(taskId: string): ExecutionMode {
+    return this.taskModes.get(taskId) ?? "auto";
+  }
 
   setEmitter(fn: (event: AgentEvent) => void): void {
     this.emitter = fn;
@@ -258,7 +271,9 @@ class AgentRuntime {
       factories,
       controllers,
       tools: extTools,
-    } = buildExtensionFactories(extensions, extEmit);
+    } = buildExtensionFactories(extensions, extEmit, {
+      getMode: () => this.getTaskMode(task.id),
+    });
 
     // tools allowlist 会过滤所有工具（含 customTools / 扩展注册工具，见 SDK agent-session _refreshToolRegistry），
     // 视觉理解/生图/扩展工具必须显式并入（buildToolAllowlist），否则注册了也不会暴露给模型
@@ -453,6 +468,16 @@ class AgentRuntime {
     if (typeof fn === "function") fn.call(controller);
   }
 
+  /** 应答工具权限确认：恢复 permission 扩展中被暂停的工具调用（agent:approveTool） */
+  resolveToolApproval(taskId: string, requestId: string, approved: boolean): void {
+    const state = this.sessions.get(taskId);
+    if (!state) return;
+    const ctrl = state.controllers["permission"] as
+      | { resolve?: (r: string, a: boolean) => void }
+      | undefined;
+    ctrl?.resolve?.(requestId, approved);
+  }
+
   /** 任务是否有活跃会话 */
   hasSession(taskId: string): boolean {
     return this.sessions.has(taskId);
@@ -464,6 +489,8 @@ class AgentRuntime {
     if (!state) return;
     // 先摘出，阻断后续 prompt 命中
     this.sessions.delete(taskId);
+    // 未应答的工具权限按拒绝处理，避免工具永久阻塞
+    (state.controllers["permission"] as { dispose?: () => void } | undefined)?.dispose?.();
     try {
       await state.session.abort();
     } catch {

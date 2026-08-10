@@ -83,9 +83,15 @@ export function createPlanModeExtension(emit: Emit): ExtensionHandle {
         },
       });
     } else if (planModeEnabled) {
-      emit({ type: "extension_status", payload: { key: "plan-mode", state: "plan", value: "⏸ plan" } });
+      emit({
+        type: "extension_status",
+        payload: { key: "plan-mode", state: "plan", value: "⏸ plan" },
+      });
     } else {
-      emit({ type: "extension_status", payload: { key: "plan-mode", state: "off", value: undefined } });
+      emit({
+        type: "extension_status",
+        payload: { key: "plan-mode", state: "off", value: undefined },
+      });
     }
   }
 

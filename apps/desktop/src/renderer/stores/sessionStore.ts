@@ -1,6 +1,7 @@
 import type {
   AttachmentRef,
   CreateTaskRequest,
+  ExecutionMode,
   HistoryBlock,
   HistoryMessage,
   HistoryTextBlock,
@@ -40,6 +41,15 @@ export interface ExtensionStatus {
   state?: string;
 }
 
+/** 待人工确认的工具调用（tool_approval_required 事件负载） */
+export interface PendingToolApproval {
+  requestId: string;
+  toolCallId: string;
+  toolName: string;
+  args: unknown;
+  isDangerous?: boolean;
+}
+
 // ────────────────────────────────────────────────
 // Store
 // ────────────────────────────────────────────────
@@ -55,6 +65,15 @@ interface SessionState {
   hydratingIds: string[];
   /** 扩展状态：taskId -> extensionKey -> {value, lines, state} */
   extensionStates: Record<string, Record<string, ExtensionStatus>>;
+  /** 任务执行模式：taskId -> auto/manual/plan（输入框右下模式下拉选择） */
+  modes: Record<string, ExecutionMode>;
+  /** 主页选中的待应用模式：创建对话时应用到新任务 */
+  pendingMode: ExecutionMode;
+  setPendingMode: (mode: ExecutionMode) => void;
+  /** 待人工确认的工具调用：taskId -> 队列 */
+  pendingApprovals: Record<string, PendingToolApproval[]>;
+  /** 本会话总是允许的工具：taskId -> 工具名集合 */
+  alwaysAllowedTools: Record<string, string[]>;
 
   initFromBackend: (tasks: TaskMeta[], workspaces: Workspace[]) => void;
   upsertTask: (task: Task) => void;
@@ -106,6 +125,13 @@ interface SessionState {
 
   /** 更新某任务的扩展状态（extension_status 事件） */
   setExtensionStatus: (taskId: string, key: string, status: ExtensionStatus) => void;
+
+  /** 设置某任务执行模式（本地 + 推送主进程） */
+  setMode: (taskId: string, mode: ExecutionMode) => void;
+  pushToolApproval: (taskId: string, approval: PendingToolApproval) => void;
+  removeToolApproval: (taskId: string, requestId: string) => void;
+  addAlwaysAllowedTool: (taskId: string, toolName: string) => void;
+  isToolAlwaysAllowed: (taskId: string, toolName: string) => boolean;
 }
 
 /** 在 task 的流式消息中按 contentIndex 查找块索引 */
@@ -144,6 +170,10 @@ export const useSessionStore = create<SessionState>((set, get) => ({
   pendingWorkspaceId: null,
   hydratingIds: [],
   extensionStates: {},
+  modes: {},
+  pendingMode: "auto",
+  pendingApprovals: {},
+  alwaysAllowedTools: {},
 
   initFromBackend: (tasks, workspaces) =>
     set({
@@ -226,11 +256,21 @@ export const useSessionStore = create<SessionState>((set, get) => ({
 
   deleteTask: async (id) => {
     await window.electronAPI.task.delete(id);
-    set((state) => ({
-      tasks: state.tasks.filter((t) => t.id !== id),
-      currentTaskId: state.currentTaskId === id ? null : state.currentTaskId,
-      hydratingIds: state.hydratingIds.filter((x) => x !== id),
-    }));
+    set((state) => {
+      const { [id]: _mode, ...modes } = state.modes;
+      const { [id]: _pa, ...pendingApprovals } = state.pendingApprovals;
+      const { [id]: _aa, ...alwaysAllowedTools } = state.alwaysAllowedTools;
+      const { [id]: _es, ...extensionStates } = state.extensionStates;
+      return {
+        tasks: state.tasks.filter((t) => t.id !== id),
+        currentTaskId: state.currentTaskId === id ? null : state.currentTaskId,
+        hydratingIds: state.hydratingIds.filter((x) => x !== id),
+        modes,
+        pendingApprovals,
+        alwaysAllowedTools,
+        extensionStates,
+      };
+    });
   },
 
   renameTask: (id, title) => {
@@ -594,4 +634,38 @@ export const useSessionStore = create<SessionState>((set, get) => ({
         [taskId]: { ...state.extensionStates[taskId], [key]: status },
       },
     })),
+
+  setMode: (taskId, mode) => {
+    set((state) => ({ modes: { ...state.modes, [taskId]: mode } }));
+    void window.electronAPI.agent.setMode({ taskId, mode });
+  },
+
+  setPendingMode: (mode) => set({ pendingMode: mode }),
+
+  pushToolApproval: (taskId, approval) =>
+    set((state) => ({
+      pendingApprovals: {
+        ...state.pendingApprovals,
+        [taskId]: [...(state.pendingApprovals[taskId] ?? []), approval],
+      },
+    })),
+
+  removeToolApproval: (taskId, requestId) =>
+    set((state) => ({
+      pendingApprovals: {
+        ...state.pendingApprovals,
+        [taskId]: (state.pendingApprovals[taskId] ?? []).filter((a) => a.requestId !== requestId),
+      },
+    })),
+
+  addAlwaysAllowedTool: (taskId, toolName) =>
+    set((state) => ({
+      alwaysAllowedTools: {
+        ...state.alwaysAllowedTools,
+        [taskId]: Array.from(new Set([...(state.alwaysAllowedTools[taskId] ?? []), toolName])),
+      },
+    })),
+
+  isToolAlwaysAllowed: (taskId, toolName) =>
+    (get().alwaysAllowedTools[taskId] ?? []).includes(toolName),
 }));

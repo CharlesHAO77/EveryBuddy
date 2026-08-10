@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { useAttachments } from "../hooks/useAttachments";
+import { useSlashCommands } from "../hooks/useSlashCommands";
 import { type ChatMessage, useSessionStore } from "../stores/sessionStore";
 import { type CategoryId, getChatDefaultId, useUIStore } from "../stores/uiStore";
 import { AttachmentPreview } from "./AttachmentPreview";
@@ -9,7 +10,6 @@ import {
   IconArrowUp,
   IconCheck,
   IconChevronDown,
-  IconClipboardCheck,
   IconClock,
   IconFolder,
   IconMic,
@@ -19,6 +19,9 @@ import {
 } from "./icons";
 import { AssistantGroup, MessageBubble } from "./MessageBubble";
 import { ModelSelector } from "./ModelSelector";
+import { ModeSelect } from "./ModeSelect";
+import { SlashCommandMenu } from "./SlashCommandMenu";
+import { ToolApprovalBar } from "./ToolApprovalBar";
 
 /* ── Model Selector Helpers ───────────────────── */
 
@@ -317,6 +320,16 @@ function WelcomeView() {
               },
         );
         taskId = task.id;
+        // 主页选择的执行模式应用到新任务（plan 需同步进入计划模式）
+        const pendingMode = useSessionStore.getState().pendingMode;
+        useSessionStore.getState().setMode(taskId, pendingMode);
+        if (pendingMode === "plan") {
+          void window.electronAPI.agent.extensionCommand({
+            taskId,
+            extension: "plan-mode",
+            command: "toggle",
+          });
+        }
       }
       const atts = attachments.map((a) => ({ name: a.name, path: a.path, size: a.size }));
       setText("");
@@ -327,12 +340,13 @@ function WelcomeView() {
     }
   };
 
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault();
-      handleSend();
-    }
-  };
+  // / 命令弹窗 + 回车/IME 组合态守卫（欢迎页无任务时命令列表为空，弹窗不出现）
+  const slash = useSlashCommands({
+    taskId: currentTaskId,
+    mode: activeCategory,
+    setText,
+    onSend: () => void handleSend(),
+  });
 
   return (
     <div className="flex min-h-full flex-col items-center">
@@ -386,14 +400,26 @@ function WelcomeView() {
 
           {/* biome-ignore lint/a11y/noStaticElementInteractions: 输入容器是拖放区，需挂 onDragOver/onDrop；键盘用户聚焦内部 textarea 即可 */}
           <div
+            ref={slash.containerRef}
             className="relative h-[160px] rounded-l border border-line bg-card shadow-card transition focus-within:border-accent"
             onDragOver={onContainerDragOver}
             onDrop={onContainerDrop}
           >
+            <SlashCommandMenu
+              open={slash.open}
+              items={slash.items}
+              highlightIndex={slash.highlightIndex}
+              onSelect={(i) => {
+                const cmd = slash.items[i];
+                if (cmd) slash.selectCommand(cmd);
+              }}
+            />
             <textarea
               value={text}
-              onChange={(e) => setText(e.target.value)}
-              onKeyDown={handleKeyDown}
+              onChange={(e) => slash.handleChange(e.target.value)}
+              onKeyDown={slash.handleKeyDown}
+              onCompositionStart={() => (slash.composingRef.current = true)}
+              onCompositionEnd={() => (slash.composingRef.current = false)}
               placeholder="今天帮你做些什么？"
               rows={3}
               className="h-full w-full resize-none border-0 bg-transparent px-[20px] pt-[20px] text-[17px] text-ink placeholder:text-ink-3 focus:outline-none"
@@ -413,7 +439,9 @@ function WelcomeView() {
                 <span className="text-[14px] text-ink-3">@引用对话文件，/调用技能与指令</span>
               </div>
 
-              <div className="flex items-center gap-[8px]">
+              <div className="flex items-center gap-[6px]">
+                {/* 执行模式下拉（主页无任务，选中记为 pending，建对话时应用） */}
+                <ModeSelect taskId={currentTaskId} />
                 {/* Model selector */}
                 <ModelSelector
                   selectedId={effectiveProviderId}
@@ -450,78 +478,8 @@ function WelcomeView() {
         {/* Bottom bar */}
         <div className="mt-[14px] flex w-[700px] items-center justify-between">
           <WorkspaceSelector />
-          <button
-            type="button"
-            className="flex items-center gap-[4px] text-[13px] text-ink-3 transition hover:text-ink-2"
-          >
-            默认权限
-            <IconChevronDown size={10} strokeWidth={2} />
-          </button>
         </div>
       </div>
-    </div>
-  );
-}
-
-/* ── 扩展状态栏（plan-mode / todo） ───────────── */
-
-function ExtensionStatusBar({ taskId }: { taskId: string }) {
-  const statuses = useSessionStore((s) => s.extensionStates[taskId]);
-  const plan = statuses?.["plan-mode"];
-  const todo = statuses?.todo;
-
-  const planOn = plan?.state === "plan" || plan?.state === "ready" || plan?.state === "executing";
-  const canExecute = plan?.state === "ready";
-  const planLines = plan?.lines;
-  const showTodo = Boolean(todo?.value || (todo?.lines?.length ?? 0) > 0);
-
-  if (!planOn && !showTodo) return null;
-
-  const execute = () =>
-    void window.electronAPI.agent.extensionCommand({
-      taskId,
-      extension: "plan-mode",
-      command: "execute",
-    });
-
-  return (
-    <div className="mb-2 flex items-center justify-between gap-3 rounded-l border border-line bg-card px-3 py-2">
-      <div className="min-w-0 flex-1">
-        {planOn && (
-          <>
-            <div className="flex items-center gap-1.5 text-[12px] font-medium text-ink">
-              <IconClipboardCheck size={13} />
-              <span className="truncate">{plan?.value}</span>
-            </div>
-            {planLines && planLines.length > 0 && (
-              <ul className="mt-1 space-y-0.5">
-                {planLines.map((l) => (
-                  <li key={l} className="truncate text-[12px] text-ink-2">
-                    {l}
-                  </li>
-                ))}
-              </ul>
-            )}
-          </>
-        )}
-        {showTodo && (
-          <div
-            className={`flex items-center gap-1.5 text-[12px] text-ink-3 ${planOn ? "mt-1" : ""}`}
-          >
-            <span>📝</span>
-            <span className="truncate">{todo?.value ?? "待办"}</span>
-          </div>
-        )}
-      </div>
-      {canExecute && (
-        <button
-          type="button"
-          onClick={execute}
-          className="shrink-0 rounded-s bg-accent px-2.5 py-1 text-[12px] font-medium text-white transition hover:bg-accent-strong active:scale-95"
-        >
-          执行计划
-        </button>
-      )}
     </div>
   );
 }
@@ -556,20 +514,6 @@ function ChatView({ taskId }: { taskId: string }) {
   const isStreaming = task?.isStreaming ?? false;
   const hydrating = useSessionStore((s) => s.hydratingIds.includes(taskId));
 
-  // Plan Mode（仅 coding 模式展示；状态由 plan-mode 扩展经 extension_status 推送）
-  const isCodingMode = task?.mode === "coding";
-  const planStatus = useSessionStore((s) => s.extensionStates[taskId]?.["plan-mode"]);
-  const isPlanModeOn =
-    planStatus?.state === "plan" ||
-    planStatus?.state === "ready" ||
-    planStatus?.state === "executing";
-  const togglePlanMode = () =>
-    void window.electronAPI.agent.extensionCommand({
-      taskId,
-      extension: "plan-mode",
-      command: "toggle",
-    });
-
   // 自动滚动到底部：仅当用户已在底部附近时，避免打断查看历史
   const scrollRef = useRef<HTMLDivElement>(null);
   const atBottomRef = useRef(true);
@@ -601,12 +545,13 @@ function ChatView({ taskId }: { taskId: string }) {
     }
   };
 
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault();
-      handleSend();
-    }
-  };
+  // / 命令弹窗 + 回车/IME 组合态守卫；执行模式经 ModeSelect 下拉切换
+  const slash = useSlashCommands({
+    taskId,
+    mode: task?.mode ?? null,
+    setText,
+    onSend: () => void handleSend(),
+  });
 
   return (
     <div className="flex h-full flex-col">
@@ -634,43 +579,41 @@ function ChatView({ taskId }: { taskId: string }) {
       </div>
 
       {/* Chat input */}
-      <div className="border-t border-line bg-paper px-6 py-4">
+      <div className="bg-paper px-6 py-4">
         <div className="mx-auto max-w-3xl">
           <input type="file" multiple {...fileInputProps} />
           {/* 附件预览条 */}
           <AttachmentPreview attachments={attachments} onRemove={removeAttachment} />
-          {/* 扩展状态条（计划模式 / 待办） */}
-          <ExtensionStatusBar taskId={taskId} />
+          {/* 工具权限确认提示条（手动模式下显示在输入框上方） */}
+          <ToolApprovalBar taskId={taskId} />
           {/* biome-ignore lint/a11y/noStaticElementInteractions: 输入容器是拖放区，需挂 onDragOver/onDrop；键盘用户聚焦内部 textarea 即可 */}
           <div
+            ref={slash.containerRef}
             className="relative h-[120px] rounded-l border border-line bg-card shadow-card transition focus-within:border-accent"
             onDragOver={onContainerDragOver}
             onDrop={onContainerDrop}
           >
+            <SlashCommandMenu
+              open={slash.open}
+              items={slash.items}
+              highlightIndex={slash.highlightIndex}
+              onSelect={(i) => {
+                const cmd = slash.items[i];
+                if (cmd) slash.selectCommand(cmd);
+              }}
+            />
             <textarea
               value={text}
-              onChange={(e) => setText(e.target.value)}
-              onKeyDown={handleKeyDown}
+              onChange={(e) => slash.handleChange(e.target.value)}
+              onKeyDown={slash.handleKeyDown}
+              onCompositionStart={() => (slash.composingRef.current = true)}
+              onCompositionEnd={() => (slash.composingRef.current = false)}
               placeholder="今天帮你做些什么？ @引用对话文件，/调用技能与指令"
               rows={2}
               className="h-full w-full resize-none border-0 bg-transparent px-[20px] pt-[16px] text-[17px] text-ink placeholder:text-ink-3 focus:outline-none"
             />
             <div className="absolute bottom-0 left-0 right-0 flex items-center justify-between px-[14px] pb-[10px]">
               <div className="flex items-center gap-[4px]">
-                {isCodingMode && (
-                  <button
-                    type="button"
-                    onClick={togglePlanMode}
-                    title={
-                      isPlanModeOn ? "关闭计划模式（恢复写入工具）" : "开启计划模式（只读探索）"
-                    }
-                    className={`flex h-[28px] w-[28px] items-center justify-center rounded-s transition hover:bg-hover ${
-                      isPlanModeOn ? "text-accent" : "text-ink-2 hover:text-ink"
-                    }`}
-                  >
-                    <IconClipboardCheck size={15} />
-                  </button>
-                )}
                 <button
                   type="button"
                   onClick={openPicker}
@@ -680,7 +623,9 @@ function ChatView({ taskId }: { taskId: string }) {
                   <IconPlus />
                 </button>
               </div>
-              <div className="flex items-center gap-[8px]">
+              <div className="flex items-center gap-[6px]">
+                {/* 执行模式下拉（自动/手动/计划），紧挨模型选择器 */}
+                <ModeSelect taskId={taskId} />
                 <ModelSelector
                   selectedId={taskProviderId}
                   onSelect={(id) => setTaskProvider(taskId, id)}

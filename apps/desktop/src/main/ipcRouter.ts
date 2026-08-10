@@ -11,6 +11,7 @@ import path from "node:path";
 import type { TaskMeta } from "@everybuddy/ipc-contract";
 import {
   abortRequestSchema,
+  approveToolRequestSchema,
   createNamedWorkspaceRequestSchema,
   createTaskRequestSchema,
   createWorkspaceRequestSchema,
@@ -21,6 +22,7 @@ import {
   renameTaskRequestSchema,
   saveModelRequestSchema,
   setApiKeyRequestSchema,
+  setModeRequestSchema,
   setTaskProviderRequestSchema,
 } from "@everybuddy/ipc-contract";
 import { type BrowserWindow, ipcMain } from "electron";
@@ -113,6 +115,18 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
   ipcMain.handle("agent:extension-command", async (_evt, raw) => {
     const req = validate(extensionCommandRequestSchema, raw);
     agentRuntime.runExtensionCommand(req.taskId, req.extension, req.command);
+  });
+
+  // 切换任务执行模式（auto/manual/plan）
+  ipcMain.handle("agent:set-mode", async (_evt, raw) => {
+    const req = validate(setModeRequestSchema, raw);
+    agentRuntime.setTaskMode(req.taskId, req.mode);
+  });
+
+  // 应答工具权限确认 -> 恢复被暂停的工具调用
+  ipcMain.handle("agent:approveTool", async (_evt, raw) => {
+    const req = validate(approveToolRequestSchema, raw);
+    agentRuntime.resolveToolApproval(req.taskId, req.requestId, req.approved);
   });
 
   // ── task:* ────────────────────────────────

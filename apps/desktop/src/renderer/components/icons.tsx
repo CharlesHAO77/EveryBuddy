@@ -78,6 +78,52 @@ export function IconClipboardCheck(props: IconProps) {
   );
 }
 
+export function IconHand(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M18 11V6a2 2 0 0 0-4 0v5" />
+      <path d="M14 10V4a2 2 0 0 0-4 0v6" />
+      <path d="M10 10.5V6a2 2 0 0 0-4 0v8" />
+      <path d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15" />
+    </Svg>
+  );
+}
+
+export function IconShield(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z" />
+    </Svg>
+  );
+}
+
+export function IconEye(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7Z" />
+      <circle cx="12" cy="12" r="3" />
+    </Svg>
+  );
+}
+
+export function IconPanelRightOpen(props: IconProps) {
+  return (
+    <Svg size={18} {...props}>
+      <rect x="3" y="3" width="18" height="18" rx="2" />
+      <line x1="15" y1="3" x2="15" y2="21" />
+    </Svg>
+  );
+}
+
+export function IconPanelRightClose(props: IconProps) {
+  return (
+    <Svg size={18} {...props}>
+      <rect x="3" y="3" width="18" height="18" rx="2" />
+      <line x1="9" y1="3" x2="9" y2="21" />
+    </Svg>
+  );
+}
+
 export function IconPlus(props: IconProps) {
   return (
     <Svg size={18} strokeWidth={2.2} {...props}>
