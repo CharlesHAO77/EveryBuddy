@@ -19,6 +19,7 @@ const api: ElectronAPI = {
       ipcRenderer.on("agent:event", handler);
       return () => ipcRenderer.off("agent:event", handler);
     },
+    extensionCommand: (req) => ipcRenderer.invoke("agent:extension-command", req),
   },
   task: {
     list: () => ipcRenderer.invoke("task:list"),

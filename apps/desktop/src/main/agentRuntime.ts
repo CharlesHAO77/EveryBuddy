@@ -24,6 +24,7 @@ import type {
 } from "@everybuddy/ipc-contract";
 import { getAgentConfig } from "./agentConfigStore";
 import { configStore } from "./configStore";
+import { buildExtensionFactories, DEFAULT_EXTENSIONS } from "./extensions";
 import {
   buildImageDescriptionBlock,
   buildManifestText,
@@ -41,15 +42,16 @@ import {
   isChatModelProviderId,
   MODELS_JSON_PATH,
 } from "./modelStore";
+import { getModeSystemPrompt } from "./prompts";
 import { createFindOperations } from "./tools/findTool";
 import { createGenerateImageToolDefinition } from "./tools/generateImageTool";
 import { createGrepToolDefinition } from "./tools/grepTool";
+import { buildToolAllowlist } from "./tools/toolAllowlist";
 import {
   buildToolPlan,
   detectToolAvailability,
   type ToolAvailability,
 } from "./tools/toolAvailability";
-import { buildToolAllowlist } from "./tools/toolAllowlist";
 import { createUnderstandImageToolDefinition } from "./tools/understandImageTool";
 import { type DescribeImageRuntime, describeImage } from "./vision";
 import { getTaskCwd } from "./workspaceManager";
@@ -78,6 +80,8 @@ const MODELS_STORE_TMP_PATH = path.join(tmpdir(), "everybuddy-models-store.json"
 interface RuntimeState {
   session: AgentSession;
   unsubscribe: () => void;
+  /** 扩展控制器（侧信道，ipcRouter:agent:extension-command 经 runExtensionCommand 调用） */
+  controllers: Record<string, unknown>;
 }
 
 class AgentRuntime {
@@ -246,18 +250,33 @@ class AgentRuntime {
       }),
     );
 
-    // 模式级 system prompt：createAgentSession 不会 reload 调用方提供的 loader，须自行 reload
+    // 扩展：构建工厂 + 控制器 + 贡献的工具名（并入 allowlist）。emit 闭包绑定本 task，
+    // 扩展内 emit(extension_status/notify) 会经 this.emit 推送到对应渲染进程
+    const extensions = cfg.extensions ?? DEFAULT_EXTENSIONS[mode];
+    const extEmit = (evt: WithoutStreamId<AgentEvent>) => this.emit(task.id, evt);
+    const {
+      factories,
+      controllers,
+      tools: extTools,
+    } = buildExtensionFactories(extensions, extEmit);
+
+    // tools allowlist 会过滤所有工具（含 customTools / 扩展注册工具，见 SDK agent-session _refreshToolRegistry），
+    // 视觉理解/生图/扩展工具必须显式并入（buildToolAllowlist），否则注册了也不会暴露给模型
+    const toolAllowlist = buildToolAllowlist(plan.tools, [...(cfg.tools ?? []), ...extTools]);
+
+    // 模式级 system prompt：cfg.systemPrompt 覆盖默认；默认 builder 按当前激活工具动态拼出清单。
+    // customPrompt 分支下 SDK 不再注入内置工具列表/guidelines，但会追加 appendSystemPrompt + project_context + skills + cwd
+    const systemPrompt =
+      cfg.systemPrompt ?? getModeSystemPrompt(mode, { activeTools: toolAllowlist });
+
     const resourceLoader = new sdk.DefaultResourceLoader({
       cwd,
       agentDir: sdk.getAgentDir(),
-      systemPrompt: cfg.systemPrompt ?? undefined,
+      systemPrompt,
       appendSystemPrompt: cfg.appendSystemPrompt ?? undefined,
+      extensionFactories: factories,
     });
     await resourceLoader.reload();
-
-    // tools allowlist 会过滤所有工具（含 customTools，见 SDK agent-session _refreshToolRegistry），
-    // 视觉理解/生图工具必须显式并入（buildToolAllowlist），否则注册了也不会暴露给模型。
-    const toolAllowlist = buildToolAllowlist(plan.tools, cfg.tools);
 
     const { session } = await sdk.createAgentSession({
       cwd,
@@ -273,7 +292,7 @@ class AgentRuntime {
       this.translateAndEmit(task.id, event);
     });
 
-    this.sessions.set(task.id, { session, unsubscribe });
+    this.sessions.set(task.id, { session, unsubscribe, controllers });
   }
 
   /**
@@ -422,6 +441,16 @@ class AgentRuntime {
     const state = this.sessions.get(taskId);
     if (!state) return;
     await state.session.abort();
+  }
+
+  /** 触发扩展控制器方法（ipcRouter:agent:extension-command -> 控制器侧信道） */
+  runExtensionCommand(taskId: string, extension: string, command: string): void {
+    const state = this.sessions.get(taskId);
+    if (!state) return;
+    const controller = state.controllers[extension] as { [k: string]: unknown } | undefined;
+    if (!controller) return;
+    const fn = controller[command];
+    if (typeof fn === "function") fn.call(controller);
   }
 
   /** 任务是否有活跃会话 */

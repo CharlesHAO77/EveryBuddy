@@ -33,6 +33,13 @@ export interface Task extends TaskMeta {
   streamMessageId?: string | null;
 }
 
+/** 扩展状态（extension_status 事件负载；state 为扩展自有状态机，如 plan-mode 的 off/plan/ready/executing） */
+export interface ExtensionStatus {
+  value?: string;
+  lines?: string[];
+  state?: string;
+}
+
 // ────────────────────────────────────────────────
 // Store
 // ────────────────────────────────────────────────
@@ -46,6 +53,8 @@ interface SessionState {
   pendingWorkspaceId: string | null;
   /** 正在加载历史的任务 id 集合（用于 ChatView 显示加载态） */
   hydratingIds: string[];
+  /** 扩展状态：taskId -> extensionKey -> {value, lines, state} */
+  extensionStates: Record<string, Record<string, ExtensionStatus>>;
 
   initFromBackend: (tasks: TaskMeta[], workspaces: Workspace[]) => void;
   upsertTask: (task: Task) => void;
@@ -94,6 +103,9 @@ interface SessionState {
   finalizeMessage: (taskId: string) => void;
   addErrorMessage: (taskId: string, message: string) => void;
   abortTask: (taskId: string) => Promise<void>;
+
+  /** 更新某任务的扩展状态（extension_status 事件） */
+  setExtensionStatus: (taskId: string, key: string, status: ExtensionStatus) => void;
 }
 
 /** 在 task 的流式消息中按 contentIndex 查找块索引 */
@@ -131,6 +143,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
   loaded: false,
   pendingWorkspaceId: null,
   hydratingIds: [],
+  extensionStates: {},
 
   initFromBackend: (tasks, workspaces) =>
     set({
@@ -573,4 +586,12 @@ export const useSessionStore = create<SessionState>((set, get) => ({
   abortTask: async (taskId) => {
     await window.electronAPI.agent.abort(taskId);
   },
+
+  setExtensionStatus: (taskId, key, status) =>
+    set((state) => ({
+      extensionStates: {
+        ...state.extensionStates,
+        [taskId]: { ...state.extensionStates[taskId], [key]: status },
+      },
+    })),
 }));

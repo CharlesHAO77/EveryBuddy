@@ -68,6 +68,16 @@ export function IconPanelLeftOpen(props: IconProps) {
   );
 }
 
+export function IconClipboardCheck(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <rect x="5" y="4" width="14" height="17" rx="2" />
+      <path d="M9 4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v1a1 1 0 0 1-1 1h-4a1 1 0 0 1-1-1V4Z" />
+      <path d="m9 13 2 2 4-4" />
+    </Svg>
+  );
+}
+
 export function IconPlus(props: IconProps) {
   return (
     <Svg size={18} strokeWidth={2.2} {...props}>

@@ -2,13 +2,14 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { useAttachments } from "../hooks/useAttachments";
 import { type ChatMessage, useSessionStore } from "../stores/sessionStore";
-import { getChatDefaultId, type CategoryId, useUIStore } from "../stores/uiStore";
+import { type CategoryId, getChatDefaultId, useUIStore } from "../stores/uiStore";
 import { AttachmentPreview } from "./AttachmentPreview";
 import { ConversationTitle } from "./ConversationTitle";
 import {
   IconArrowUp,
   IconCheck,
   IconChevronDown,
+  IconClipboardCheck,
   IconClock,
   IconFolder,
   IconMic,
@@ -462,6 +463,69 @@ function WelcomeView() {
   );
 }
 
+/* ── 扩展状态栏（plan-mode / todo） ───────────── */
+
+function ExtensionStatusBar({ taskId }: { taskId: string }) {
+  const statuses = useSessionStore((s) => s.extensionStates[taskId]);
+  const plan = statuses?.["plan-mode"];
+  const todo = statuses?.todo;
+
+  const planOn = plan?.state === "plan" || plan?.state === "ready" || plan?.state === "executing";
+  const canExecute = plan?.state === "ready";
+  const planLines = plan?.lines;
+  const showTodo = Boolean(todo?.value || (todo?.lines?.length ?? 0) > 0);
+
+  if (!planOn && !showTodo) return null;
+
+  const execute = () =>
+    void window.electronAPI.agent.extensionCommand({
+      taskId,
+      extension: "plan-mode",
+      command: "execute",
+    });
+
+  return (
+    <div className="mb-2 flex items-center justify-between gap-3 rounded-l border border-line bg-card px-3 py-2">
+      <div className="min-w-0 flex-1">
+        {planOn && (
+          <>
+            <div className="flex items-center gap-1.5 text-[12px] font-medium text-ink">
+              <IconClipboardCheck size={13} />
+              <span className="truncate">{plan?.value}</span>
+            </div>
+            {planLines && planLines.length > 0 && (
+              <ul className="mt-1 space-y-0.5">
+                {planLines.map((l) => (
+                  <li key={l} className="truncate text-[12px] text-ink-2">
+                    {l}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </>
+        )}
+        {showTodo && (
+          <div
+            className={`flex items-center gap-1.5 text-[12px] text-ink-3 ${planOn ? "mt-1" : ""}`}
+          >
+            <span>📝</span>
+            <span className="truncate">{todo?.value ?? "待办"}</span>
+          </div>
+        )}
+      </div>
+      {canExecute && (
+        <button
+          type="button"
+          onClick={execute}
+          className="shrink-0 rounded-s bg-accent px-2.5 py-1 text-[12px] font-medium text-white transition hover:bg-accent-strong active:scale-95"
+        >
+          执行计划
+        </button>
+      )}
+    </div>
+  );
+}
+
 /* ── Chat View ───────────────────────────────── */
 
 function ChatView({ taskId }: { taskId: string }) {
@@ -491,6 +555,20 @@ function ChatView({ taskId }: { taskId: string }) {
   const taskProviderId = task?.providerId ?? defaultProviderId;
   const isStreaming = task?.isStreaming ?? false;
   const hydrating = useSessionStore((s) => s.hydratingIds.includes(taskId));
+
+  // Plan Mode（仅 coding 模式展示；状态由 plan-mode 扩展经 extension_status 推送）
+  const isCodingMode = task?.mode === "coding";
+  const planStatus = useSessionStore((s) => s.extensionStates[taskId]?.["plan-mode"]);
+  const isPlanModeOn =
+    planStatus?.state === "plan" ||
+    planStatus?.state === "ready" ||
+    planStatus?.state === "executing";
+  const togglePlanMode = () =>
+    void window.electronAPI.agent.extensionCommand({
+      taskId,
+      extension: "plan-mode",
+      command: "toggle",
+    });
 
   // 自动滚动到底部：仅当用户已在底部附近时，避免打断查看历史
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -561,6 +639,8 @@ function ChatView({ taskId }: { taskId: string }) {
           <input type="file" multiple {...fileInputProps} />
           {/* 附件预览条 */}
           <AttachmentPreview attachments={attachments} onRemove={removeAttachment} />
+          {/* 扩展状态条（计划模式 / 待办） */}
+          <ExtensionStatusBar taskId={taskId} />
           {/* biome-ignore lint/a11y/noStaticElementInteractions: 输入容器是拖放区，需挂 onDragOver/onDrop；键盘用户聚焦内部 textarea 即可 */}
           <div
             className="relative h-[120px] rounded-l border border-line bg-card shadow-card transition focus-within:border-accent"
@@ -576,14 +656,30 @@ function ChatView({ taskId }: { taskId: string }) {
               className="h-full w-full resize-none border-0 bg-transparent px-[20px] pt-[16px] text-[17px] text-ink placeholder:text-ink-3 focus:outline-none"
             />
             <div className="absolute bottom-0 left-0 right-0 flex items-center justify-between px-[14px] pb-[10px]">
-              <button
-                type="button"
-                onClick={openPicker}
-                title="添加附件"
-                className="flex h-[28px] w-[28px] items-center justify-center rounded-s text-ink-2 transition hover:bg-hover hover:text-ink"
-              >
-                <IconPlus />
-              </button>
+              <div className="flex items-center gap-[4px]">
+                {isCodingMode && (
+                  <button
+                    type="button"
+                    onClick={togglePlanMode}
+                    title={
+                      isPlanModeOn ? "关闭计划模式（恢复写入工具）" : "开启计划模式（只读探索）"
+                    }
+                    className={`flex h-[28px] w-[28px] items-center justify-center rounded-s transition hover:bg-hover ${
+                      isPlanModeOn ? "text-accent" : "text-ink-2 hover:text-ink"
+                    }`}
+                  >
+                    <IconClipboardCheck size={15} />
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={openPicker}
+                  title="添加附件"
+                  className="flex h-[28px] w-[28px] items-center justify-center rounded-s text-ink-2 transition hover:bg-hover hover:text-ink"
+                >
+                  <IconPlus />
+                </button>
+              </div>
               <div className="flex items-center gap-[8px]">
                 <ModelSelector
                   selectedId={taskProviderId}

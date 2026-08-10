@@ -7,6 +7,7 @@
 import type { AgentEvent } from "@everybuddy/ipc-contract";
 import { useEffect } from "react";
 import { useSessionStore } from "../stores/sessionStore";
+import { useToastStore } from "../stores/toastStore";
 
 export function useAgentStream(): void {
   useEffect(() => {
@@ -92,6 +93,22 @@ export function useAgentStream(): void {
             event.payload.output,
             event.payload.error,
           );
+          break;
+
+        // 扩展状态（plan-mode 的 value/lines/state，todo 的待办列表）
+        case "extension_status":
+          store.setExtensionStatus(taskId, event.payload.key, {
+            value: event.payload.value,
+            lines: event.payload.lines,
+            state: event.payload.state,
+          });
+          break;
+        // 扩展通知（瞬时提示）
+        case "extension_notify":
+          useToastStore.getState().push({
+            message: event.payload.message,
+            level: event.payload.level,
+          });
           break;
       }
     });

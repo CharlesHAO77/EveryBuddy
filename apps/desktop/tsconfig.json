@@ -20,6 +20,8 @@
     "tests/modelStore.test.ts",
     "tests/toolAvailability.test.ts",
     "tests/grepTool.test.ts",
-    "tests/findTool.test.ts"
+    "tests/findTool.test.ts",
+    "tests/planModeUtils.test.ts",
+    "tests/prompts.test.ts"
   ]
 }

@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { MainView } from "./components/MainView";
 import { SettingsPanel } from "./components/SettingsPanel";
 import { Sidebar } from "./components/Sidebar";
+import { ToastHost } from "./components/ToastHost";
 import { useAgentStream } from "./hooks/useAgentStream";
 import { useSessionStore } from "./stores/sessionStore";
 import { useUIStore } from "./stores/uiStore";
@@ -55,6 +56,7 @@ export function App() {
         <MainView />
       </div>
       {isSettingsOpen && <SettingsPanel onClose={() => setSettingsOpen(false)} />}
+      <ToastHost />
     </div>
   );
 }

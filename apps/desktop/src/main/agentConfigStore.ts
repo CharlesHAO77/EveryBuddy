@@ -27,12 +27,14 @@ const DEFAULT_PATHS: AgentConfigPaths = {
 
 /** 单模式 agent 配置（可编辑字段） */
 export interface AgentConfig {
-  /** 覆盖默认 system prompt */
+  /** 覆盖模式默认提示词（默认由 main/prompts/*.ts builder 生成） */
   systemPrompt?: string;
   /** 追加到 system prompt 末尾的文本 */
   appendSystemPrompt?: string[];
   /** 追加到工具 allowlist 的工具名（如 ["understand_image","generate_image"]） */
   tools?: string[];
+  /** 启用的扩展名（如 ["plan-mode","todo"]）；undefined 走模式默认 */
+  extensions?: string[];
   /** 该模式的默认对话模型 provider id */
   defaultModelProviderId?: string;
   /** 该模式的视觉理解模型 provider id（缺省用能力标签） */

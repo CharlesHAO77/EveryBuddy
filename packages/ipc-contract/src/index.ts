@@ -119,6 +119,23 @@ export type AgentEvent =
         output?: unknown;
         error?: string;
       };
+    }
+  // 扩展事件（plan-mode / todo 等桌面适配扩展经 IPC 推送到渲染进程）
+  | {
+      streamId: string;
+      type: "extension_status";
+      payload: {
+        key: string;
+        value?: string;
+        lines?: string[];
+        /** 扩展自有状态机（如 plan-mode 的 off/plan/ready/executing），供渲染进程做条件渲染 */
+        state?: string;
+      };
+    }
+  | {
+      streamId: string;
+      type: "extension_notify";
+      payload: { message: string; level?: "info" | "warn" | "error" };
     };
 
 // ────────────────────────────────────────────────
@@ -358,6 +375,14 @@ export const openPathRequestSchema = z.object({
   path: z.string().min(1, "参数缺失"),
 });
 
+/** 扩展命令请求（如 plan-mode toggle） */
+export const extensionCommandRequestSchema = z.object({
+  taskId: z.string().min(1, "参数缺失"),
+  extension: z.string().min(1, "参数缺失"),
+  command: z.string().min(1, "参数缺失"),
+});
+export type ExtensionCommandRequest = z.infer<typeof extensionCommandRequestSchema>;
+
 // ────────────────────────────────────────────────
 // Preload API 形状（见 §6.3）
 // ────────────────────────────────────────────────
@@ -367,6 +392,7 @@ export interface ElectronAPI {
     prompt: (req: PromptRequest) => Promise<PromptResponse>;
     abort: (streamId: string) => Promise<void>;
     onEvent: (cb: (event: AgentEvent) => void) => () => void;
+    extensionCommand: (req: ExtensionCommandRequest) => Promise<void>;
   };
   task: {
     list: () => Promise<TaskMeta[]>;

@@ -14,6 +14,7 @@ import {
   createNamedWorkspaceRequestSchema,
   createTaskRequestSchema,
   createWorkspaceRequestSchema,
+  extensionCommandRequestSchema,
   idRequestSchema,
   openPathRequestSchema,
   promptRequestSchema,
@@ -106,6 +107,12 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
   ipcMain.handle("agent:abort", async (_evt, raw) => {
     const req = validate(abortRequestSchema, raw);
     await agentRuntime.abort(req.streamId);
+  });
+
+  // 扩展命令（如 plan-mode toggle/execute）-> 扩展控制器侧信道
+  ipcMain.handle("agent:extension-command", async (_evt, raw) => {
+    const req = validate(extensionCommandRequestSchema, raw);
+    agentRuntime.runExtensionCommand(req.taskId, req.extension, req.command);
   });
 
   // ── task:* ────────────────────────────────
