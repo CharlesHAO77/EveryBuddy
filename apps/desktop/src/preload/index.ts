@@ -41,6 +41,7 @@ const api: ElectronAPI = {
     remove: (id) => ipcRenderer.invoke("workspace:remove", { id }),
     selectDir: () => ipcRenderer.invoke("workspace:selectDir"),
     openDir: (path) => ipcRenderer.invoke("workspace:openDir", { path }),
+    readDir: (path) => ipcRenderer.invoke("workspace:readDir", { path }),
   },
   config: {
     getModels: () => ipcRenderer.invoke("config:getModels"),

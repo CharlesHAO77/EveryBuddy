@@ -28,7 +28,8 @@ export function createMainWindow(): BrowserWindow {
       ? {
           titleBarStyle: "hidden" as const,
           titleBarOverlay: {
-            color: "#faf8f4", // 与 globals.css --paper 一致
+            // 透明背景：展开时贴合右侧栏 bg-paper-deep，折叠时贴合主区 bg-paper，避免顶部出现色块
+            color: "rgba(0, 0, 0, 0)",
             symbolColor: "#1f1c18", // 与 --ink 一致
             height: 40,
           },

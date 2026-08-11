@@ -12,6 +12,7 @@ import {
   modelTypeSchema,
   openPathRequestSchema,
   promptRequestSchema,
+  readDirRequestSchema,
   renameTaskRequestSchema,
   saveModelRequestSchema,
 } from "./index";
@@ -68,6 +69,18 @@ describe("openPathRequestSchema", () => {
   });
   it("rejects missing path", () => {
     expect(openPathRequestSchema.safeParse({}).success).toBe(false);
+  });
+});
+
+describe("readDirRequestSchema", () => {
+  it("accepts path", () => {
+    expect(readDirRequestSchema.safeParse({ path: "/tmp/x" }).success).toBe(true);
+  });
+  it("rejects empty path", () => {
+    expect(readDirRequestSchema.safeParse({ path: "" }).success).toBe(false);
+  });
+  it("rejects missing path", () => {
+    expect(readDirRequestSchema.safeParse({}).success).toBe(false);
   });
 });
 

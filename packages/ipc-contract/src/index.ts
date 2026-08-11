@@ -162,6 +162,15 @@ export interface Workspace {
   createdAt: string;
 }
 
+/** 目录条目（workspace:readDir 单层返回，供渲染进程懒加载目录树） */
+export interface WorkspaceDirEntry {
+  name: string;
+  path: string;
+  isDir: boolean;
+  /** 文件字节数（目录为 undefined） */
+  size?: number;
+}
+
 // ────────────────────────────────────────────────
 // Task（= 会话）
 // ────────────────────────────────────────────────
@@ -388,6 +397,11 @@ export const openPathRequestSchema = z.object({
   path: z.string().min(1, "参数缺失"),
 });
 
+/** 读取目录单层条目（懒加载目录树用） */
+export const readDirRequestSchema = z.object({
+  path: z.string().min(1, "参数缺失"),
+});
+
 /** 扩展命令请求（如 plan-mode toggle） */
 export const extensionCommandRequestSchema = z.object({
   taskId: z.string().min(1, "参数缺失"),
@@ -447,6 +461,8 @@ export interface ElectronAPI {
     remove: (id: string) => Promise<void>;
     selectDir: () => Promise<string | null>;
     openDir: (path: string) => Promise<void>;
+    /** 读取目录单层条目（懒加载目录树） */
+    readDir: (path: string) => Promise<WorkspaceDirEntry[]>;
   };
   config: {
     getModels: () => Promise<ModelProviderConfig[]>;

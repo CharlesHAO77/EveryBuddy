@@ -6,7 +6,7 @@
  */
 
 import { randomUUID } from "node:crypto";
-import { rm } from "node:fs/promises";
+import { readdir, rm, stat } from "node:fs/promises";
 import path from "node:path";
 import type { TaskMeta } from "@everybuddy/ipc-contract";
 import {
@@ -19,6 +19,7 @@ import {
   idRequestSchema,
   openPathRequestSchema,
   promptRequestSchema,
+  readDirRequestSchema,
   renameTaskRequestSchema,
   saveModelRequestSchema,
   setApiKeyRequestSchema,
@@ -249,6 +250,25 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
   ipcMain.handle("workspace:openDir", async (_evt, raw) => {
     const { path: targetPath } = validate(openPathRequestSchema, raw);
     await openInFinder(targetPath);
+  });
+
+  // 读取目录单层条目（懒加载目录树：文件附字节数，目录无）
+  ipcMain.handle("workspace:readDir", async (_evt, raw) => {
+    const { path: dir } = validate(readDirRequestSchema, raw);
+    const dirents = await readdir(dir, { withFileTypes: true });
+    return Promise.all(
+      dirents.map(async (d) => {
+        const p = path.join(dir, d.name);
+        if (!d.isFile()) return { name: d.name, path: p, isDir: d.isDirectory() };
+        let size: number | undefined;
+        try {
+          size = (await stat(p)).size;
+        } catch {
+          size = undefined;
+        }
+        return { name: d.name, path: p, isDir: false, size };
+      }),
+    );
   });
 
   // ── config:* ──────────────────────────────
