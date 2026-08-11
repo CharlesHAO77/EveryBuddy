@@ -42,6 +42,8 @@ const api: ElectronAPI = {
     selectDir: () => ipcRenderer.invoke("workspace:selectDir"),
     openDir: (path) => ipcRenderer.invoke("workspace:openDir", { path }),
     readDir: (path) => ipcRenderer.invoke("workspace:readDir", { path }),
+    revealPath: (path) => ipcRenderer.invoke("workspace:revealPath", { path }),
+    readFile: (path) => ipcRenderer.invoke("workspace:readFile", { path }),
   },
   config: {
     getModels: () => ipcRenderer.invoke("config:getModels"),

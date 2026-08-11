@@ -6,7 +6,8 @@
 
 import type { AgentEvent } from "@everybuddy/ipc-contract";
 import { useEffect } from "react";
-import { useSessionStore } from "../stores/sessionStore";
+import { type PreviewItem, useSessionStore } from "../stores/sessionStore";
+import { useUIStore } from "../stores/uiStore";
 
 export function useAgentStream(): void {
   useEffect(() => {
@@ -92,6 +93,30 @@ export function useAgentStream(): void {
             event.payload.output,
             event.payload.error,
           );
+          // 生图完成：把生成图片加入「最近结果」并自动打开右侧栏切到预览
+          if (event.payload.toolName === "generate_image" && event.payload.ok) {
+            const output = event.payload.output as { details?: { paths?: unknown } } | undefined;
+            const paths = Array.isArray(output?.details?.paths)
+              ? output.details.paths.filter((p): p is string => typeof p === "string")
+              : [];
+            if (paths.length > 0) {
+              const s = useSessionStore.getState();
+              const task = s.tasks.find((t) => t.id === taskId);
+              const cwd = task?.workspacePath ?? task?.workDir;
+              if (cwd) {
+                const items: PreviewItem[] = paths.map((rel) => ({
+                  id: crypto.randomUUID(),
+                  kind: "image",
+                  name: rel.split(/[\\/]/).pop() ?? rel,
+                  // 相对路径拼 cwd：混合分隔符由主进程 path.resolve 归一
+                  absPath: `${cwd}/${rel}`,
+                }));
+                s.addPreviewItems(taskId, items);
+                s.setPreviewSelection(taskId, items[0]?.id ?? null);
+                useUIStore.setState({ rightPanelOpen: true, rightPanelView: "preview" });
+              }
+            }
+          }
           break;
 
         // 工具权限确认（手动模式下副作用工具调用前暂停，等待人工应答）
@@ -115,13 +140,30 @@ export function useAgentStream(): void {
           break;
 
         // 扩展状态（plan-mode 的 value/lines/state，todo 的待办列表）
-        case "extension_status":
-          store.setExtensionStatus(taskId, event.payload.key, {
+        case "extension_status": {
+          const key = event.payload.key;
+          // 读更新前状态，用于判断「关键时机」自动切换（todo 首次出现 / 计划就绪 / 开始执行 / 进入计划模式）
+          const prev = store.extensionStates[taskId]?.[key];
+          store.setExtensionStatus(taskId, key, {
             value: event.payload.value,
             lines: event.payload.lines,
             state: event.payload.state,
           });
+          const nextLines = event.payload.lines;
+          const nextState = event.payload.state;
+          const shouldShow =
+            (key === "todo" &&
+              (nextLines?.length ?? 0) > 0 &&
+              (prev?.lines?.length ?? 0) === 0) ||
+            (key === "plan-mode" &&
+              nextState !== undefined &&
+              nextState !== "off" &&
+              prev?.state !== nextState);
+          if (shouldShow) {
+            useUIStore.setState({ rightPanelOpen: true, rightPanelView: "todo-plan" });
+          }
           break;
+        }
         // 扩展通知（瞬时提示）：放入当前对话消息区居中显示（4s 自动消失），替代右上角 toast
         case "extension_notify":
           store.pushChatNotice(taskId, event.payload.message, event.payload.level);

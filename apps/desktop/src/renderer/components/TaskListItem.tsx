@@ -28,6 +28,7 @@ export function TaskListItem({
   onDeleteRequest,
 }: TaskListItemProps) {
   const renameTask = useSessionStore((s) => s.renameTask);
+  const openTaskDir = useSessionStore((s) => s.openTaskDir);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState("");
   // Esc 取消后 blur 不再提交
@@ -102,6 +103,7 @@ export function TaskListItem({
       <ActionMenu
         items={[
           { label: "重命名", onSelect: startRename },
+          { label: "打开所在目录", onSelect: () => void openTaskDir(id) },
           { label: "删除", danger: true, onSelect: () => onDeleteRequest(id, title) },
         ]}
       />

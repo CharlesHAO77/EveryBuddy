@@ -1,46 +1,35 @@
 /**
- * RightPanel - 右侧面板（待办 + 未来预览区）。
+ * RightPanel - 右侧面板（待办 + 文件 + 预览）。
  *
- * 视图注册表便于扩展（后续加制品 md 编辑器、工作区文件等）。待办视图
- * 展示 plan-mode 的三态步骤（完成删除线 / 当前项高亮 / 待执行）与 todo 进度。
+ * 视图注册表便于扩展。待办视图展示 plan-mode 的三态步骤（完成删除线 / 当前项高亮 / 待执行）
+ * 与 todo 进度；文件 / 预览视图分别来自 FileTreeView / PreviewView。
+ * 当前 tab 状态上移至 uiStore，供 agent 事件（todo/plan 关键时机、生图产物）自动打开面板并切换。
  * 视觉对齐 Sidebar（bg-paper-deep + border-l）；折叠图标固定右上角（win 贴原生按钮左侧 / mac 直接贴角），
  * 折叠后仅保留按钮、无长条边栏。
  */
 
-import type { WorkspaceDirEntry } from "@everybuddy/ipc-contract";
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import { useSessionStore } from "../stores/sessionStore";
-import { useUIStore } from "../stores/uiStore";
+import { type RightPanelViewId, useUIStore } from "../stores/uiStore";
+import { Empty } from "./Empty";
+import { FileTreeView } from "./FileTreeView";
 import {
-  IconChevronRight,
   IconClipboardCheck,
   IconEye,
   IconFile,
-  IconFolder,
   IconPanelRightClose,
   IconPanelRightOpen,
 } from "./icons";
+import { PreviewView } from "./PreviewView";
 
-type RightPanelViewId = "todo-plan" | "files" | "preview";
+type ViewId = RightPanelViewId;
 
-const VIEWS: Array<{ id: RightPanelViewId; label: string; icon: ReactNode }> = [
+const VIEWS: Array<{ id: ViewId; label: string; icon: ReactNode }> = [
   { id: "todo-plan", label: "待办", icon: <IconClipboardCheck size={12} /> },
   { id: "files", label: "文件", icon: <IconFile size={12} /> },
   { id: "preview", label: "预览", icon: <IconEye size={12} /> },
 ];
-
-function Empty({ text }: { text: string }) {
-  return (
-    <div className="flex flex-1 flex-col items-center justify-center gap-1.5 text-center text-[12.5px] text-ink-3">
-      {text}
-    </div>
-  );
-}
-
-function ComingSoon() {
-  return <Empty text="敬请期待" />;
-}
 
 /** 计划步骤三态：已完成（删除线）/ 当前执行项（强调条 + 浅绿底）/ 待执行 */
 function TodoPlanView() {
@@ -199,118 +188,11 @@ function TodoPlanView() {
   );
 }
 
-/** 加载并渲染某目录的直接子项：文件夹展开 / 文件只读行；处理加载中、失败与空目录态 */
-function DirContents({ path: dirPath, depth }: { path: string; depth: number }) {
-  const [entries, setEntries] = useState<WorkspaceDirEntry[] | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      setEntries(await window.electronAPI.workspace.readDir(dirPath));
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setLoading(false);
-    }
-  }, [dirPath]);
-
-  // 挂载即加载（失败后不自动重试；重新展开/切换任务可重试）
-  useEffect(() => {
-    if (entries === null && error === null && !loading) void load();
-  }, [entries, error, loading, load]);
-
-  if (loading) {
-    return (
-      <div className="px-1.5 py-0.5 text-[11.5px] text-ink-3" style={{ paddingLeft: depth * 14 + 6 }}>
-        加载中…
-      </div>
-    );
-  }
-  if (error) {
-    return (
-      <div className="px-1.5 py-0.5 text-[11.5px] text-ink-3" style={{ paddingLeft: depth * 14 + 6 }}>
-        读取失败：{error}
-      </div>
-    );
-  }
-  if (entries === null) return null;
-  if (entries.length === 0) {
-    return (
-      <div className="px-1.5 py-0.5 text-[11.5px] text-ink-3" style={{ paddingLeft: depth * 14 + 6 }}>
-        {depth === 0 ? "文件为空" : "空目录"}
-      </div>
-    );
-  }
-
-  const sorted = entries
-    .slice()
-    .sort((a, b) => (a.isDir === b.isDir ? a.name.localeCompare(b.name) : a.isDir ? -1 : 1));
-  const rowPad = depth * 14 + 6;
-
-  return (
-    <div>
-      {sorted.map((e) =>
-        e.isDir ? (
-          <DirNode key={e.path} name={e.name} path={e.path} depth={depth} />
-        ) : (
-          <div
-            key={e.path}
-            className="flex items-center gap-1.5 rounded-s px-1.5 py-1 text-[12px] text-ink-2"
-            style={{ paddingLeft: rowPad }}
-          >
-            <span className="w-3 shrink-0" />
-            <IconFile size={13} className="shrink-0 text-ink-3" />
-            <span className="min-w-0 truncate">{e.name}</span>
-          </div>
-        ),
-      )}
-    </div>
-  );
-}
-
-/** 文件夹行：点击展开/收起（子项由 DirContents 懒加载） */
-function DirNode({ name, path: dirPath, depth }: { name: string; path: string; depth: number }) {
-  const [open, setOpen] = useState(false);
-  return (
-    <div>
-      <button
-        type="button"
-        onClick={() => setOpen(!open)}
-        title={dirPath}
-        className="flex w-full items-center gap-1.5 rounded-s px-1.5 py-1 text-[12px] text-ink-2 transition hover:bg-hover hover:text-ink"
-        style={{ paddingLeft: depth * 14 + 6 }}
-      >
-        <IconChevronRight
-          size={12}
-          className={`shrink-0 text-ink-3 transition-transform ${open ? "rotate-90" : ""}`}
-        />
-        <IconFolder size={14} className="shrink-0 text-accent" />
-        <span className="min-w-0 truncate">{name}</span>
-      </button>
-      {open && <DirContents path={dirPath} depth={depth + 1} />}
-    </div>
-  );
-}
-
-/** 「文件」视图：当前任务工作空间目录（空间任务 -> workspacePath；临时任务 -> workDir），直接显示目录内容 */
-function FileTreeView() {
-  const taskId = useSessionStore((s) => s.currentTaskId);
-  const task = useSessionStore((s) => (taskId ? s.tasks.find((t) => t.id === taskId) : undefined));
-  const rootPath = task?.workspacePath ?? task?.workDir;
-
-  if (!rootPath) {
-    return <Empty text="选择或新建对话查看工作空间文件" />;
-  }
-  return <DirContents key={rootPath} path={rootPath} depth={0} />;
-}
-
 export function RightPanel() {
   const open = useUIStore((s) => s.rightPanelOpen);
   const setOpen = useUIStore((s) => s.setRightPanelOpen);
-  const [view, setView] = useState<RightPanelViewId>("todo-plan");
+  const view = useUIStore((s) => s.rightPanelView);
+  const setView = useUIStore((s) => s.setRightPanelView);
   // 仅 Windows 右上角有原生窗口按钮（WCO，含缩放/最大化），折叠按钮需贴其左侧；macOS 无右上角按钮，直接贴角
   const isWin = document.documentElement.dataset.platform === "win";
 
@@ -381,7 +263,7 @@ export function RightPanel() {
         ) : view === "files" ? (
           <FileTreeView />
         ) : (
-          <ComingSoon />
+          <PreviewView />
         )}
       </div>
     </div>

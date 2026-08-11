@@ -596,6 +596,7 @@ class AgentRuntime {
           type: "tool_execution_end",
           payload: {
             toolCallId: e.toolCallId as string,
+            toolName: e.toolName as string,
             ok: !e.isError,
             output: e.result,
             error: e.isError ? this.extractError(e.result) : undefined,

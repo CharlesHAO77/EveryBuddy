@@ -65,6 +65,10 @@ export function ActionMenu({ items }: ActionMenuProps) {
         className={`flex h-[20px] w-[20px] items-center justify-center rounded-s text-ink-3 transition hover:bg-active ${
           open ? "opacity-100" : "opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
         }`}
+        onKeyDown={(e) => {
+          // 行级 role="button" 会响应 Enter/Space：按键落在 ⋯ 上时阻止冒泡，避免误触行动作
+          if (e.key === "Enter" || e.key === " ") e.stopPropagation();
+        }}
       >
         <IconMoreVertical size={14} title="更多操作" />
       </button>

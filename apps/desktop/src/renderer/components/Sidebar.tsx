@@ -90,6 +90,7 @@ export function Sidebar() {
       return {
         id: ws.id,
         name: ws.name,
+        path: ws.path,
         sessions: searchQuery ? wsTasks.filter((s) => s.title.includes(searchQuery)) : wsTasks,
       };
     })
@@ -343,6 +344,7 @@ export function Sidebar() {
                         taskCount: ws.sessions.length,
                       })
                     }
+                    onOpenDir={() => void window.electronAPI.workspace.openDir(ws.path)}
                   >
                     {ws.sessions.map((session) => (
                       <TaskListItem

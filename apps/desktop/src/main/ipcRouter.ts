@@ -35,7 +35,9 @@ import {
   createWorkspace,
   getTaskCwd,
   openInFinder,
+  readFileForPreview,
   resolveSessionLocation,
+  revealInFolder,
   selectDirectory,
 } from "./workspaceManager";
 
@@ -269,6 +271,18 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
         return { name: d.name, path: p, isDir: false, size };
       }),
     );
+  });
+
+  // 在文件管理器中显示该文件（选中高亮；已删则兜底打开父目录）
+  ipcMain.handle("workspace:revealPath", async (_evt, raw) => {
+    const { path: targetPath } = validate(openPathRequestSchema, raw);
+    await revealInFolder(targetPath);
+  });
+
+  // 读取文件内容用于预览（主进程按扩展名分类）
+  ipcMain.handle("workspace:readFile", async (_evt, raw) => {
+    const { path: targetPath } = validate(openPathRequestSchema, raw);
+    return readFileForPreview(targetPath);
   });
 
   // ── config:* ──────────────────────────────

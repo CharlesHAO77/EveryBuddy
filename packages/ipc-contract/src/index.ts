@@ -115,6 +115,8 @@ export type AgentEvent =
       type: "tool_execution_end";
       payload: {
         toolCallId: string;
+        /** 工具名（SDK ToolExecutionEndEvent 携带，供渲染端按工具结果自动收集产物） */
+        toolName: string;
         ok: boolean;
         output?: unknown;
         error?: string;
@@ -170,6 +172,19 @@ export interface WorkspaceDirEntry {
   /** 文件字节数（目录为 undefined） */
   size?: number;
 }
+
+/**
+ * workspace:readFile 返回（预览按类型分派，见 §6.2）：
+ *  - image：base64 dataUrl（图片预览）
+ *  - text：UTF-8 文本（Markdown/代码预览）
+ *  - binary：非文本或超过文本上限（无法直接预览）
+ *  - error：读取失败（文件不存在/权限等），error 为可展示消息
+ */
+export type ReadFileResult =
+  | { kind: "image"; dataUrl: string; mimeType: string; size: number }
+  | { kind: "text"; text: string; mimeType: string; size: number }
+  | { kind: "binary"; size: number }
+  | { kind: "error"; error: string };
 
 // ────────────────────────────────────────────────
 // Task（= 会话）
@@ -463,6 +478,10 @@ export interface ElectronAPI {
     openDir: (path: string) => Promise<void>;
     /** 读取目录单层条目（懒加载目录树） */
     readDir: (path: string) => Promise<WorkspaceDirEntry[]>;
+    /** 在系统文件管理器中显示该文件（选中高亮）；文件已删除则兜底打开父目录 */
+    revealPath: (path: string) => Promise<void>;
+    /** 读取文件内容用于预览（主进程按扩展名分类，返回 ReadFileResult） */
+    readFile: (path: string) => Promise<ReadFileResult>;
   };
   config: {
     getModels: () => Promise<ModelProviderConfig[]>;

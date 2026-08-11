@@ -7,6 +7,8 @@ interface WorkspaceListItemProps {
   open: boolean;
   onToggle: () => void;
   onRemoveRequest: () => void;
+  /** 在系统文件管理器中打开该空间目录 */
+  onOpenDir: () => void;
   /** 展开时渲染的子任务列表（由 Sidebar 传入） */
   children?: ReactNode;
 }
@@ -20,6 +22,7 @@ export function WorkspaceListItem({
   open,
   onToggle,
   onRemoveRequest,
+  onOpenDir,
   children,
 }: WorkspaceListItemProps) {
   return (
@@ -36,7 +39,12 @@ export function WorkspaceListItem({
       >
         <IconFolder title="空间" className="shrink-0 text-ink-2" />
         <span className="flex-1 truncate text-left">{name}</span>
-        <ActionMenu items={[{ label: "移除空间", danger: true, onSelect: onRemoveRequest }]} />
+        <ActionMenu
+          items={[
+            { label: "打开所在目录", onSelect: onOpenDir },
+            { label: "移除空间", danger: true, onSelect: onRemoveRequest },
+          ]}
+        />
         {/* chevron hover 时让位给 ⋯ 按钮 */}
         <span className="text-ink-3 group-hover:hidden">
           <IconChevronDown

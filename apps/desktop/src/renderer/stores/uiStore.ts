@@ -3,6 +3,9 @@ import { create } from "zustand";
 
 export type CategoryId = "daily" | "coding";
 
+/** 右侧面板 tab：待办/计划 / 文件 / 预览 */
+export type RightPanelViewId = "todo-plan" | "files" | "preview";
+
 /** 设置侧栏分区 id：通用 → 模型设置（用户确认顺序） */
 export type SettingsSectionId = "models" | "general";
 
@@ -26,6 +29,9 @@ interface UIState {
   /** 右侧面板（待办/计划 + 预览区）开合 */
   rightPanelOpen: boolean;
   setRightPanelOpen: (open: boolean) => void;
+  /** 右侧面板当前 tab（上移自 RightPanel 局部 state，供 agent 事件自动切换） */
+  rightPanelView: RightPanelViewId;
+  setRightPanelView: (view: RightPanelViewId) => void;
   /** 右侧面板宽度（v1 固定默认，预留拖拽） */
   rightPanelWidth: number;
   setRightPanelWidth: (w: number) => void;
@@ -55,6 +61,8 @@ export const useUIStore = create<UIState>((set) => ({
 
   rightPanelOpen: true,
   setRightPanelOpen: (open) => set({ rightPanelOpen: open }),
+  rightPanelView: "todo-plan",
+  setRightPanelView: (view) => set({ rightPanelView: view }),
   rightPanelWidth: 250,
   setRightPanelWidth: (w) => set({ rightPanelWidth: w }),
 

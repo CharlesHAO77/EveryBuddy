@@ -41,6 +41,15 @@ export interface ExtensionStatus {
   state?: string;
 }
 
+/** 右侧预览 tab 的单个可预览项（最近结果 strip 中的 chip） */
+export interface PreviewItem {
+  id: string;
+  kind: "image" | "file";
+  name: string;
+  /** 文件绝对路径（生成图片为 cwd 拼接相对路径，混合分隔符由主进程归一） */
+  absPath: string;
+}
+
 /** 待人工确认的工具调用（tool_approval_required 事件负载） */
 export interface PendingToolApproval {
   requestId: string;
@@ -72,6 +81,12 @@ interface SessionState {
   hydratingIds: string[];
   /** 扩展状态：taskId -> extensionKey -> {value, lines, state} */
   extensionStates: Record<string, Record<string, ExtensionStatus>>;
+  /** 预览项：taskId -> 最近结果列表（新在前，去重 + 上限 100） */
+  previewItems: Record<string, PreviewItem[]>;
+  /** 当前选中的预览项 id：taskId -> PreviewItem.id | null */
+  previewSelection: Record<string, string | null>;
+  addPreviewItems: (taskId: string, items: PreviewItem[]) => void;
+  setPreviewSelection: (taskId: string, id: string | null) => void;
   /** 任务执行模式：taskId -> auto/manual/plan（输入框右下模式下拉选择） */
   modes: Record<string, ExecutionMode>;
   /** 主页选中的待应用模式：创建对话时应用到新任务 */
@@ -181,6 +196,8 @@ export const useSessionStore = create<SessionState>((set, get) => ({
   pendingWorkspaceId: null,
   hydratingIds: [],
   extensionStates: {},
+  previewItems: {},
+  previewSelection: {},
   modes: {},
   pendingMode: "auto",
   pendingApprovals: {},
@@ -273,6 +290,8 @@ export const useSessionStore = create<SessionState>((set, get) => ({
       const { [id]: _pa, ...pendingApprovals } = state.pendingApprovals;
       const { [id]: _aa, ...alwaysAllowedTools } = state.alwaysAllowedTools;
       const { [id]: _es, ...extensionStates } = state.extensionStates;
+      const { [id]: _pi, ...previewItems } = state.previewItems;
+      const { [id]: _ps, ...previewSelection } = state.previewSelection;
       return {
         tasks: state.tasks.filter((t) => t.id !== id),
         currentTaskId: state.currentTaskId === id ? null : state.currentTaskId,
@@ -281,6 +300,8 @@ export const useSessionStore = create<SessionState>((set, get) => ({
         pendingApprovals,
         alwaysAllowedTools,
         extensionStates,
+        previewItems,
+        previewSelection,
       };
     });
   },
@@ -645,6 +666,26 @@ export const useSessionStore = create<SessionState>((set, get) => ({
         ...state.extensionStates,
         [taskId]: { ...state.extensionStates[taskId], [key]: status },
       },
+    })),
+
+  addPreviewItems: (taskId, items) =>
+    set((state) => {
+      const existing = state.previewItems[taskId] ?? [];
+      // 按 absPath 去重（同一文件不重复入条），新项前置、封顶 100
+      const seen = new Set(existing.map((i) => i.absPath));
+      const fresh = items.filter((i) => !seen.has(i.absPath));
+      if (fresh.length === 0) return state;
+      return {
+        previewItems: {
+          ...state.previewItems,
+          [taskId]: [...fresh, ...existing].slice(0, 100),
+        },
+      };
+    }),
+
+  setPreviewSelection: (taskId, id) =>
+    set((state) => ({
+      previewSelection: { ...state.previewSelection, [taskId]: id },
     })),
 
   setMode: (taskId, mode) => {
