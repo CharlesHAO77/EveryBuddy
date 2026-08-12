@@ -65,6 +65,11 @@ export function useSlashCommands({ taskId, mode, setText, onSend }: UseSlashComm
 
   const selectCommand = (cmd: SlashCommand) => {
     setOpen(false);
+    // 扩展命令（/steer /follow-up）：插入前缀并保持 textarea 焦点，等待用户继续输入参数
+    if (cmd.insertPrefix) {
+      setText(cmd.insertPrefix);
+      return;
+    }
     setText("");
     cmd.run(ctx);
   };

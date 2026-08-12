@@ -10,12 +10,14 @@
 
 import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
+import { aggregateBilling, formatCost, formatTokens, TYPE_LABELS } from "../billing";
 import { useSessionStore } from "../stores/sessionStore";
 import { type RightPanelViewId, useUIStore } from "../stores/uiStore";
 import { Empty } from "./Empty";
 import { FileTreeView } from "./FileTreeView";
 import {
   IconClipboardCheck,
+  IconCoins,
   IconEye,
   IconFile,
   IconPanelRightClose,
@@ -29,7 +31,64 @@ const VIEWS: Array<{ id: ViewId; label: string; icon: ReactNode }> = [
   { id: "todo-plan", label: "待办", icon: <IconClipboardCheck size={12} /> },
   { id: "files", label: "文件", icon: <IconFile size={12} /> },
   { id: "preview", label: "预览", icon: <IconEye size={12} /> },
+  { id: "billing", label: "计费", icon: <IconCoins size={12} /> },
 ];
+
+/** 会话级计费汇总（按模型类型分组，真实 usage/cost） */
+function BillingView() {
+  const taskId = useSessionStore((s) => s.currentTaskId);
+  const messages = useSessionStore((s) =>
+    taskId ? s.tasks.find((t) => t.id === taskId)?.messages ?? [] : [],
+  );
+  const models = useUIStore((s) => s.models);
+
+  if (!taskId) return <Empty text="选择或新建对话查看计费" />;
+  const rows = aggregateBilling(messages, models);
+  if (rows.length === 0) return <Empty text="暂无计费数据" />;
+
+  return (
+    <div className="flex flex-col gap-2">
+      <div className="flex items-center gap-1.5 text-[11px] font-semibold tracking-wide text-accent-strong">
+        <IconCoins size={12} className="shrink-0" />
+        会话计费 · 按模型类型
+      </div>
+      {rows.map((r) => {
+        const tag =
+          r.type === "llm"
+            ? "bg-[#f6efd8] text-[#6b5b1f]"
+            : r.type === "vlm"
+              ? "bg-[#efe8fa] text-[#5a3e8f]"
+              : "bg-[#e2f2f8] text-[#0f6d8f]";
+        return (
+          <div key={r.type} className="rounded-m border border-line bg-card px-3 py-2 shadow-card">
+            <div className="flex items-center gap-1.5 text-[13px] font-semibold text-ink">
+              <span className={`rounded px-1 text-[9.5px] font-bold leading-[1.5] ${tag}`}>
+                {r.type === "llm" ? "LLM" : r.type === "vlm" ? "VLM" : "IMG"}
+              </span>
+              <span>{TYPE_LABELS[r.type]}</span>
+            </div>
+            {r.model && <div className="text-[11px] text-ink-3">{r.model}</div>}
+            <div className="mt-1 flex flex-wrap items-baseline gap-2">
+              <span className="text-[15px] font-bold tabular-nums text-ink">
+                {formatTokens(r.usage.totalTokens)}
+              </span>
+              <span className="text-[11px] text-ink-3">tokens</span>
+              {r.usage.cost > 0 && (
+                <span className="text-[12.5px] font-semibold text-accent-strong">
+                  {formatCost(r.usage.cost)}
+                </span>
+              )}
+            </div>
+            <div className="text-[11px] text-ink-3 tabular-nums">
+              {r.count} 条消息 · {formatTokens(r.usage.input)} in / {formatTokens(r.usage.output)}{" "}
+              out / {formatTokens(r.usage.cacheRead)} cache
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
 
 /** 计划步骤三态：已完成（删除线）/ 当前执行项（强调条 + 浅绿底）/ 待执行 */
 function TodoPlanView() {
@@ -262,6 +321,8 @@ export function RightPanel() {
           <TodoPlanView />
         ) : view === "files" ? (
           <FileTreeView />
+        ) : view === "billing" ? (
+          <BillingView />
         ) : (
           <PreviewView />
         )}

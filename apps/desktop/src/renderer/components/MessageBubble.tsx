@@ -6,7 +6,16 @@ import { useState } from "react";
 import type { ChatMessage, ContentBlock } from "../stores/sessionStore";
 import { formatFileSize } from "./AttachmentPreview";
 import { CompactionNoticeCard } from "./CompactionNoticeCard";
-import { IconAlertTriangle, IconCheck, IconChevronDown, IconChevronRight, IconFile } from "./icons";
+import {
+  IconAlertTriangle,
+  IconCheck,
+  IconChevronDown,
+  IconChevronRight,
+  IconFile,
+  IconStop,
+} from "./icons";
+import { MessageFooter } from "./MessageFooter";
+import { RunningIndicator } from "./RunningIndicator";
 import { TextCard } from "./TextCard";
 import { ThinkingCard } from "./ThinkingCard";
 import { ToolCallCard } from "./ToolCallCard";
@@ -75,6 +84,8 @@ export function MessageBubble({ message }: MessageBubbleProps) {
 
 interface AssistantGroupProps {
   messages: ChatMessage[];
+  /** 所属任务 id（footer 的赞/踩/分支等操作需要） */
+  taskId: string;
 }
 
 interface FlatBlock {
@@ -89,12 +100,14 @@ interface FlatBlock {
  * 合并为一条 AI 消息。结束后将思考+工具过程折叠为「任务已完成 {时长}」，仅展示最终文本结果；
  * 流式过程中保持平铺实时反馈。时间戳在整条消息结束时显示一次。
  */
-export function AssistantGroup({ messages }: AssistantGroupProps) {
+export function AssistantGroup({ messages, taskId }: AssistantGroupProps) {
   const isStreaming = messages.some((m) => m.isStreaming);
   const [expanded, setExpanded] = useState(false);
   const first = messages[0];
   const lastMsg = messages[messages.length - 1];
   const time = lastMsg ? formatTime(lastMsg.timestamp) : "";
+  // 取消语义：任一 turn 被取消即整组按「已取消」呈现（合成 abort 落在最后一条流式消息上）
+  const cancelled = messages.some((m) => m.cancelled || m.stopReason === "aborted");
 
   // 拍平所有 turn 的 blocks；notice（上下文压缩提示）作为独立块一并纳入，使其可折叠进同一过程
   const blocks: FlatBlock[] = messages.flatMap((m): FlatBlock[] => {
@@ -128,7 +141,8 @@ export function AssistantGroup({ messages }: AssistantGroupProps) {
   // 过程块 = 除最终结果外的全部块；若无 text 结果则整组为过程
   const processBlocks = lastTextIdx >= 0 ? blocks.filter((_, i) => i !== lastTextIdx) : blocks;
   const resultBlock = lastTextIdx >= 0 ? blocks[lastTextIdx] : undefined;
-  const foldable = !isStreaming && hasProcess && processBlocks.length > 0;
+  // 取消的消息不折叠为「任务已完成」卡：平铺保留部分内容 + 危险色「已取消」pill
+  const foldable = !isStreaming && !cancelled && hasProcess && processBlocks.length > 0;
 
   // 执行时长：当前会话用 endedAt 精确；历史回放无 endedAt 时退化为末条 timestamp（近似）
   const endTs = lastMsg?.endedAt ?? lastMsg?.timestamp ?? first?.timestamp ?? 0;
@@ -147,6 +161,13 @@ export function AssistantGroup({ messages }: AssistantGroupProps) {
   return (
     <div className="flex w-full justify-start">
       <div className="flex max-w-[85%] flex-col gap-1.5">
+        {/* 已取消：危险色 pill（替代「任务已完成」卡，下方平铺保留的部分内容） */}
+        {cancelled && !isStreaming && (
+          <span className="inline-flex w-fit items-center gap-1 rounded-full border border-danger/30 bg-danger/5 px-2.5 py-0.5 text-[12px] font-medium text-danger">
+            <IconStop size={10} />
+            已取消
+          </span>
+        )}
         {foldable ? (
           <>
             <button
@@ -175,10 +196,19 @@ export function AssistantGroup({ messages }: AssistantGroupProps) {
             {expanded && processBlocks.map(renderBlock)}
             {resultBlock ? renderBlock(resultBlock) : null}
           </>
+        ) : isStreaming && blocks.length === 0 ? (
+          // 流式已开始但尚无内容块（首 token 前）：组内「运行中」指示
+          <RunningIndicator />
         ) : (
           blocks.map(renderBlock)
         )}
-        {!isStreaming && <div className="mt-0.5 text-[11px] text-ink-3">{time}</div>}
+        {!isStreaming && (
+          <>
+            <div className="mt-0.5 text-[11px] text-ink-3">{time}</div>
+            {/* AI 消息 footer：模型/token/计费 + 复制/赞/踩/转发/分支（非流式已结束消息） */}
+            <MessageFooter taskId={taskId} messages={messages} />
+          </>
+        )}
       </div>
     </div>
   );

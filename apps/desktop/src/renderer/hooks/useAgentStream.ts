@@ -17,12 +17,23 @@ export function useAgentStream(): void {
 
       switch (event.type) {
         case "message_start":
-          store.startAssistantMessage(taskId);
+          store.startAssistantMessage(taskId, event.payload.sdkTimestamp);
           break;
         case "message_end":
           // 单条 LLM response 结束：内容块已完整，兜底关闭未闭合的 thinking/text 块。
           // 不结束消息级流式--工具可能仍在 message_end 之后执行
           store.closeContentBlocks(taskId);
+          // 取消语义：stopReason "aborted"（真实或主进程合成）→ 标记「已取消」
+          if (event.payload.stopReason === "aborted") store.markMessageCancelled(taskId);
+          // footer 元数据（usage/model/provider/stopReason）
+          store.setMessageMeta(taskId, event.payload);
+          break;
+        case "message_entry_ids":
+          // agent_settled 后下发的 assistant 条目 id 映射（分支锚点）
+          store.markMessageEntryIds(taskId, event.payload.entries);
+          break;
+        case "queue_update":
+          store.setQueueState(taskId, event.payload);
           break;
         case "error":
           store.addErrorMessage(taskId, event.payload.message);

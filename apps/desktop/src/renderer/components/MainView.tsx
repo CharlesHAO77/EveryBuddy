@@ -1,12 +1,20 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import type { AttachmentRef } from "@everybuddy/ipc-contract";
 import { useShallow } from "zustand/react/shallow";
+import {
+  MENTION_TOKEN_RE,
+  type MentionFile,
+  parseFileMentions,
+} from "../fileMentions";
 import { useAttachments } from "../hooks/useAttachments";
+import { useFileMentions } from "../hooks/useFileMentions";
 import { useSlashCommands } from "../hooks/useSlashCommands";
 import { type ChatMessage, useSessionStore } from "../stores/sessionStore";
 import { type CategoryId, getChatDefaultId, useUIStore } from "../stores/uiStore";
 import { AttachmentPreview } from "./AttachmentPreview";
 import { CompactionNoticeCard } from "./CompactionNoticeCard";
 import { ConversationTitle } from "./ConversationTitle";
+import { FileMentionMenu } from "./FileMentionMenu";
 import {
   IconArrowUp,
   IconCheck,
@@ -18,9 +26,12 @@ import {
   IconStop,
   IconX,
 } from "./icons";
+import { isBareSteerCommand, parseCommandChannel } from "../slashCommands";
 import { AssistantGroup, MessageBubble } from "./MessageBubble";
 import { ModelSelector } from "./ModelSelector";
 import { ModeSelect } from "./ModeSelect";
+import { RunningIndicator } from "./RunningIndicator";
+import { SendModeChooser } from "./SendModeChooser";
 import { SlashCommandMenu } from "./SlashCommandMenu";
 import { ToolApprovalBar } from "./ToolApprovalBar";
 
@@ -81,6 +92,42 @@ const codingTags = [
   { id: "cicd", label: "CI/CD" },
   { id: "docs", label: "文档" },
 ];
+
+/**
+ * 将 `@token` 解析为真实文件：token 为相对路径（src/auth/login.ts），
+ * 用 workspace.readDir 读其父目录单层，命中非目录文件即为有效（构造 AttachmentRef）。
+ */
+async function resolveMentionFile(cwd: string, token: string): Promise<MentionFile | null> {
+  if (!token || token.startsWith("/") || token.includes("..")) return null;
+  const parts = token.split("/");
+  const name = parts.pop();
+  if (!name) return null;
+  const parentRel = parts.join("/");
+  const dir = parentRel ? `${cwd}/${parentRel}` : cwd;
+  try {
+    const entries = await window.electronAPI.workspace.readDir(dir);
+    const hit = entries.find((e) => e.name === name);
+    if (hit && !hit.isDir) return { path: hit.path, name: hit.name, size: hit.size };
+  } catch {
+    // 目录不存在/不可读 → 视为未命中（保留字面）
+  }
+  return null;
+}
+
+/** 解析文本中的 @ 引用：命中 → 剥离为附件，未命中保留字面 */
+async function resolveMentions(
+  text: string,
+  cwd: string | null | undefined,
+): Promise<{ clean: string; attachments: AttachmentRef[] }> {
+  if (!cwd) return { clean: text, attachments: [] };
+  const tokens = [...text.matchAll(MENTION_TOKEN_RE)].map((m) => m[1]).filter((t): t is string => Boolean(t));
+  const files: MentionFile[] = [];
+  for (const token of tokens) {
+    const f = await resolveMentionFile(cwd, token);
+    if (f) files.push(f);
+  }
+  return parseFileMentions(text, files);
+}
 
 /* ── MainView Component ──────────────────────── */
 
@@ -308,8 +355,19 @@ function WelcomeView() {
   const currentTags = activeCategory === "daily" ? dailyTags : codingTags;
 
   const handleSend = async () => {
-    const trimmed = text.trim();
-    if (!trimmed && attachments.length === 0) return;
+    const raw = text.trim();
+    if (!raw && attachments.length === 0) return;
+    // 裸 /steer /follow-up：提示不发送（欢迎页无任务可挂通知时静默）
+    if (isBareSteerCommand(raw)) {
+      if (currentTaskId) {
+        useSessionStore
+          .getState()
+          .pushChatNotice(currentTaskId, "请输入要发送的内容，如：/steer 换个思路", "warn");
+      }
+      return;
+    }
+    const cmd = parseCommandChannel(raw);
+    const trimmed = cmd ? cmd.rest : raw;
     try {
       let taskId = currentTaskId;
       if (!taskId) {
@@ -343,9 +401,13 @@ function WelcomeView() {
         }
       }
       const atts = attachments.map((a) => ({ name: a.name, path: a.path, size: a.size }));
+      // @ 文件识别：命中 token 剥离为附件（按待选工作空间路径解析；临时任务无目录则保留字面）
+      const st = useSessionStore.getState();
+      const pendingWs = st.workspaces.find((w) => w.id === st.pendingWorkspaceId);
+      const { clean, attachments: mentionAtts } = await resolveMentions(trimmed, pendingWs?.path);
       setText("");
       clear();
-      await sendMessage(taskId, trimmed, atts);
+      await sendMessage(taskId, clean, [...atts, ...mentionAtts], cmd?.channel);
     } catch (err) {
       console.error("[WelcomeView] 发送失败:", err);
     }
@@ -530,11 +592,22 @@ function ChatView({ taskId }: { taskId: string }) {
   } = useAttachments();
 
   const taskProviderId = task?.providerId ?? defaultProviderId;
+  const taskCwd = task?.workspacePath ?? task?.workDir;
   const isStreaming = task?.isStreaming ?? false;
   const hydrating = useSessionStore((s) => s.hydratingIds.includes(taskId));
   const chatNotices = useSessionStore((s) => s.chatNotices[taskId]);
   const notices = chatNotices ?? [];
   const dismissChatNotice = useSessionStore((s) => s.dismissChatNotice);
+  const pushChatNotice = useSessionStore((s) => s.pushChatNotice);
+  const queueState = useSessionStore((s) => s.queues[taskId]);
+  const queuedCount = (queueState?.followUp.length ?? 0) + (queueState?.steering.length ?? 0);
+
+  // 运行中发送选择器（转向 / 排队 / 取消）
+  const [chooserOpen, setChooserOpen] = useState(false);
+  const [chooserText, setChooserText] = useState("");
+  // @ 文件识别（textarea ref 供光标处插入）
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const mention = useFileMentions({ cwd: taskCwd, text, setText, textareaRef });
 
   // 自动滚动到底部：仅当用户已在底部附近时，避免打断查看历史
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -554,17 +627,47 @@ function ChatView({ taskId }: { taskId: string }) {
 
   const groups = useMemo(() => groupMessages(messages), [messages]);
 
+  /** 发送：剥离 /steer /follow-up 前缀路由 channel；裸命令提示不发送；运行中非命令输入弹选择器 */
   const handleSend = async () => {
-    const trimmed = text.trim();
-    if (!trimmed && attachments.length === 0) return;
+    const raw = text.trim();
+    if (!raw && attachments.length === 0) return;
+    // 裸 /steer /follow-up：提示不发送
+    if (isBareSteerCommand(raw)) {
+      pushChatNotice(taskId, "请输入要发送的内容，如：/steer 换个思路 或 /follow-up 稍后处理", "warn");
+      return;
+    }
+    const cmd = parseCommandChannel(raw);
+    // 运行中 + 普通文本 → 弹「转向 / 排队 / 取消」选择器，不直接发送
+    if (isStreaming && !cmd) {
+      setChooserText(raw);
+      setChooserOpen(true);
+      return;
+    }
+    const content = cmd ? cmd.rest : raw;
     const atts = attachments.map((a) => ({ name: a.name, path: a.path, size: a.size }));
+    // @ 文件识别：命中的 token 剥离为附件（未命中保留字面）
+    const { clean, attachments: mentionAtts } = await resolveMentions(content, taskCwd);
     setText("");
     clear();
+    setChooserOpen(false);
     try {
-      await sendMessage(taskId, trimmed, atts);
+      await sendMessage(taskId, clean, [...atts, ...mentionAtts], cmd?.channel);
     } catch (err) {
       console.error("[ChatView] 发送失败:", err);
     }
+  };
+
+  /** 选择器确认：按 channel 路由发送（附件 + @引用一并携带） */
+  const doChoose = async (channel: "steer" | "followUp") => {
+    const content = chooserText;
+    const atts = attachments.map((a) => ({ name: a.name, path: a.path, size: a.size }));
+    const { clean, attachments: mentionAtts } = await resolveMentions(content, taskCwd);
+    setText("");
+    clear();
+    setChooserOpen(false);
+    void sendMessage(taskId, clean, [...atts, ...mentionAtts], channel).catch((err) =>
+      console.error("[ChatView] 发送失败:", err),
+    );
   };
 
   // / 命令弹窗 + 回车/IME 组合态守卫；执行模式经 ModeSelect 下拉切换
@@ -574,6 +677,32 @@ function ChatView({ taskId }: { taskId: string }) {
     setText,
     onSend: () => void handleSend(),
   });
+
+  /** 键盘：@ 菜单 > 运行中选择器 > / 命令，逐级消费 */
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    // @ 菜单开 → mention 处理（Enter 选中文件/进目录，不发送）
+    if (mention.handleKeyDown(e)) return;
+    // 运行中发送选择器打开 → Enter 不重发、Esc 关闭
+    if (chooserOpen) {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        setChooserOpen(false);
+        return;
+      }
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        return;
+      }
+      return;
+    }
+    slash.handleKeyDown(e);
+  };
+
+  /** 输入变化：/ 命令开合 + @ 文件识别开合 */
+  const handleChange = (value: string) => {
+    slash.handleChange(value);
+    mention.onTextChange(value);
+  };
 
   return (
     <div className="flex h-full flex-col">
@@ -613,13 +742,15 @@ function ChatView({ taskId }: { taskId: string }) {
               const first = g.messages[0];
               if (!first) return null;
               return g.kind === "assistant" ? (
-                <AssistantGroup key={first.id} messages={g.messages} />
+                <AssistantGroup key={first.id} messages={g.messages} taskId={taskId} />
               ) : g.kind === "notice" ? (
                 <CompactionNoticeCard key={first.id} summary={first.noticeContent ?? ""} />
               ) : (
                 <MessageBubble key={first.id} message={first} />
               );
             })}
+            {/* 等待首个 assistant 消息的空白期（已发送未首响应）：末尾「运行中」指示 */}
+            {task?.pending && !task.isStreaming && <RunningIndicator />}
           </div>
         )}
       </div>
@@ -648,10 +779,36 @@ function ChatView({ taskId }: { taskId: string }) {
                 if (cmd) slash.selectCommand(cmd);
               }}
             />
+            {/* @ 文件识别下拉 */}
+            <FileMentionMenu
+              open={mention.open}
+              loading={mention.loading}
+              entries={mention.entries}
+              path={mention.path}
+              highlightIndex={mention.highlightIndex}
+              onNavigate={mention.navigate}
+              onGoRoot={mention.goRoot}
+              onGoCrumb={mention.goCrumb}
+              onSelect={mention.insertMention}
+            />
+            {/* 运行中发送选择器：转向 / 排队 / 取消 */}
+            <SendModeChooser
+              open={chooserOpen}
+              onSteer={() => void doChoose("steer")}
+              onQueue={() => void doChoose("followUp")}
+              onCancel={() => setChooserOpen(false)}
+            />
+            {/* 已排队 chip（queue_update：steer/followUp 队列非空） */}
+            {queuedCount > 0 && (
+              <div className="absolute left-3 top-[-10px] rounded-full border border-accent-line bg-accent-tint px-2 py-[1px] text-[11px] font-medium text-accent-strong shadow-card">
+                ⏳ {queuedCount} 条已排队 · 完成后自动发送
+              </div>
+            )}
             <textarea
+              ref={textareaRef}
               value={text}
-              onChange={(e) => slash.handleChange(e.target.value)}
-              onKeyDown={slash.handleKeyDown}
+              onChange={(e) => handleChange(e.target.value)}
+              onKeyDown={handleKeyDown}
               onCompositionStart={() => (slash.composingRef.current = true)}
               onCompositionEnd={() => (slash.composingRef.current = false)}
               placeholder="今天帮你做些什么？ @引用对话文件，/调用技能与指令"

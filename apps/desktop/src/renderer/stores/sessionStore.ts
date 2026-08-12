@@ -7,6 +7,7 @@ import type {
   HistoryTextBlock,
   HistoryThinkingBlock,
   HistoryToolBlock,
+  MessageUsage,
   TaskMeta,
   Workspace,
 } from "@everybuddy/ipc-contract";
@@ -27,6 +28,14 @@ export interface ChatMessage extends HistoryMessage {
   isStreaming?: boolean;
   /** agent 结束时间戳（渲染层内存，用于计算执行时长；历史回放无此字段） */
   endedAt?: number;
+  /** 用户取消（abort）标记：呈现「已取消」而非「任务已完成」 */
+  cancelled?: boolean;
+  /** SDK 消息时间戳（message_start 透传），用于 message_entry_ids 按时间匹配写 entryId */
+  sdkTimestamp?: number;
+  /** 会话 JSONL 条目 id（分支锚点；回放消息 = 消息 id，流式消息由 message_entry_ids 回填） */
+  entryId?: string;
+  /** 赞/踩本地 UI 状态（不持久化） */
+  feedback?: "up" | "down" | null;
 }
 
 export interface Task extends TaskMeta {
@@ -34,6 +43,8 @@ export interface Task extends TaskMeta {
   isStreaming?: boolean;
   /** 当前流式 assistant 消息 id */
   streamMessageId?: string | null;
+  /** 已发送、等待首个 assistant 消息（覆盖首 token 前的空白期，渲染「运行中」指示） */
+  pending?: boolean;
 }
 
 /** 扩展状态（extension_status 事件负载；state 为扩展自有状态机，如 plan-mode 的 off/plan/ready/executing） */
@@ -102,11 +113,16 @@ interface SessionState {
   chatNotices: Record<string, ChatNotice[]>;
   pushChatNotice: (taskId: string, message: string, level?: ChatNotice["level"]) => void;
   dismissChatNotice: (taskId: string, id: string) => void;
+  /** SDK 排队状态：taskId -> steer/followUp 队列（queue_update 事件，驱动「已排队」chip） */
+  queues: Record<string, { steering: string[]; followUp: string[] }>;
+  setQueueState: (taskId: string, queue: { steering: string[]; followUp: string[] }) => void;
 
   initFromBackend: (tasks: TaskMeta[], workspaces: Workspace[]) => void;
   upsertTask: (task: Task) => void;
 
   createTask: (req: CreateTaskRequest) => Promise<Task>;
+  /** 从指定 assistant 条目分叉出新会话：建 Task → upsert → 选中（hydrate 加载分支历史） */
+  branchTask: (taskId: string, entryId: string) => Promise<Task>;
   selectTask: (id: string) => void;
   hydrateTask: (id: string) => Promise<void>;
   deleteTask: (id: string) => Promise<void>;
@@ -118,11 +134,16 @@ interface SessionState {
   selectWorkspaceDir: () => Promise<string | null>;
   setPendingWorkspace: (id: string | null) => void;
 
-  sendMessage: (taskId: string, text: string, attachments?: AttachmentRef[]) => Promise<void>;
+  sendMessage: (
+    taskId: string,
+    text: string,
+    attachments?: AttachmentRef[],
+    channel?: "steer" | "followUp",
+  ) => Promise<void>;
   setTaskProvider: (taskId: string, providerId: string) => Promise<void>;
 
   // 流式块操作
-  startAssistantMessage: (taskId: string) => void;
+  startAssistantMessage: (taskId: string, sdkTimestamp?: number) => void;
   startBlock: (
     taskId: string,
     contentIndex: number,
@@ -150,6 +171,20 @@ interface SessionState {
   finalizeMessage: (taskId: string) => void;
   addErrorMessage: (taskId: string, message: string) => void;
   abortTask: (taskId: string) => Promise<void>;
+  /** 标记当前流式消息为「已取消」（message_end stopReason==="aborted" 或合成 abort） */
+  markMessageCancelled: (taskId: string) => void;
+  /** 写入当前流式消息的元数据（message_end 的 usage/model/provider/stopReason） */
+  setMessageMeta: (
+    taskId: string,
+    meta: { stopReason?: string; usage?: MessageUsage; model?: string; provider?: string },
+  ) => void;
+  /** 按 sdkTimestamp 匹配回填 entryId（message_entry_ids 事件，分支锚点） */
+  markMessageEntryIds: (
+    taskId: string,
+    entries: Array<{ sdkTimestamp: number; entryId: string }>,
+  ) => void;
+  /** 赞/踩本地 UI 状态（不持久化，重复点同一按钮为取消） */
+  setMessageFeedback: (taskId: string, messageId: string, feedback: "up" | "down" | null) => void;
 
   /** 更新某任务的扩展状态（extension_status 事件） */
   setExtensionStatus: (taskId: string, key: string, status: ExtensionStatus) => void;
@@ -205,6 +240,10 @@ export const useSessionStore = create<SessionState>((set, get) => ({
   pendingApprovals: {},
   alwaysAllowedTools: {},
   chatNotices: {},
+  queues: {},
+
+  setQueueState: (taskId, queue) =>
+    set((state) => ({ queues: { ...state.queues, [taskId]: queue } })),
 
   initFromBackend: (tasks, workspaces) =>
     set({
@@ -252,6 +291,27 @@ export const useSessionStore = create<SessionState>((set, get) => ({
     return task;
   },
 
+  branchTask: async (taskId, entryId) => {
+    const meta = await window.electronAPI.task.branch({ taskId, entryId });
+    const task: Task = {
+      id: meta.id,
+      title: meta.title,
+      type: meta.type,
+      workspaceId: meta.workspaceId,
+      workspacePath: meta.workspacePath,
+      workDir: meta.workDir,
+      providerId: meta.providerId,
+      sessionDir: meta.sessionDir,
+      messages: [],
+      createdAt: meta.createdAt,
+      updatedAt: meta.updatedAt,
+    };
+    set((state) => ({ tasks: [task, ...state.tasks] }));
+    // 选中新分支并加载其历史（hydrateTask 空消息即触发回放）
+    get().selectTask(task.id);
+    return task;
+  },
+
   selectTask: (id) => {
     set({ currentTaskId: id });
     // 恢复已有任务的 AgentSession（重启后选中任务时）
@@ -274,7 +334,8 @@ export const useSessionStore = create<SessionState>((set, get) => ({
       set((state) => ({
         tasks: state.tasks.map((t) =>
           t.id === id && t.messages.length === 0 && !t.isStreaming
-            ? { ...t, messages: history }
+            ? // 回放消息天然以条目 id 为消息 id（historyMapper），统一回填 entryId 供分支锚点
+              { ...t, messages: history.map((m) => ({ ...m, entryId: m.id })) }
             : t,
         ),
         hydratingIds: state.hydratingIds.filter((x) => x !== id),
@@ -338,7 +399,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
   selectWorkspaceDir: () => window.electronAPI.workspace.selectDir(),
   setPendingWorkspace: (id) => set({ pendingWorkspaceId: id }),
 
-  sendMessage: async (taskId, text, attachments) => {
+  sendMessage: async (taskId, text, attachments, channel) => {
     // 用户消息 blocks：附件 chips 在前，文本块在后（可仅有附件无文本）
     const blocks: ContentBlock[] = (attachments ?? []).map((a, i) => ({
       id: String(i),
@@ -363,13 +424,24 @@ export const useSessionStore = create<SessionState>((set, get) => ({
       return {
         tasks: state.tasks.map((t) =>
           t.id === taskId
-            ? { ...t, messages: [...t.messages, userMsg], updatedAt: new Date().toISOString() }
+            ? {
+                ...t,
+                messages: [...t.messages, userMsg],
+                updatedAt: new Date().toISOString(),
+                // 等待首个 assistant 消息期间置 pending（首 token 前渲染「运行中」指示）；
+                // 流式中发送（steer/followUp）不置，避免与在途流的指示重复
+                pending: t.isStreaming ? t.pending : true,
+              }
             : t,
         ),
       };
     });
     try {
-      await window.electronAPI.agent.prompt({ sessionId: taskId, text, providerId, attachments });
+      const req = { sessionId: taskId, text, providerId, attachments };
+      // 转向/排队路由到对应 IPC（主进程空闲时二者都回退普通 prompt）
+      if (channel === "steer") await window.electronAPI.agent.steer(req);
+      else if (channel === "followUp") await window.electronAPI.agent.followUp(req);
+      else await window.electronAPI.agent.prompt(req);
     } catch (err) {
       // 主进程通常已通过 error 事件报错；此处兜底，避免 unhandled rejection
       get().addErrorMessage(taskId, err instanceof Error ? err.message : String(err));
@@ -381,7 +453,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
 
   // ── 流式块操作 ────────────────────────────
 
-  startAssistantMessage: (taskId) =>
+  startAssistantMessage: (taskId, sdkTimestamp) =>
     set((state) => ({
       tasks: state.tasks.map((t) => {
         if (t.id !== taskId) return t;
@@ -392,12 +464,15 @@ export const useSessionStore = create<SessionState>((set, get) => ({
           blocks: [],
           timestamp: Date.now(),
           isStreaming: true,
+          sdkTimestamp,
         };
         return {
           ...t,
           messages: [...t.messages, msg],
           isStreaming: true,
           streamMessageId: msgId,
+          // 首个 assistant 消息到达，结束 pending（「运行中」指示移交组内流式渲染）
+          pending: false,
         };
       }),
     })),
@@ -617,6 +692,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
             .filter((m) => !(m.blocks.length === 0 && !m.errorMessage && !m.isStreaming)),
           isStreaming: false,
           streamMessageId: null,
+          pending: false,
         };
       }),
     })),
@@ -643,12 +719,13 @@ export const useSessionStore = create<SessionState>((set, get) => ({
             ),
             isStreaming: false,
             streamMessageId: null,
+            pending: false,
           };
         }
         // 无流式消息：仅当上一条不是错误消息时才追加，避免同一失败被 SDK error 事件
         // 与 session.prompt() reject 双重上报产生重复错误气泡
         const last = t.messages[t.messages.length - 1];
-        if (last?.errorMessage) return t;
+        if (last?.errorMessage) return t.pending ? { ...t, pending: false } : t;
         const errMsg: ChatMessage = {
           id: genId(),
           role: "assistant",
@@ -656,13 +733,73 @@ export const useSessionStore = create<SessionState>((set, get) => ({
           timestamp: Date.now(),
           errorMessage: message,
         };
-        return { ...t, messages: [...t.messages, errMsg] };
+        return { ...t, messages: [...t.messages, errMsg], pending: false };
       }),
     })),
 
   abortTask: async (taskId) => {
     await window.electronAPI.agent.abort(taskId);
   },
+
+  markMessageCancelled: (taskId) =>
+    set((state) => ({
+      tasks: state.tasks.map((t) => {
+        if (t.id !== taskId || !t.streamMessageId) return t;
+        return {
+          ...t,
+          messages: t.messages.map((m) =>
+            m.id === t.streamMessageId ? { ...m, cancelled: true } : m,
+          ),
+        };
+      }),
+    })),
+
+  setMessageMeta: (taskId, meta) =>
+    set((state) => ({
+      tasks: state.tasks.map((t) => {
+        if (t.id !== taskId || !t.streamMessageId) return t;
+        return {
+          ...t,
+          messages: t.messages.map((m) =>
+            m.id === t.streamMessageId
+              ? {
+                  ...m,
+                  stopReason: meta.stopReason ?? m.stopReason,
+                  usage: meta.usage ?? m.usage,
+                  model: meta.model ?? m.model,
+                  provider: meta.provider ?? m.provider,
+                }
+              : m,
+          ),
+        };
+      }),
+    })),
+
+  markMessageEntryIds: (taskId, entries) =>
+    set((state) => ({
+      tasks: state.tasks.map((t) => {
+        if (t.id !== taskId) return t;
+        return {
+          ...t,
+          messages: t.messages.map((m) => {
+            if (m.role !== "assistant" || m.entryId || m.sdkTimestamp === undefined) return m;
+            const hit = entries.find((e) => e.sdkTimestamp === m.sdkTimestamp);
+            return hit ? { ...m, entryId: hit.entryId } : m;
+          }),
+        };
+      }),
+    })),
+
+  setMessageFeedback: (taskId, messageId, feedback) =>
+    set((state) => ({
+      tasks: state.tasks.map((t) => {
+        if (t.id !== taskId) return t;
+        return {
+          ...t,
+          messages: t.messages.map((m) => (m.id === messageId ? { ...m, feedback } : m)),
+        };
+      }),
+    })),
 
   setExtensionStatus: (taskId, key, status) =>
     set((state) => ({
