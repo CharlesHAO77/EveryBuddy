@@ -17,6 +17,7 @@ import {
   createWorkspaceRequestSchema,
   extensionCommandRequestSchema,
   idRequestSchema,
+  openExternalRequestSchema,
   openPathRequestSchema,
   promptRequestSchema,
   readDirRequestSchema,
@@ -26,7 +27,7 @@ import {
   setModeRequestSchema,
   setTaskProviderRequestSchema,
 } from "@everybuddy/ipc-contract";
-import { type BrowserWindow, ipcMain } from "electron";
+import { type BrowserWindow, ipcMain, shell } from "electron";
 import { agentRuntime } from "./agentRuntime";
 import { configStore, SESSIONS_DIR, WORK_SPACES_DIR } from "./configStore";
 import * as modelStore from "./modelStore";
@@ -311,5 +312,12 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
     const { id } = validate(idRequestSchema, raw);
     modelStore.setActiveModel(id);
     await agentRuntime.refreshModel();
+  });
+
+  // system:* —— markdown 链接等外链打开（仅放行 http/https，防任意协议注入）
+  ipcMain.handle("system:openExternal", async (_evt, raw) => {
+    const { url } = validate(openExternalRequestSchema, raw);
+    if (!/^https?:\/\//i.test(url)) throw new Error("仅支持 http/https 链接");
+    await shell.openExternal(url);
   });
 }

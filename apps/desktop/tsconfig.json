@@ -25,6 +25,8 @@
     "tests/prompts.test.ts",
     "tests/slashCommands.test.ts",
     "tests/permission.test.ts",
-    "tests/ipcContract.test.ts"
+    "tests/ipcContract.test.ts",
+    "tests/historyMapper.test.ts",
+    "tests/markdownText.test.tsx"
   ]
 }

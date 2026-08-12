@@ -55,6 +55,8 @@ const api: ElectronAPI = {
   system: {
     // 仅在 preload（拥有 node/electron 环境）中可调；contextBridge 支持 File 对象跨桥传递
     getPathForFile: (file) => webUtils.getPathForFile(file),
+    // 用系统默认浏览器打开外链（markdown 链接用；主进程仅放行 http/https）
+    openExternal: (url) => ipcRenderer.invoke("system:openExternal", { url }),
   },
 };
 

@@ -274,10 +274,12 @@ export type HistoryBlock =
 
 export interface HistoryMessage {
   id: string;
-  role: "user" | "assistant";
+  role: "user" | "assistant" | "notice";
   blocks: HistoryBlock[];
   timestamp: number;
   errorMessage?: string;
+  /** 压缩边界提示（role === "notice" 时）：SDK 上下文压缩摘要（markdown），持久显示于消息列表 */
+  noticeContent?: string;
 }
 
 // ────────────────────────────────────────────────
@@ -412,6 +414,12 @@ export const openPathRequestSchema = z.object({
   path: z.string().min(1, "参数缺失"),
 });
 
+/** system:openExternal 请求：用系统默认浏览器打开外链（仅 http/https） */
+export const openExternalRequestSchema = z.object({
+  url: z.string().min(1, "参数缺失"),
+});
+export type OpenExternalRequest = z.infer<typeof openExternalRequestSchema>;
+
 /** 读取目录单层条目（懒加载目录树用） */
 export const readDirRequestSchema = z.object({
   path: z.string().min(1, "参数缺失"),
@@ -494,6 +502,8 @@ export interface ElectronAPI {
   system: {
     /** 从渲染进程 File 对象取得本地绝对路径（Electron 32+ 移除 File.path） */
     getPathForFile: (file: File) => string;
+    /** 用系统默认浏览器打开外链（markdown 链接用，主进程仅放行 http/https） */
+    openExternal: (url: string) => Promise<void>;
   };
 }
 

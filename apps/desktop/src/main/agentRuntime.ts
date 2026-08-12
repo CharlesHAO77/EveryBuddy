@@ -14,12 +14,11 @@ import { randomUUID } from "node:crypto";
 import { existsSync, mkdirSync, readdirSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import type { SessionEntry, ToolDefinition } from "@earendil-works/pi-coding-agent";
+import type { ToolDefinition } from "@earendil-works/pi-coding-agent";
 import type {
   AgentEvent,
   AttachmentRef,
   ExecutionMode,
-  HistoryBlock,
   HistoryMessage,
   TaskMeta,
 } from "@everybuddy/ipc-contract";
@@ -31,9 +30,9 @@ import {
   buildManifestText,
   parseFileContent,
   resolveInUploads,
-  splitFileMarkers,
   stageAttachments,
 } from "./fileParser";
+import { buildFullPath, entriesToHistory } from "./historyMapper";
 import {
   AUTH_PATH,
   getApiKey,
@@ -504,27 +503,27 @@ class AgentRuntime {
    * 加载任务的历史消息（用于选中已有任务时回放）。
    * 优先用活跃会话的 sessionManager；无活跃会话则直接打开会话文件读取
    * （不依赖 task:resume 时序）。映射遵循 §0.4 卡片化消息模型。
+   * 注意：用 buildFullPath 走完整 leaf 路径而非 SDK 的 buildContextEntries
+   * （后者是压缩感知的，会丢弃 compaction 之前的旧消息），并在压缩边界插入摘要提示。
    */
   async loadHistory(taskId: string): Promise<HistoryMessage[]> {
     const sdk = await this.load();
-    let entries: SessionEntry[];
     const state = this.sessions.get(taskId);
+    let sm: SessionManagerInstance | null = null;
     if (state) {
-      entries = state.session.sessionManager.buildContextEntries();
+      sm = state.session.sessionManager;
     } else {
       const task = configStore.getTask(taskId);
-      if (!task) return [];
-      const cwd = getTaskCwd(task);
-      const recentFile = findMostRecentSessionFile(task.sessionDir);
-      if (!recentFile || !existsSync(recentFile)) return [];
-      const sm = sdk.SessionManager.open(
-        recentFile,
-        task.sessionDir,
-        cwd,
-      ) as SessionManagerInstance;
-      entries = sm.buildContextEntries();
+      if (task) {
+        const cwd = getTaskCwd(task);
+        const recentFile = findMostRecentSessionFile(task.sessionDir);
+        if (recentFile && existsSync(recentFile)) {
+          sm = sdk.SessionManager.open(recentFile, task.sessionDir, cwd) as SessionManagerInstance;
+        }
+      }
     }
-    return entriesToHistory(entries);
+    if (!sm) return [];
+    return entriesToHistory(buildFullPath(sm), { compactionNotices: true });
   }
 
   // ── 事件映射（见 §3.2） ───────────────────
@@ -699,108 +698,6 @@ class AgentRuntime {
     }
     return undefined;
   }
-}
-
-// ── 历史消息映射 ─────────────────────────────
-
-/** 提取文本内容（content 可能是 string 或内容块数组） */
-function extractText(content: unknown): string {
-  if (typeof content === "string") return content;
-  if (Array.isArray(content)) {
-    return content
-      .map((c) =>
-        c && typeof c === "object" && "text" in c ? String((c as { text: unknown }).text) : "",
-      )
-      .join("");
-  }
-  return "";
-}
-
-/** 将会话条目映射为渲染进程可用的历史消息（见 §0.4 卡片化消息模型） */
-function entriesToHistory(entries: SessionEntry[]): HistoryMessage[] {
-  const messages: HistoryMessage[] = [];
-  for (const entry of entries) {
-    if (entry.type !== "message") continue;
-    const msg = entry.message as {
-      role?: string;
-      content?: unknown;
-      timestamp?: number;
-      errorMessage?: string;
-      toolCallId?: string;
-      isError?: boolean;
-    };
-    const ts =
-      typeof msg.timestamp === "number" ? msg.timestamp : Date.parse(entry.timestamp) || Date.now();
-    const role = msg.role;
-
-    if (role === "user") {
-      // 用户消息内容含附件清单标记（<file name="uploads/x" size="n"/>），
-      // 拆分为附件 chips + 剩余文本，历史回放据此渲染
-      messages.push({
-        id: entry.id,
-        role: "user",
-        timestamp: ts,
-        blocks: splitFileMarkers(extractText(msg.content)),
-      });
-    } else if (role === "assistant") {
-      const blocks: HistoryBlock[] = [];
-      if (Array.isArray(msg.content)) {
-        msg.content.forEach((c, i) => {
-          if (!c || typeof c !== "object") return;
-          const ct = (c as { type?: string }).type;
-          if (ct === "text") {
-            blocks.push({
-              id: String(i),
-              kind: "text",
-              content: String((c as { text?: unknown }).text ?? ""),
-              done: true,
-            });
-          } else if (ct === "thinking") {
-            blocks.push({
-              id: String(i),
-              kind: "thinking",
-              content: String((c as { thinking?: unknown }).thinking ?? ""),
-              done: true,
-            });
-          } else if (ct === "toolCall") {
-            const tc = c as { id?: string; name?: string; arguments?: unknown };
-            blocks.push({
-              id: String(i),
-              kind: "tool",
-              toolCallId: tc.id ?? String(i),
-              toolName: tc.name ?? "",
-              args: tc.arguments,
-              argDelta: "",
-              status: "success",
-              output: undefined,
-              outputDelta: "",
-              done: true,
-            });
-          }
-        });
-      }
-      messages.push({
-        id: entry.id,
-        role: "assistant",
-        timestamp: ts,
-        blocks,
-        errorMessage: msg.errorMessage,
-      });
-    } else if (role === "toolResult") {
-      // 工具结果回填到前一条 assistant 消息中匹配 toolCallId 的工具块
-      const lastAssistant = [...messages].reverse().find((m) => m.role === "assistant");
-      const toolBlock = lastAssistant?.blocks.find(
-        (b) => b.kind === "tool" && b.toolCallId === msg.toolCallId,
-      );
-      if (toolBlock && toolBlock.kind === "tool") {
-        toolBlock.output = msg.content;
-        toolBlock.status = msg.isError ? "error" : "success";
-        if (msg.isError) toolBlock.error = extractText(msg.content);
-      }
-    }
-    // 其余角色（bashExecution/custom/branchSummary/compactionSummary）跳过
-  }
-  return messages;
 }
 
 /**

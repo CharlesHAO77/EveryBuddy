@@ -5,6 +5,7 @@ import { useSlashCommands } from "../hooks/useSlashCommands";
 import { type ChatMessage, useSessionStore } from "../stores/sessionStore";
 import { type CategoryId, getChatDefaultId, useUIStore } from "../stores/uiStore";
 import { AttachmentPreview } from "./AttachmentPreview";
+import { CompactionNoticeCard } from "./CompactionNoticeCard";
 import { ConversationTitle } from "./ConversationTitle";
 import {
   IconArrowUp,
@@ -31,13 +32,16 @@ function useDefaultProviderId() {
 
 type MessageGroup =
   | { kind: "user" | "error"; messages: ChatMessage[] }
-  | { kind: "assistant"; messages: ChatMessage[] };
+  | { kind: "assistant"; messages: ChatMessage[] }
+  | { kind: "notice"; messages: ChatMessage[] };
 
-/** 将连续的 assistant 消息合并为一组（一个 agent 消息含多个 turn），user/错误消息独立成组 */
+/** 将连续的 assistant 消息合并为一组（一个 agent 消息含多个 turn），user/错误/压缩提示独立成组 */
 function groupMessages(messages: ChatMessage[]): MessageGroup[] {
   const groups: MessageGroup[] = [];
   for (const msg of messages) {
-    if (msg.role === "user") {
+    if (msg.role === "notice") {
+      groups.push({ kind: "notice", messages: [msg] });
+    } else if (msg.role === "user") {
       groups.push({ kind: "user", messages: [msg] });
     } else if (msg.errorMessage) {
       groups.push({ kind: "error", messages: [msg] });
@@ -595,6 +599,8 @@ function ChatView({ taskId }: { taskId: string }) {
               if (!first) return null;
               return g.kind === "assistant" ? (
                 <AssistantGroup key={first.id} messages={g.messages} />
+              ) : g.kind === "notice" ? (
+                <CompactionNoticeCard key={first.id} summary={first.noticeContent ?? ""} />
               ) : (
                 <MessageBubble key={first.id} message={first} />
               );
