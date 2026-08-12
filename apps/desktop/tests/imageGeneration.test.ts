@@ -123,4 +123,45 @@ describe("httpGenerateImage", () => {
     const result = await httpGenerateImage(OPTS, { prompt: "x" }, fetchImpl);
     expect(result.responseId).toBe("rid-1");
   });
+
+  it("abort 信号透传给 fetch init（生图即时取消）", async () => {
+    let capturedSignal: unknown;
+    const fetchImpl = makeFetch((_url, init) => {
+      capturedSignal = (init as { signal?: unknown } | undefined)?.signal;
+      return resp({ json: { data: [{ b64_json: PNG_1PX_B64 }] } });
+    });
+    const ctrl = new AbortController();
+    await httpGenerateImage(OPTS, { prompt: "x" }, fetchImpl, ctrl.signal);
+    expect(capturedSignal).toBe(ctrl.signal);
+  });
+
+  it("url 形态的二次下载也透传 signal", async () => {
+    const calls: Array<{ url: string; signal: unknown }> = [];
+    const fetchImpl = makeFetch((url, init) => {
+      calls.push({ url, signal: (init as { signal?: unknown } | undefined)?.signal });
+      if (url === "https://cdn.example/img1.png") {
+        return resp({ bytes: PNG_1PX_BYTES });
+      }
+      return resp({ json: { data: [{ url: "https://cdn.example/img1.png" }] } });
+    });
+    const ctrl = new AbortController();
+    await httpGenerateImage(OPTS, { prompt: "x" }, fetchImpl, ctrl.signal);
+    expect(calls[0]?.signal).toBe(ctrl.signal);
+    expect(calls[1]?.signal).toBe(ctrl.signal);
+  });
+
+  it("已 abort 的信号 → fetch 以 AbortError 拒绝", async () => {
+    const fetchImpl = makeFetch((_url, init) => {
+      const signal = (init as { signal?: AbortSignal } | undefined)?.signal;
+      if (signal?.aborted) {
+        return Promise.reject(new DOMException("The operation was aborted.", "AbortError"));
+      }
+      return resp({ json: { data: [{ b64_json: PNG_1PX_B64 }] } });
+    });
+    const ctrl = new AbortController();
+    ctrl.abort();
+    await expect(httpGenerateImage(OPTS, { prompt: "x" }, fetchImpl, ctrl.signal)).rejects.toThrow(
+      /aborted/i,
+    );
+  });
 });

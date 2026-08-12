@@ -11,7 +11,7 @@
  */
 
 import { randomUUID } from "node:crypto";
-import { existsSync, mkdirSync, readdirSync, statSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, renameSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import type { ToolDefinition } from "@earendil-works/pi-coding-agent";
@@ -54,7 +54,7 @@ import {
 } from "./tools/toolAvailability";
 import { createUnderstandImageToolDefinition } from "./tools/understandImageTool";
 import { type DescribeImageRuntime, describeImage } from "./vision";
-import { getTaskCwd } from "./workspaceManager";
+import { getTaskCwd, resolveSessionLocation } from "./workspaceManager";
 
 // 类型导入（编译期擦除）；运行时通过动态 import() 加载 ESM 包
 type CodingAgentSDK = typeof import("@earendil-works/pi-coding-agent");
@@ -94,6 +94,12 @@ class AgentRuntime {
   private availability: ToolAvailability | null = null;
   /** 任务执行模式（auto/manual/plan），由渲染进程经 agent:set-mode 下发，供权限扩展实时读取 */
   private taskModes = new Map<string, ExecutionMode>();
+  /**
+   * 每任务 abort 请求标志：abort() 置位；收到 stopReason==="aborted" 的 message_end 清除。
+   * 若 abort 发生在工具执行中，message_end 早已发过（stopReason "stop"），不会再收到 "aborted"，
+   * 故 agent_end 时标志仍在 → 合成一条 message_end { stopReason: "aborted" }（渲染层统一 handler）。
+   */
+  private abortRequested = new Set<string>();
 
   /** 切换某任务的执行模式 */
   setTaskMode(taskId: string, mode: ExecutionMode): void {
@@ -235,12 +241,13 @@ class AgentRuntime {
           const pid = resolveVisionProviderId();
           return pid ? this.resolveModel(pid) : undefined;
         },
-        describeImage: (model, image, question) =>
+        describeImage: (model, image, question, signal) =>
           describeImage(
             this.modelRuntime as unknown as DescribeImageRuntime,
             model,
             image,
             question,
+            signal,
           ),
         visionProviderId: resolveVisionProviderId,
       }),
@@ -341,6 +348,113 @@ class AgentRuntime {
     });
   }
 
+  /** 仅当目标是可对话模型时切换会话模型；失败经事件流报错并返回 false */
+  private async resolveAndSetModel(
+    taskId: string,
+    state: RuntimeState,
+    providerId?: string,
+  ): Promise<boolean> {
+    // 仅当目标是可对话模型时才切换（任务里残留的 image providerId 保持会话原模型）
+    if (providerId && isChatModelProviderId(providerId)) {
+      const model = this.resolveModel(providerId);
+      if (model && typeof state.session.setModel === "function") {
+        try {
+          await state.session.setModel(model);
+        } catch (err) {
+          this.emitError(
+            taskId,
+            `切换模型失败: ${err instanceof Error ? err.message : String(err)}`,
+          );
+          return false;
+        }
+      }
+    }
+    return true;
+  }
+
+  /**
+   * 构造完整 prompt 文本（prompt/steer/followUp 共用）：
+   * 附件暂存到 uploads/ + 视觉自动调度（非视觉模型先用视觉模型描述图片）+ 附件清单。
+   * 注意：本段的「图片附件 + 非视觉模型自动描述」不在工具内、时段极短，不接取消（特性②仅覆盖工具内调用）。
+   * 失败经事件流报错并返回 null。
+   */
+  private async buildPromptText(
+    taskId: string,
+    text: string,
+    providerId?: string,
+    attachments?: AttachmentRef[],
+  ): Promise<string | null> {
+    if (!attachments || attachments.length === 0) return text;
+
+    const task = configStore.getTask(taskId);
+    const cwd = task ? getTaskCwd(task) : undefined;
+    if (!task || !cwd) {
+      this.emitError(taskId, "无法定位任务工作目录");
+      return null;
+    }
+    try {
+      const staged = await stageAttachments(attachments, cwd);
+      const copied = staged.filter((s) => !s.skipped);
+      if (copied.length === 0) {
+        this.emitError(taskId, `附件暂存失败：${staged[0]?.error ?? "未知错误"}`);
+        return null;
+      }
+
+      // 视觉自动调度：当前模型无视觉 + 图片附件 → 用视觉模型描述并注入文本，不把裸图发给非视觉模型
+      const providerIdEffective = providerId ?? task.providerId;
+      const currentModel = providerIdEffective
+        ? this.resolveModel(providerIdEffective)
+        : undefined;
+      const supportsVision = Boolean(currentModel?.input?.includes("image"));
+      const imageFiles = staged.filter((s) => !s.skipped && s.category === "image");
+
+      let manifest: string;
+      let descBlock = "";
+      if (imageFiles.length > 0 && !supportsVision) {
+        const visionProviderId =
+          getAgentConfig(task.mode ?? "daily").visionModelProviderId ?? getVisionModel();
+        const visionModel = visionProviderId ? this.resolveModel(visionProviderId) : undefined;
+        if (!visionModel) {
+          this.emitError(
+            taskId,
+            "当前模型不支持图片，且未配置视觉理解模型。请在模型设置中为视觉模型勾选「视觉理解」，或切换支持视觉的模型。",
+          );
+          return null;
+        }
+        // 逐张图片：解析（缩放）→ 视觉模型描述
+        const descs: Array<{ name: string; description: string }> = [];
+        for (const f of imageFiles) {
+          const { content } = await parseFileContent(f.uploadPath, { resizeImages: true });
+          const img = content.find(
+            (c): c is { type: "image"; data: string; mimeType: string } => c.type === "image",
+          );
+          if (img) {
+            const description = await describeImage(
+              this.modelRuntime as unknown as DescribeImageRuntime,
+              visionModel,
+              img,
+            );
+            descs.push({ name: f.uploadName, description });
+          }
+        }
+        manifest = buildManifestText(staged, {
+          imageHint:
+            "图片已由视觉理解模型自动分析，内容见下方 <image-description> 块（如需针对图片追问，可用 understand_image 工具）",
+        });
+        descBlock = buildImageDescriptionBlock(descs);
+      } else {
+        manifest = buildManifestText(staged);
+      }
+
+      return text.trim()
+        ? `${text}\n\n${manifest}${descBlock ? `\n\n${descBlock}` : ""}`
+        : `${manifest}${descBlock ? `\n\n${descBlock}` : ""}`;
+    } catch (err) {
+      this.emitError(taskId, `附件处理失败: ${err instanceof Error ? err.message : String(err)}`);
+      return null;
+    }
+  }
+
   /** 发送消息，支持按任务切换模型与附带附件（附件复制到 uploads/，Agent 按需读取） */
   async prompt(
     taskId: string,
@@ -355,93 +469,9 @@ class AgentRuntime {
       return;
     }
 
-    // 仅当目标是可对话模型时才切换（任务里残留的 image providerId 保持会话原模型）
-    if (providerId && isChatModelProviderId(providerId)) {
-      const model = this.resolveModel(providerId);
-      if (model && typeof state.session.setModel === "function") {
-        try {
-          await state.session.setModel(model);
-        } catch (err) {
-          this.emitError(
-            taskId,
-            `切换模型失败: ${err instanceof Error ? err.message : String(err)}`,
-          );
-          return;
-        }
-      }
-    }
-
-    // 附件：复制到任务工作目录 uploads/ 并构建清单文本，Agent 决定何时用 read/parse_attachment 解析
-    let fullText = text;
-    if (attachments && attachments.length > 0) {
-      const task = configStore.getTask(taskId);
-      const cwd = task ? getTaskCwd(task) : undefined;
-      if (!task || !cwd) {
-        this.emitError(taskId, "无法定位任务工作目录");
-        return;
-      }
-      try {
-        const staged = await stageAttachments(attachments, cwd);
-        const copied = staged.filter((s) => !s.skipped);
-        if (copied.length === 0) {
-          this.emitError(taskId, `附件暂存失败：${staged[0]?.error ?? "未知错误"}`);
-          return;
-        }
-
-        // 视觉自动调度：当前模型无视觉 + 图片附件 → 用视觉模型描述并注入文本，不把裸图发给非视觉模型
-        const providerIdEffective = providerId ?? task.providerId;
-        const currentModel = providerIdEffective
-          ? this.resolveModel(providerIdEffective)
-          : undefined;
-        const supportsVision = Boolean(currentModel?.input?.includes("image"));
-        const imageFiles = staged.filter((s) => !s.skipped && s.category === "image");
-
-        let manifest: string;
-        let descBlock = "";
-        if (imageFiles.length > 0 && !supportsVision) {
-          const visionProviderId =
-            getAgentConfig(task.mode ?? "daily").visionModelProviderId ?? getVisionModel();
-          const visionModel = visionProviderId ? this.resolveModel(visionProviderId) : undefined;
-          if (!visionModel) {
-            this.emitError(
-              taskId,
-              "当前模型不支持图片，且未配置视觉理解模型。请在模型设置中为视觉模型勾选「视觉理解」，或切换支持视觉的模型。",
-            );
-            return;
-          }
-          // 逐张图片：解析（缩放）→ 视觉模型描述
-          const descs: Array<{ name: string; description: string }> = [];
-          for (const f of imageFiles) {
-            const { content } = await parseFileContent(f.uploadPath, { resizeImages: true });
-            const img = content.find(
-              (c): c is { type: "image"; data: string; mimeType: string } => c.type === "image",
-            );
-            if (img) {
-              const description = await describeImage(
-                this.modelRuntime as unknown as DescribeImageRuntime,
-                visionModel,
-                img,
-              );
-              descs.push({ name: f.uploadName, description });
-            }
-          }
-          manifest = buildManifestText(staged, {
-            imageHint:
-              "图片已由视觉理解模型自动分析，内容见下方 <image-description> 块（如需针对图片追问，可用 understand_image 工具）",
-          });
-          descBlock = buildImageDescriptionBlock(descs);
-        } else {
-          manifest = buildManifestText(staged);
-        }
-
-        fullText = text.trim()
-          ? `${text}\n\n${manifest}${descBlock ? `\n\n${descBlock}` : ""}`
-          : `${manifest}${descBlock ? `\n\n${descBlock}` : ""}`;
-      } catch (err) {
-        this.emitError(taskId, `附件处理失败: ${err instanceof Error ? err.message : String(err)}`);
-        return;
-      }
-    }
+    if (!(await this.resolveAndSetModel(taskId, state, providerId))) return;
+    const fullText = await this.buildPromptText(taskId, text, providerId, attachments);
+    if (fullText === null) return;
 
     try {
       await state.session.prompt(fullText);
@@ -450,10 +480,46 @@ class AgentRuntime {
     }
   }
 
-  /** 中止当前流 */
+  /**
+   * 转向/排队发送（/steer /follow-up 与运行中「转向/排队」选择器）。
+   * SDK steer()/followUp() 仅排队、空闲时不启动 run（agent 循环未运行），
+   * 故空闲必须回退 session.prompt；运行中 steer=打断、followUp=排队。
+   */
+  async steerMessage(
+    taskId: string,
+    text: string,
+    channel: "steer" | "followUp",
+    providerId?: string,
+    attachments?: AttachmentRef[],
+  ): Promise<void> {
+    const state = this.sessions.get(taskId);
+    if (!state) {
+      this.emitError(taskId, "任务会话未就绪，请稍后重试或重新选择任务");
+      return;
+    }
+
+    if (!(await this.resolveAndSetModel(taskId, state, providerId))) return;
+    const fullText = await this.buildPromptText(taskId, text, providerId, attachments);
+    if (fullText === null) return;
+
+    try {
+      if (state.session.isIdle) {
+        await state.session.prompt(fullText);
+      } else if (channel === "steer") {
+        await state.session.steer(fullText);
+      } else {
+        await state.session.followUp(fullText);
+      }
+    } catch (err) {
+      this.emitError(taskId, `发送消息失败: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }
+
+  /** 中止当前流（置 abortRequested 标志；若 abort 落在工具执行期，agent_end 时合成 aborted message_end） */
   async abort(taskId: string): Promise<void> {
     const state = this.sessions.get(taskId);
     if (!state) return;
+    this.abortRequested.add(taskId);
     await state.session.abort();
   }
 
@@ -475,6 +541,101 @@ class AgentRuntime {
       | { resolve?: (r: string, a: boolean) => void }
       | undefined;
     ctrl?.resolve?.(requestId, approved);
+  }
+
+  /**
+   * 从指定 assistant 条目分叉出新会话（task:branch）。
+   * 用临时 SessionManager.open() 调 createBranchedSession（它会变更该 manager 的 file 指针，
+   * 不能用任务活跃会话的 manager）；分支文件先落在原 sessionDir，再移入新任务的 sessionDir。
+   */
+  async branchTask(taskId: string, entryId: string): Promise<TaskMeta> {
+    const sdk = await this.load();
+    const task = configStore.getTask(taskId);
+    if (!task) throw new Error("任务不存在");
+    const recentFile = findMostRecentSessionFile(task.sessionDir);
+    if (!recentFile || !existsSync(recentFile)) {
+      throw new Error("找不到会话记录，无法创建分支");
+    }
+
+    const sm = sdk.SessionManager.open(
+      recentFile,
+      task.sessionDir,
+      getTaskCwd(task),
+    ) as SessionManagerInstance;
+    let newSessionFile: string | undefined;
+    try {
+      newSessionFile = sm.createBranchedSession(entryId);
+    } catch (err) {
+      throw new Error(
+        `创建分支失败（条目可能不存在）: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
+    if (!newSessionFile) throw new Error("创建分支失败：会话未持久化");
+
+    // 新任务：复制类型/模式/模型/空间，解析新 sessionDir（临时任务取新 workDir）
+    const workspace = task.workspaceId
+      ? configStore.getWorkspace(task.workspaceId)
+      : undefined;
+    const { sessionDir: newSessionDir, workDir } = resolveSessionLocation(
+      task.type,
+      workspace,
+    );
+    const now = new Date().toISOString();
+    const newTask: TaskMeta = {
+      id: randomUUID(),
+      title: `${task.title} · 分支`,
+      type: task.type,
+      mode: task.mode,
+      workspaceId: task.workspaceId,
+      workspacePath: task.workspacePath,
+      workDir,
+      providerId: task.providerId,
+      sessionDir: newSessionDir,
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    // 分支文件落到原 sessionDir（open 时持久化），移入新任务的 sessionDir
+    renameSync(newSessionFile, path.join(newSessionDir, path.basename(newSessionFile)));
+
+    configStore.addTask(newTask);
+    // 阻塞至会话就绪，避免与紧随的 prompt 竞态；失败经事件流报错，不阻断分支创建
+    try {
+      await this.createTaskSession(newTask, newTask.providerId);
+    } catch (err) {
+      console.error(`[agentRuntime] 分支会话初始化失败:`, err);
+      this.emitError(
+        newTask.id,
+        `会话初始化失败: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
+    return newTask;
+  }
+
+  /**
+   * agent_settled 后下发 assistant 条目 id 映射（message_entry_ids）。
+   * 渲染层按 sdkTimestamp 匹配写 entryId，作为分支锚点（流式新消息是随机 uuid，需此回填）。
+   */
+  private emitEntryIds(taskId: string): void {
+    const state = this.sessions.get(taskId);
+    if (!state) return;
+    try {
+      const sm = state.session.sessionManager as SessionManagerInstance;
+      const leafId = sm.getLeafId();
+      if (!leafId) return;
+      const entries: Array<{ sdkTimestamp: number; entryId: string }> = [];
+      for (const entry of sm.getBranch(leafId)) {
+        if (entry.type !== "message") continue;
+        const msg = entry.message as { role?: string; timestamp?: number } | undefined;
+        if (msg?.role !== "assistant" || typeof msg.timestamp !== "number") continue;
+        entries.push({ sdkTimestamp: msg.timestamp, entryId: entry.id });
+      }
+      if (entries.length > 0) {
+        this.emit(taskId, { type: "message_entry_ids", payload: { entries } });
+      }
+    } catch (err) {
+      console.warn(`[agentRuntime] emitEntryIds 失败:`, err);
+    }
   }
 
   /** 任务是否有活跃会话 */
@@ -538,17 +699,62 @@ class AgentRuntime {
 
     switch (e.type) {
       case "message_start": {
-        // SDK 对 user/assistant/toolResult 消息均发 message_start；仅 assistant 需要创建流式消息
-        const message = e.message as { role?: string } | undefined;
+        // SDK 对 user/assistant/toolResult 消息均发 message_start；仅 assistant 需要创建流式消息。
+        // 透传 SDK 自身时间戳（避免双进程时钟偏差），渲染层据此匹配 entryId 锚点
+        const message = e.message as { role?: string; timestamp?: number } | undefined;
         if (message?.role === "assistant") {
-          emit({ type: "message_start" });
+          emit({
+            type: "message_start",
+            payload: { sdkTimestamp: message.timestamp ?? Date.now() },
+          });
         }
         break;
       }
       case "message_end": {
-        const message = e.message as { role?: string; stopReason?: string } | undefined;
+        const message = e.message as
+          | {
+              role?: string;
+              stopReason?: string;
+              usage?: {
+                input?: number;
+                output?: number;
+                cacheRead?: number;
+                cacheWrite?: number;
+                totalTokens?: number;
+                reasoning?: number;
+                cost?: { input?: number; output?: number; total?: number };
+              };
+              model?: string;
+              provider?: string;
+            }
+          | undefined;
         if (message?.role === "assistant") {
-          emit({ type: "message_end", payload: { stopReason: message.stopReason } });
+          if (message.stopReason === "aborted") this.abortRequested.delete(taskId);
+          emit({
+            type: "message_end",
+            payload: {
+              stopReason: message.stopReason,
+              usage: message.usage
+                ? {
+                    input: message.usage.input ?? 0,
+                    output: message.usage.output ?? 0,
+                    cacheRead: message.usage.cacheRead ?? 0,
+                    cacheWrite: message.usage.cacheWrite ?? 0,
+                    totalTokens: message.usage.totalTokens ?? 0,
+                    reasoning: message.usage.reasoning,
+                    cost: message.usage.cost
+                      ? {
+                          input: message.usage.cost.input ?? 0,
+                          output: message.usage.cost.output ?? 0,
+                          total: message.usage.cost.total ?? 0,
+                        }
+                      : undefined,
+                  }
+                : undefined,
+              model: message.model,
+              provider: message.provider,
+            },
+          });
         }
         break;
       }
@@ -557,11 +763,28 @@ class AgentRuntime {
         break;
       }
       case "agent_end": {
+        // abort 发生在工具执行期时不会再有 "aborted" 的 message_end，合成一条保持取消语义统一
+        if (this.abortRequested.delete(taskId)) {
+          emit({ type: "message_end", payload: { stopReason: "aborted" } });
+        }
         emit({ type: "agent_end" });
         break;
       }
       case "agent_settled": {
         emit({ type: "agent_settled" });
+        // 结算后条目已落盘，下发 assistant 条目 id 映射（分支锚点）
+        this.emitEntryIds(taskId);
+        break;
+      }
+      case "queue_update": {
+        // SDK 排队状态（steer/followUp 队列），驱动渲染层「已排队」指示
+        emit({
+          type: "queue_update",
+          payload: {
+            steering: Array.isArray(e.steering) ? (e.steering as string[]).slice() : [],
+            followUp: Array.isArray(e.followUp) ? (e.followUp as string[]).slice() : [],
+          },
+        });
         break;
       }
       case "message_update": {

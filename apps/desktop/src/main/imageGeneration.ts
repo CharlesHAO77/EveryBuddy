@@ -29,7 +29,13 @@ export interface HttpGenerateImageOptions {
 
 export type FetchLike = (
   input: string,
-  init?: { method?: string; headers?: Record<string, string>; body?: string },
+  init?: {
+    method?: string;
+    headers?: Record<string, string>;
+    body?: string;
+    /** abort 信号（生图即时取消）：abort 时 fetch 以 AbortError 拒绝 */
+    signal?: AbortSignal;
+  },
 ) => Promise<{
   ok: boolean;
   status: number;
@@ -44,8 +50,8 @@ function detectMimeFromBytes(buf: Uint8Array): string {
 }
 
 /** 下载 URL 图片为 Buffer（生图响应为 url 形态时用） */
-async function fetchUrlBytes(url: string, fetchImpl: FetchLike): Promise<Uint8Array> {
-  const res = await fetchImpl(url);
+async function fetchUrlBytes(url: string, fetchImpl: FetchLike, signal?: AbortSignal): Promise<Uint8Array> {
+  const res = await fetchImpl(url, { signal });
   if (!res.ok) {
     const body = await res.text().catch(() => "");
     throw new Error(`下载生图结果失败 ${res.status}: ${body.slice(0, 200)}`);
@@ -62,6 +68,7 @@ export async function httpGenerateImage(
   opts: HttpGenerateImageOptions,
   params: GenerateImageParams,
   fetchImpl: FetchLike = fetch as unknown as FetchLike,
+  signal?: AbortSignal,
 ): Promise<GenerateImageResult> {
   const url = `${opts.baseUrl.replace(/\/+$/, "")}${opts.apiPath ?? "/images/generations"}`;
   const res = await fetchImpl(url, {
@@ -76,6 +83,7 @@ export async function httpGenerateImage(
       size: params.size,
       n: params.n ?? 1,
     }),
+    signal,
   });
 
   if (!res.ok) {
@@ -98,7 +106,7 @@ export async function httpGenerateImage(
       const bytes = Uint8Array.from(Buffer.from(item.b64_json, "base64"));
       images.push({ data: item.b64_json, mimeType: detectMimeFromBytes(bytes) });
     } else if (item.url) {
-      const bytes = await fetchUrlBytes(item.url, fetchImpl);
+      const bytes = await fetchUrlBytes(item.url, fetchImpl, signal);
       images.push({
         data: Buffer.from(bytes).toString("base64"),
         mimeType: detectMimeFromBytes(bytes),

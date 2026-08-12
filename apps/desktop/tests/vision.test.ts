@@ -76,6 +76,37 @@ describe("describeImage", () => {
     );
     expect(text).toContain("未返回文本");
   });
+
+  it("abort 信号透传给 modelRuntime.complete", async () => {
+    let received: { signal?: AbortSignal } | undefined;
+    const runtime: DescribeImageRuntime = {
+      async complete(_model, _context, options) {
+        received = options;
+        return { content: "x" };
+      },
+    };
+    const ctrl = new AbortController();
+    await describeImage(
+      runtime,
+      { input: ["text", "image"] },
+      { data: "aA==", mimeType: "image/png" },
+      undefined,
+      ctrl.signal,
+    );
+    expect(received?.signal).toBe(ctrl.signal);
+  });
+
+  it("无 signal 时不传 options（complete 第三参为 undefined）", async () => {
+    let received: unknown = "sentinel";
+    const runtime: DescribeImageRuntime = {
+      async complete(_model, _context, options) {
+        received = options;
+        return { content: "x" };
+      },
+    };
+    await describeImage(runtime, { input: ["text", "image"] }, { data: "aA==", mimeType: "image/png" });
+    expect(received).toBeUndefined();
+  });
 });
 
 describe("extractTextContent", () => {

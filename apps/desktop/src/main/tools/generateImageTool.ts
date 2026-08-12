@@ -69,7 +69,11 @@ export async function createGenerateImageToolDefinition(
       size: Type.Optional(Type.String({ description: "如 1024x1024，默认由服务端决定" })),
       n: Type.Optional(Type.Number({ description: "生成张数，默认 1" })),
     }),
-    execute: async (_toolCallId: string, params: { prompt: string; size?: string; n?: number }) => {
+    execute: async (
+      _toolCallId: string,
+      params: { prompt: string; size?: string; n?: number },
+      signal?: AbortSignal,
+    ) => {
       const provider = deps.resolveImageGenProvider();
       if (!provider) {
         return {
@@ -95,6 +99,7 @@ export async function createGenerateImageToolDefinition(
           { baseUrl: provider.baseUrl, apiKey, model: provider.model, apiPath: provider.apiPath },
           { prompt: params.prompt, size: params.size, n: params.n },
           deps.fetchImpl,
+          signal,
         );
         images = result.images;
       } catch (err) {

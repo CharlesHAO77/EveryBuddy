@@ -31,6 +31,7 @@ export interface DescribeImageRuntime {
         content: Array<{ type: string; text?: string; data?: string; mimeType?: string }>;
       }>;
     },
+    options?: { signal?: AbortSignal },
   ): Promise<{ content: unknown }>;
 }
 
@@ -58,20 +59,25 @@ export async function describeImage(
   model: DescribeImageModel,
   image: ImageInput,
   question?: string,
+  signal?: AbortSignal,
 ): Promise<string> {
-  const result = await modelRuntime.complete(model, {
-    systemPrompt:
-      "你是一名视觉理解助手。请根据用户问题准确、简洁地描述图片内容；若无问题则概括图片要点。",
-    messages: [
-      {
-        role: "user",
-        content: [
-          { type: "text", text: question?.trim() || "请描述这张图片的内容。" },
-          { type: "image", data: image.data, mimeType: image.mimeType },
-        ],
-      },
-    ],
-  });
+  const result = await modelRuntime.complete(
+    model,
+    {
+      systemPrompt:
+        "你是一名视觉理解助手。请根据用户问题准确、简洁地描述图片内容；若无问题则概括图片要点。",
+      messages: [
+        {
+          role: "user",
+          content: [
+            { type: "text", text: question?.trim() || "请描述这张图片的内容。" },
+            { type: "image", data: image.data, mimeType: image.mimeType },
+          ],
+        },
+      ],
+    },
+    signal ? { signal } : undefined,
+  );
   const text = extractTextContent(result.content).trim();
   return text || "[视觉模型未返回文本]";
 }

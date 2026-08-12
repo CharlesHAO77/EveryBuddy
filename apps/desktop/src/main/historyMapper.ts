@@ -128,6 +128,36 @@ export function entriesToHistory(
       });
     } else if (role === "assistant") {
       const blocks: HistoryBlock[] = [];
+      // 真实计费元数据：SDK AssistantMessage 已含 usage/cost/provider/model/stopReason（JSONL 持久化），
+      // 回放时映射供 footer 展示与「已取消」语义
+      const um = (msg as { usage?: unknown }).usage as
+        | {
+            input?: number;
+            output?: number;
+            cacheRead?: number;
+            cacheWrite?: number;
+            totalTokens?: number;
+            reasoning?: number;
+            cost?: { input?: number; output?: number; total?: number };
+          }
+        | undefined;
+      const usage = um
+        ? {
+            input: um.input ?? 0,
+            output: um.output ?? 0,
+            cacheRead: um.cacheRead ?? 0,
+            cacheWrite: um.cacheWrite ?? 0,
+            totalTokens: um.totalTokens ?? 0,
+            reasoning: um.reasoning,
+            cost: um.cost
+              ? {
+                  input: um.cost.input ?? 0,
+                  output: um.cost.output ?? 0,
+                  total: um.cost.total ?? 0,
+                }
+              : undefined,
+          }
+        : undefined;
       if (Array.isArray(msg.content)) {
         msg.content.forEach((c, i) => {
           if (!c || typeof c !== "object") return;
@@ -169,6 +199,10 @@ export function entriesToHistory(
         timestamp: ts,
         blocks,
         errorMessage: msg.errorMessage,
+        usage,
+        model: (msg as { model?: string }).model,
+        provider: (msg as { provider?: string }).provider,
+        stopReason: (msg as { stopReason?: string }).stopReason,
       });
     } else if (role === "toolResult") {
       // 工具结果回填到前一条 assistant 消息中匹配 toolCallId 的工具块

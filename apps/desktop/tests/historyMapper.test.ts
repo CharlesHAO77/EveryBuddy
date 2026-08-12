@@ -157,6 +157,50 @@ describe("entriesToHistory", () => {
     expect(tool.status).toBe("error");
     expect(tool.error).toBe("失败原因");
   });
+
+  it("assistant 消息映射 usage/model/provider/stopReason（真实计费 + 已取消回放）", () => {
+    const entries = chain([
+      msg("a1", "root", {
+        role: "assistant",
+        content: [{ type: "text", text: "部分内容" }],
+        provider: "p-llm",
+        model: "claude-sonnet-5",
+        stopReason: "aborted",
+        usage: {
+          input: 100,
+          output: 200,
+          cacheRead: 50,
+          cacheWrite: 0,
+          totalTokens: 350,
+          reasoning: 60,
+          cost: { input: 0.1, output: 0.2, total: 0.3 },
+        },
+      }),
+    ]);
+    const result = entriesToHistory(entries);
+    const a1 = result[0];
+    if (a1?.role !== "assistant") throw new Error("a1 缺失");
+    expect(a1.provider).toBe("p-llm");
+    expect(a1.model).toBe("claude-sonnet-5");
+    expect(a1.stopReason).toBe("aborted");
+    expect(a1.usage).toMatchObject({
+      input: 100,
+      output: 200,
+      cacheRead: 50,
+      cacheWrite: 0,
+      totalTokens: 350,
+      reasoning: 60,
+    });
+    expect(a1.usage?.cost).toEqual({ input: 0.1, output: 0.2, total: 0.3 });
+  });
+
+  it("无 usage 的 assistant 消息 → usage 为 undefined（footer 不显示计费）", () => {
+    const entries = chain([msg("a1", "root", assistantMsg([{ type: "text", text: "x" }]))]);
+    const result = entriesToHistory(entries);
+    const a1 = result[0];
+    if (a1?.role !== "assistant") throw new Error("a1 缺失");
+    expect(a1.usage).toBeUndefined();
+  });
 });
 
 describe("buildFullPath", () => {

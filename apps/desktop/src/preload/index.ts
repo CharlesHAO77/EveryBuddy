@@ -14,6 +14,8 @@ const api: ElectronAPI = {
   agent: {
     prompt: (req) => ipcRenderer.invoke("agent:prompt", req),
     abort: (streamId) => ipcRenderer.invoke("agent:abort", { streamId }),
+    steer: (req) => ipcRenderer.invoke("agent:steer", req),
+    followUp: (req) => ipcRenderer.invoke("agent:followUp", req),
     onEvent: (cb) => {
       const handler = (_: unknown, event: unknown) => cb(event as never);
       ipcRenderer.on("agent:event", handler);
@@ -33,6 +35,7 @@ const api: ElectronAPI = {
     setProvider: (taskId, providerId) =>
       ipcRenderer.invoke("task:setProvider", { taskId, providerId }),
     openDir: (id) => ipcRenderer.invoke("task:openDir", { id }),
+    branch: (req) => ipcRenderer.invoke("task:branch", req),
   },
   workspace: {
     list: () => ipcRenderer.invoke("workspace:list"),

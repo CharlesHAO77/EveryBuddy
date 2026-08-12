@@ -5,6 +5,7 @@
 import { describe, expect, it } from "vitest";
 import {
   attachmentRefSchema,
+  branchRequestSchema,
   createNamedWorkspaceRequestSchema,
   createTaskRequestSchema,
   createWorkspaceRequestSchema,
@@ -156,6 +157,21 @@ describe("saveModelRequestSchema", () => {
     if (result.success) {
       expect(result.data).not.toHaveProperty("capabilities");
     }
+  });
+});
+
+describe("branchRequestSchema", () => {
+  it("accepts taskId + entryId", () => {
+    expect(branchRequestSchema.safeParse({ taskId: "t", entryId: "e" }).success).toBe(true);
+  });
+  it("rejects missing entryId", () => {
+    expect(branchRequestSchema.safeParse({ taskId: "t" }).success).toBe(false);
+  });
+  it("rejects empty entryId", () => {
+    expect(branchRequestSchema.safeParse({ taskId: "t", entryId: "" }).success).toBe(false);
+  });
+  it("rejects missing taskId", () => {
+    expect(branchRequestSchema.safeParse({ entryId: "e" }).success).toBe(false);
   });
 });
 

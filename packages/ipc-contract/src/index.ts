@@ -44,17 +44,55 @@ export interface PromptResponse {
 }
 
 /**
+ * 单条 assistant 消息的 token 用量与费用（来自 SDK AssistantMessage.usage，JSONL 已持久化）。
+ * cost 单位为元（SDK 按模型定价计算）；>0 即展示，无则不显示。
+ */
+export interface MessageUsage {
+  input: number;
+  output: number;
+  cacheRead: number;
+  cacheWrite: number;
+  totalTokens: number;
+  /** 推理 token（output 的子集，provider 不上报时缺省） */
+  reasoning?: number;
+  cost?: { input: number; output: number; total: number };
+}
+
+/**
  * 统一事件流（见 §0.4 卡片化消息模型）。
  * pi-coding-agent 的内容块粒度事件经 AgentRuntime 归一化为此类型。
  * streamId = taskId；contentIndex 标识块在消息内的序号，用于按序渲染卡片。
  */
 export type AgentEvent =
   // 消息生命周期
-  | { streamId: string; type: "message_start" }
-  | { streamId: string; type: "message_end"; payload: { stopReason?: string } }
+  // message_start 携带 SDK 自身时间戳（避免主/渲染双进程时钟偏差），用于 entryId 匹配锚点
+  | { streamId: string; type: "message_start"; payload: { sdkTimestamp: number } }
+  | {
+      streamId: string;
+      type: "message_end";
+      payload: {
+        stopReason?: string;
+        /** 本条 assistant 消息的 token 用量/费用（SDK usage，>0 即展示） */
+        usage?: MessageUsage;
+        model?: string;
+        provider?: string;
+      };
+    }
   | { streamId: string; type: "turn_end" }
   | { streamId: string; type: "agent_end" }
   | { streamId: string; type: "agent_settled" }
+  // agent_settled 后下发：assistant 条目 id 映射（按 sdkTimestamp 匹配），供分支锚点使用
+  | {
+      streamId: string;
+      type: "message_entry_ids";
+      payload: { entries: Array<{ sdkTimestamp: number; entryId: string }> };
+    }
+  // SDK 排队状态（steer/followUp 队列），驱动「已排队」指示
+  | {
+      streamId: string;
+      type: "queue_update";
+      payload: { steering: string[]; followUp: string[] };
+    }
   | { streamId: string; type: "error"; payload: { message: string } }
   // 思考块
   | { streamId: string; type: "thinking_start"; payload: { contentIndex: number } }
@@ -280,6 +318,13 @@ export interface HistoryMessage {
   errorMessage?: string;
   /** 压缩边界提示（role === "notice" 时）：SDK 上下文压缩摘要（markdown），持久显示于消息列表 */
   noticeContent?: string;
+  /** assistant 消息的 token 用量/费用（JSONL 回放，footer 元数据与计费用） */
+  usage?: MessageUsage;
+  /** assistant 消息的模型/提供者（footer 展示与模型类型分账用） */
+  model?: string;
+  provider?: string;
+  /** assistant 消息结束原因（"aborted" 回放时呈现「已取消」） */
+  stopReason?: string;
 }
 
 // ────────────────────────────────────────────────
@@ -396,6 +441,13 @@ export const setApiKeyRequestSchema = z.object({
 
 export const idRequestSchema = z.object({ id: z.string().min(1) });
 
+/** task:branch 请求：从指定 assistant 条目分叉出新会话（entryId 为会话 JSONL 条目 id） */
+export const branchRequestSchema = z.object({
+  taskId: z.string().min(1, "参数缺失"),
+  entryId: z.string().min(1, "参数缺失"),
+});
+export type BranchRequest = z.infer<typeof branchRequestSchema>;
+
 export const renameTaskRequestSchema = z.object({
   id: z.string().min(1, "参数缺失"),
   title: z.string().min(1, "参数缺失"),
@@ -460,6 +512,10 @@ export interface ElectronAPI {
   agent: {
     prompt: (req: PromptRequest) => Promise<PromptResponse>;
     abort: (streamId: string) => Promise<void>;
+    /** 转向：打断当前生成并处理新消息（空闲时等同 prompt） */
+    steer: (req: PromptRequest) => Promise<PromptResponse>;
+    /** 排队：当前生成完成后自动处理（空闲时等同 prompt） */
+    followUp: (req: PromptRequest) => Promise<PromptResponse>;
     onEvent: (cb: (event: AgentEvent) => void) => () => void;
     extensionCommand: (req: ExtensionCommandRequest) => Promise<void>;
     /** 切换任务执行模式（auto/manual/plan） */
@@ -476,6 +532,8 @@ export interface ElectronAPI {
     rename: (id: string, title: string) => Promise<void>;
     setProvider: (taskId: string, providerId: string) => Promise<void>;
     openDir: (id: string) => Promise<void>;
+    /** 从指定 assistant 条目分叉出新会话，返回新任务 */
+    branch: (req: BranchRequest) => Promise<TaskMeta>;
   };
   workspace: {
     list: () => Promise<Workspace[]>;

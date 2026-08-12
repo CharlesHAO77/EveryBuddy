@@ -20,11 +20,12 @@ export interface UnderstandImageToolDeps {
    * 返回 undefined 表示未配置。每次调用都解析，新打标签的模型无需重建会话即生效。
    */
   resolveVisionModel: () => DescribeImageModel | undefined;
-  /** 一次性视觉理解调用（agentRuntime 包装 vision.describeImage） */
+  /** 一次性视觉理解调用（agentRuntime 包装 vision.describeImage；signal 来自 agent.run abortController） */
   describeImage: (
     model: DescribeImageModel,
     image: ImageInput,
     question?: string,
+    signal?: AbortSignal,
   ) => Promise<string>;
   /** 已配置的视觉 provider id（仅用于 details 标注） */
   visionProviderId?: () => string | undefined;
@@ -46,7 +47,11 @@ export async function createUnderstandImageToolDefinition(
         Type.String({ description: "针对图片的具体问题；缺省为描述图片内容" }),
       ),
     }),
-    execute: async (_toolCallId: string, params: { file: string; question?: string }) => {
+    execute: async (
+      _toolCallId: string,
+      params: { file: string; question?: string },
+      signal?: AbortSignal,
+    ) => {
       const filePath = resolveInUploads(path.join(cwd, "uploads"), params.file);
       if (!filePath) {
         return {
@@ -77,7 +82,7 @@ export async function createUnderstandImageToolDefinition(
         };
       }
       try {
-        const description = await deps.describeImage(model, image, params.question);
+        const description = await deps.describeImage(model, image, params.question, signal);
         return {
           content: [{ type: "text", text: description }],
           details: { usedVisionModel: deps.visionProviderId?.() },

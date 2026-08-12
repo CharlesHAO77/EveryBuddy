@@ -12,6 +12,7 @@ import type { TaskMeta } from "@everybuddy/ipc-contract";
 import {
   abortRequestSchema,
   approveToolRequestSchema,
+  branchRequestSchema,
   createNamedWorkspaceRequestSchema,
   createTaskRequestSchema,
   createWorkspaceRequestSchema,
@@ -115,6 +116,32 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
     await agentRuntime.abort(req.streamId);
   });
 
+  // 转向发送（/steer 与运行中「转向」）：打断当前生成并处理新消息
+  ipcMain.handle("agent:steer", async (_evt, raw) => {
+    const req = validate(promptRequestSchema, raw);
+    await agentRuntime.steerMessage(
+      req.sessionId,
+      req.text,
+      "steer",
+      req.providerId,
+      req.attachments,
+    );
+    return { streamId: req.sessionId };
+  });
+
+  // 排队发送（/follow-up 与运行中「排队」）：当前生成完成后自动处理
+  ipcMain.handle("agent:followUp", async (_evt, raw) => {
+    const req = validate(promptRequestSchema, raw);
+    await agentRuntime.steerMessage(
+      req.sessionId,
+      req.text,
+      "followUp",
+      req.providerId,
+      req.attachments,
+    );
+    return { streamId: req.sessionId };
+  });
+
   // 扩展命令（如 plan-mode toggle/execute）-> 扩展控制器侧信道
   ipcMain.handle("agent:extension-command", async (_evt, raw) => {
     const req = validate(extensionCommandRequestSchema, raw);
@@ -215,6 +242,12 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
     if (!task) throw new Error("任务不存在");
     // 打开工作目录（临时任务 -> work-spaces 下的工作目录，空间任务 -> 空间路径），而非 JSONL 会话目录
     await openInFinder(getTaskCwd(task));
+  });
+
+  // 从指定 assistant 条目分叉出新会话（渲染层 footer「分支」按钮触发）
+  ipcMain.handle("task:branch", async (_evt, raw) => {
+    const req = validate(branchRequestSchema, raw);
+    return agentRuntime.branchTask(req.taskId, req.entryId);
   });
 
   // ── workspace:* ──────────────────────────
