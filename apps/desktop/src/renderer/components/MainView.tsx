@@ -363,6 +363,14 @@ function WelcomeView() {
     <div className="flex min-h-full flex-col items-center">
       {/* ── Centered Content ── */}
       <div className="flex w-full max-w-[600px] flex-col items-center pt-[130px]">
+        {/* Brand icon（public/assets/icon-256.png，图标自带圆角，无需容器） */}
+        <img
+          src="./assets/icon-256.png"
+          alt="EveryBuddy"
+          draggable={false}
+          className="mb-[20px] h-[72px] w-[72px] select-none"
+        />
+
         {/* Title */}
         <h1 className="font-display text-[36px] font-semibold tracking-tight text-ink">
           EveryBuddy, 我帮你

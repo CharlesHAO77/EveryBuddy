@@ -1,3 +1,4 @@
+import path from "node:path";
 import { app, BrowserWindow, Menu } from "electron";
 import { agentRuntime } from "./agentRuntime";
 import { ensureAppDirs } from "./configStore";
@@ -13,6 +14,11 @@ app.whenReady().then(async () => {
   // 必须在 createMainWindow 之前调用，否则窗口创建后不生效（见 electron/electron#16521）。
   if (process.platform === "win32") {
     Menu.setApplicationMenu(null);
+  }
+
+  // 开发模式 macOS Dock 图标（打包版由 icns 自动生效，无需手动设置）
+  if (process.platform === "darwin" && !app.isPackaged) {
+    app.dock?.setIcon(path.join(app.getAppPath(), "assets", "icons", "icon.png"));
   }
 
   // 确保应用目录结构存在

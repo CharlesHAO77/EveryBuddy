@@ -1,11 +1,13 @@
 import path from "node:path";
-import { BrowserWindow } from "electron";
+import { app, BrowserWindow } from "electron";
 
 /**
  * Electron Forge Vite plugin 在构建主进程时会通过 vite:define 注入
- * MAIN_WINDOW_VITE_DEV_SERVER_URL 常量（renderer name 为 main_window）。
+ * MAIN_WINDOW_VITE_DEV_SERVER_URL / MAIN_WINDOW_VITE_NAME 常量
+ * （renderer name 为 main_window）。
  */
 declare const MAIN_WINDOW_VITE_DEV_SERVER_URL: string | undefined;
+declare const MAIN_WINDOW_VITE_NAME: string;
 
 /**
  * 创建主窗口（见 docs/architecture.md §5.2）。
@@ -17,6 +19,11 @@ export function createMainWindow(): BrowserWindow {
     minWidth: 900,
     minHeight: 600,
     title: "EveryBuddy",
+    // 窗口图标（Win/Linux 任务栏；macOS 忽略，Dock 图标由打包 icns 提供）
+    // 打包版读 extraResource 拷入 resources 根目录的 icon.png；dev 读源目录
+    icon: app.isPackaged
+      ? path.join(process.resourcesPath, "icon.png")
+      : path.join(app.getAppPath(), "assets", "icons", "icon.png"),
     // 暖纸感底色，避免启动时白屏闪烁；配色与 renderer globals.css --paper 保持一致
     backgroundColor: "#faf8f4",
     // macOS 沉浸式标题栏：红绿灯嵌入侧边栏顶栏（保持不变）
@@ -46,7 +53,8 @@ export function createMainWindow(): BrowserWindow {
   if (MAIN_WINDOW_VITE_DEV_SERVER_URL) {
     void win.loadURL(MAIN_WINDOW_VITE_DEV_SERVER_URL);
   } else {
-    void win.loadFile(path.join(__dirname, "..", "renderer", "index.html"));
+    // 打包版 renderer 产物在 .vite/renderer/<name>/index.html，必须带 MAIN_WINDOW_VITE_NAME
+    void win.loadFile(path.join(__dirname, "..", "renderer", MAIN_WINDOW_VITE_NAME, "index.html"));
   }
 
   return win;
