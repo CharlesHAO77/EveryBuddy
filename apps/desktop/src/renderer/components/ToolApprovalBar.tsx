@@ -45,7 +45,7 @@ export function ToolApprovalBar({ taskId }: { taskId: string }) {
   };
 
   return (
-    <div className="mb-2 flex items-start justify-between gap-3 rounded-l border border-line bg-card px-3 py-2.5 shadow-card">
+    <div className="mb-2 flex items-start justify-between gap-3 rounded-xl border border-line bg-card px-3 py-2.5 shadow-card">
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
           <span

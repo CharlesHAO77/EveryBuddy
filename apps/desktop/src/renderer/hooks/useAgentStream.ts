@@ -152,12 +152,9 @@ export function useAgentStream(): void {
           const nextLines = event.payload.lines;
           const nextState = event.payload.state;
           const shouldShow =
-            (key === "todo" &&
-              (nextLines?.length ?? 0) > 0 &&
-              (prev?.lines?.length ?? 0) === 0) ||
+            (key === "todo" && (nextLines?.length ?? 0) > 0 && (prev?.lines?.length ?? 0) === 0) ||
             (key === "plan-mode" &&
-              nextState !== undefined &&
-              nextState !== "off" &&
+              (nextState === "ready" || nextState === "executing") &&
               prev?.state !== nextState);
           if (shouldShow) {
             useUIStore.setState({ rightPanelOpen: true, rightPanelView: "todo-plan" });

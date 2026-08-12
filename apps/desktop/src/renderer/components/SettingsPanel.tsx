@@ -4,8 +4,8 @@
  * 默认激活分区为「模型设置」（通用为占位）。
  */
 import type { ComponentType } from "react";
-import { useUIStore, type SettingsSectionId } from "../stores/uiStore";
-import { IconSettings, IconSlidersHorizontal, IconX, type IconProps } from "./icons";
+import { type SettingsSectionId, useUIStore } from "../stores/uiStore";
+import { type IconProps, IconSettings, IconSlidersHorizontal, IconX } from "./icons";
 import { ModelSettings } from "./ModelSettings";
 
 interface SettingsPanelProps {
@@ -49,7 +49,7 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-ink/20 p-4">
       {/* 悬浮设置窗口：固定尺寸，不随分区内容变化 */}
-      <div className="flex h-[600px] w-[900px] max-w-full flex-col overflow-hidden rounded-l bg-paper shadow-modal">
+      <div className="flex h-[600px] w-[900px] max-w-full flex-col overflow-hidden rounded-xl bg-paper shadow-modal">
         {/* 顶栏：设置标题 + 右上角关闭 */}
         <div className="flex h-[52px] shrink-0 items-center justify-between border-b border-line px-4">
           <span className="text-[15px] font-semibold text-ink">设置</span>
@@ -75,7 +75,9 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
                     type="button"
                     onClick={() => setSection(s.id)}
                     className={`flex h-[40px] w-full items-center gap-[10px] rounded-s px-[12px] text-[14px] transition ${
-                      isActive ? "bg-accent-tint font-semibold text-ink" : "text-ink-2 hover:bg-hover"
+                      isActive
+                        ? "bg-accent-tint font-semibold text-ink"
+                        : "text-ink-2 hover:bg-hover"
                     }`}
                   >
                     <Icon className={isActive ? "text-accent" : "text-ink-2"} />

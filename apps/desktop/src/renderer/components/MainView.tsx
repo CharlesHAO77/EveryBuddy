@@ -35,12 +35,19 @@ type MessageGroup =
   | { kind: "assistant"; messages: ChatMessage[] }
   | { kind: "notice"; messages: ChatMessage[] };
 
-/** 将连续的 assistant 消息合并为一组（一个 agent 消息含多个 turn），user/错误/压缩提示独立成组 */
+/** 将连续的 assistant 消息合并为一组（一个 agent 消息含多个 turn），user/错误独立成组。
+ *  例外：压缩提示（notice）若位于 assistant 组中段（同一 agent 过程被压缩后继续），并入该组一同折叠，
+ *  避免一个 agent 过程被拆成多个折叠框。 */
 function groupMessages(messages: ChatMessage[]): MessageGroup[] {
   const groups: MessageGroup[] = [];
   for (const msg of messages) {
     if (msg.role === "notice") {
-      groups.push({ kind: "notice", messages: [msg] });
+      const last = groups[groups.length - 1];
+      if (last?.kind === "assistant") {
+        last.messages.push(msg);
+      } else {
+        groups.push({ kind: "notice", messages: [msg] });
+      }
     } else if (msg.role === "user") {
       groups.push({ kind: "user", messages: [msg] });
     } else if (msg.errorMessage) {
@@ -405,7 +412,7 @@ function WelcomeView() {
           {/* biome-ignore lint/a11y/noStaticElementInteractions: 输入容器是拖放区，需挂 onDragOver/onDrop；键盘用户聚焦内部 textarea 即可 */}
           <div
             ref={slash.containerRef}
-            className="relative h-[160px] rounded-l border border-line bg-card shadow-card transition focus-within:border-accent"
+            className="relative h-[160px] rounded-xl border border-line bg-card shadow-card transition focus-within:border-accent"
             onDragOver={onContainerDragOver}
             onDrop={onContainerDrop}
           >
@@ -620,7 +627,7 @@ function ChatView({ taskId }: { taskId: string }) {
           {/* biome-ignore lint/a11y/noStaticElementInteractions: 输入容器是拖放区，需挂 onDragOver/onDrop；键盘用户聚焦内部 textarea 即可 */}
           <div
             ref={slash.containerRef}
-            className="relative h-[120px] rounded-l border border-line bg-card shadow-card transition focus-within:border-accent"
+            className="relative h-[120px] rounded-xl border border-line bg-card shadow-card transition focus-within:border-accent"
             onDragOver={onContainerDragOver}
             onDrop={onContainerDrop}
           >

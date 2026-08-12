@@ -51,7 +51,7 @@ export function ConfirmDialog({
         if (e.target === e.currentTarget && !loading) onCancel();
       }}
     >
-      <div className="w-[360px] rounded-l bg-paper p-5 shadow-modal">
+      <div className="w-[360px] rounded-xl bg-paper p-5 shadow-modal">
         <h3 className="text-[16px] font-semibold text-ink">{title}</h3>
         <p className="mt-2 whitespace-pre-line text-[14px] leading-[1.6] text-ink-2">
           {description}

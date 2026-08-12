@@ -25,6 +25,8 @@ export type ThinkingBlock = HistoryThinkingBlock;
 
 export interface ChatMessage extends HistoryMessage {
   isStreaming?: boolean;
+  /** agent 结束时间戳（渲染层内存，用于计算执行时长；历史回放无此字段） */
+  endedAt?: number;
 }
 
 export interface Task extends TaskMeta {
@@ -607,6 +609,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
                 ? {
                     ...m,
                     isStreaming: false,
+                    endedAt: Date.now(),
                     blocks: m.blocks.map((b) => (b.done ? b : { ...b, done: true })),
                   }
                 : m,
@@ -632,6 +635,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
                 ? {
                     ...m,
                     isStreaming: false,
+                    endedAt: Date.now(),
                     errorMessage: message,
                     blocks: m.blocks.map((b) => ({ ...b, done: true })),
                   }
@@ -727,10 +731,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
     set((s) => ({
       chatNotices: {
         ...s.chatNotices,
-        [taskId]: [
-          ...(s.chatNotices[taskId] ?? []),
-          { id, message, level: level ?? "info" },
-        ],
+        [taskId]: [...(s.chatNotices[taskId] ?? []), { id, message, level: level ?? "info" }],
       },
     }));
     setTimeout(() => {

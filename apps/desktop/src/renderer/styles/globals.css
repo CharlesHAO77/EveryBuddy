@@ -67,10 +67,12 @@
   --color-terminal: var(--terminal);
   --color-terminal-text: var(--terminal-text);
 
-  /* 圆角 3 档：s=6 按钮/chips，m=10 卡片/菜单，l=16 输入框大卡片 */
+  /* 圆角 3 档：s=6 按钮/chips，m=10 卡片/菜单，xl=16 输入框大卡片
+   * 注意：不能用 `l` 作 token 名 -- `rounded-l` 与 Tailwind 方向性工具类（left 侧）冲突，
+   * 方向规则会把左侧两角覆盖成 4px，导致左右圆角不对称。 */
   --radius-s: 6px;
   --radius-m: 10px;
-  --radius-l: 16px;
+  --radius-xl: 16px;
 
   --shadow-card: var(--shadow-card);
   --shadow-pop: var(--shadow-pop);
