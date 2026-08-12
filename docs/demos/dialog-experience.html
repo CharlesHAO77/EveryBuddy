@@ -1,0 +1,1201 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>EveryBuddy · 对话体验增强 — 原型 Demo</title>
+<style>
+/* ──────────────────────────────── 设计 Token（对齐 apps/desktop globals.css 温暖纸感） */
+:root{
+  --paper:#faf8f4; --paper-deep:#f4f0e9; --card:#ffffff;
+  --hover:#f1ede4; --active:#eae4d8;
+  --ink:#1f1c18; --ink-2:#57534b; --ink-3:#a39e93;
+  --line:#e9e4da; --line-strong:#dcd5c7;
+  --accent:#0d7a5f; --accent-strong:#0a6450; --accent-tint:#e7f2ee; --accent-line:#bcddd2;
+  --danger:#b4453a; --danger-strong:#9c3a31;
+  --terminal:#2a2723; --terminal-text:#e8e4dc;
+  --shadow-card:0 1px 2px rgb(31 28 24 / .04), 0 1px 6px rgb(31 28 24 / .03);
+  --shadow-pop:0 4px 16px rgb(31 28 24 / .1), 0 1px 3px rgb(31 28 24 / .06);
+  --radius-s:6px; --radius-m:10px; --radius-xl:16px;
+}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,"Noto Sans SC","PingFang SC","Microsoft YaHei",sans-serif;
+  background:var(--paper);color:var(--ink);font-size:15px;font-weight:500;line-height:1.55;-webkit-font-smoothing:antialiased;
+}
+button{font-family:inherit;cursor:pointer;border:none;background:none;color:inherit}
+::selection{background:var(--accent-tint)}
+
+/* ── 整体布局 ── */
+.app{display:flex;flex-direction:column;height:100vh}
+.topbar{
+  display:flex;align-items:center;gap:12px;padding:8px 16px;background:var(--paper-deep);
+  border-bottom:1px solid var(--line);flex:0 0 auto;
+}
+.top-title{font-size:14px;font-weight:700;color:var(--ink)}
+.demo-badge{font-size:11px;font-weight:600;color:var(--accent-strong);background:var(--accent-tint);border:1px solid var(--accent-line);border-radius:999px;padding:1px 8px;margin-left:6px}
+.top-actions{margin-left:auto;display:flex;align-items:center;gap:10px}
+.live-status{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--ink-2);background:var(--card);border:1px solid var(--line);border-radius:999px;padding:2px 10px}
+.live-status .dot{width:7px;height:7px;border-radius:50%;background:#8a9a55}
+.live-status.running .dot{background:var(--accent);animation:blink 1s infinite}
+.live-status.running{color:var(--accent-strong);border-color:var(--accent-line)}
+@keyframes blink{50%{opacity:.25}}
+.btn-stop{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:var(--danger-strong);background:var(--card);border:1px solid #e2bab3;border-radius:999px;padding:3px 12px;transition:.15s}
+.btn-stop:hover{background:#faeae7}
+.btn-ghost{font-size:12px;color:var(--ink-2);border:1px solid var(--line);border-radius:999px;padding:3px 12px;background:var(--card)}
+.btn-ghost:hover{background:var(--hover)}
+.hidden{display:none !important}
+
+.workspace{display:grid;grid-template-columns:236px 1fr 300px;flex:1;min-height:0}
+
+/* ── 侧栏 ── */
+.sidebar{background:var(--paper-deep);border-right:1px solid var(--line);display:flex;flex-direction:column;min-height:0}
+.side-head{display:flex;align-items:center;padding:12px 14px 8px}
+.side-title{font-size:12px;font-weight:700;color:var(--ink-3);letter-spacing:.06em}
+.btn-new{margin-left:auto;width:24px;height:24px;border-radius:6px;color:var(--accent-strong);font-size:16px;line-height:1}
+.btn-new:hover{background:var(--active)}
+.side-list{flex:1;overflow-y:auto;padding:4px 8px}
+.side-item{display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:8px;cursor:pointer;color:var(--ink-2);font-size:13px;transition:.12s}
+.side-item:hover{background:var(--hover)}
+.side-item.active{background:var(--active);color:var(--ink)}
+.side-item .ico{flex:0 0 auto;color:var(--ink-3);font-size:11px}
+.side-item.active .ico{color:var(--accent)}
+.side-item .ti{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.side-item .cnt{flex:0 0 auto;font-size:11px;color:var(--ink-3);background:var(--card);border:1px solid var(--line);border-radius:999px;padding:0 7px}
+.side-item .b-tag{flex:0 0 auto;font-size:10px;font-weight:700;color:var(--accent-strong);background:var(--accent-tint);border-radius:4px;padding:0 5px}
+.side-item .br-tag{flex:0 0 auto;font-size:10px;font-weight:700;color:var(--ink-2);background:var(--hover);border-radius:4px;padding:0 5px}
+.side-foot{padding:10px 14px;border-top:1px solid var(--line)}
+.ws-card{font-size:11px;color:var(--ink-3);background:var(--card);border:1px solid var(--line);border-radius:8px;padding:6px 10px;display:flex;align-items:center;gap:6px}
+
+/* ── 对话主区 ── */
+.chat{display:flex;flex-direction:column;min-width:0;min-height:0;background:var(--paper)}
+.chat-head{display:flex;align-items:center;gap:10px;padding:10px 22px;border-bottom:1px solid var(--line);flex:0 0 auto}
+.chat-head .t{font-size:14px;font-weight:700}
+.chat-head .m-sub{font-size:12px;color:var(--ink-3)}
+.chat-head .head-branch{font-size:11px;color:var(--accent-strong);background:var(--accent-tint);border:1px solid var(--accent-line);border-radius:999px;padding:1px 8px}
+.msg-list{flex:1;overflow-y:auto;padding:20px 0 8px}
+.msg-col{max-width:760px;margin:0 auto;padding:0 22px;display:flex;flex-direction:column;gap:18px}
+.msg{display:flex;flex-direction:column}
+.msg-user{align-items:flex-end}
+.user-bubble{max-width:72%;background:var(--accent-tint);border:1px solid var(--accent-line);border-radius:14px 14px 4px 14px;padding:9px 14px;font-size:14px;white-space:pre-wrap;word-break:break-word}
+.chip-row{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:6px;justify-content:flex-end}
+.file-chip{display:inline-flex;align-items:center;gap:5px;font-size:12px;color:var(--accent-strong);background:var(--card);border:1px solid var(--accent-line);border-radius:999px;padding:2px 10px;box-shadow:var(--shadow-card)}
+.file-chip .x{color:var(--ink-3)}
+.msg-time{font-size:11px;color:var(--ink-3);margin-top:4px}
+
+.msg-ai{align-items:flex-start;width:100%}
+.ai-body{width:100%;display:flex;flex-direction:column;gap:8px}
+.pill{align-self:flex-start;display:inline-flex;align-items:center;gap:5px;border-radius:999px;padding:2px 11px;font-size:12px;font-weight:600;margin-bottom:2px}
+.pill-cancelled{color:var(--danger-strong);background:#faeae7;border:1px solid #eccfc9}
+.pill-queued{color:var(--accent-strong);background:var(--accent-tint);border:1px solid var(--accent-line)}
+.ai-text{font-size:14.5px;white-space:pre-wrap;word-break:break-word;color:var(--ink)}
+.ai-text code{font-family:"SFMono-Regular",Consolas,"Liberation Mono",monospace;font-size:13px;background:var(--hover);border:1px solid var(--line);border-radius:4px;padding:0 4px}
+.cursor{display:inline-block;width:8px;height:15px;background:var(--accent);vertical-align:text-bottom;margin-left:2px;animation:blink 1s step-start infinite}
+
+/* 运行中指示：三颗弹跳圆点（统一包在 .ri-dots 里，组内与末尾 pending 共用） */
+.ri{display:inline-flex;align-items:center;gap:7px;padding:8px 4px;color:var(--ink-2);font-size:13px}
+.ri-dots{display:inline-flex;align-items:center;gap:5px}
+.ri-dots .dot{width:7px;height:7px;border-radius:50%;background:var(--accent);animation:bounce 1.2s infinite;flex:0 0 auto}
+.ri-dots .dot:nth-child(2){animation-delay:.15s}
+.ri-dots .dot:nth-child(3){animation-delay:.3s}
+@keyframes bounce{0%,60%,100%{transform:translateY(0);opacity:.55}30%{transform:translateY(-5px);opacity:1}}
+.ri-standalone{display:flex;align-items:center;gap:7px;padding:6px 0;color:var(--ink-2);font-size:13px}
+
+/* 工具卡片 */
+.tool-card{border:1px solid var(--line);border-radius:10px;background:var(--card);box-shadow:var(--shadow-card);overflow:hidden;font-size:13px;align-self:flex-start;max-width:100%}
+.tc-row{display:flex;align-items:center;gap:8px;padding:8px 12px;color:var(--ink-2)}
+.tc-row .tc-ico{width:8px;height:8px;border-radius:50%;background:var(--ink-3)}
+.tc-row.done .tc-ico{background:#8a9a55}
+.tc-row .tc-name{font-weight:600;color:var(--ink)}
+.tc-row .tc-spin{width:13px;height:13px;border:2px solid var(--accent-line);border-top-color:var(--accent);border-radius:50%;animation:spin .8s linear infinite;margin-left:auto}
+.tc-row.done .tc-spin{display:none}
+.tc-row.done .tc-ok{color:#6b7a3f;margin-left:auto;font-weight:700}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* 任务完成折叠卡 */
+.done-card{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--ink-2);background:var(--card);border:1px solid var(--line);border-radius:10px;padding:8px 12px;cursor:pointer;box-shadow:var(--shadow-card);align-self:flex-start}
+.done-card .dk-ico{width:16px;height:16px;border-radius:50%;background:#8a9a55;color:#fff;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700}
+.done-card .dk-arr{margin-left:auto;color:var(--ink-3);font-size:11px;transition:.2s}
+.done-card.open .dk-arr{transform:rotate(180deg)}
+.done-list{width:100%;border-top:1px solid var(--line);padding:8px 6px 2px;color:var(--ink-2);font-size:12.5px;display:flex;flex-direction:column;gap:4px}
+.done-list .dl{display:flex;gap:6px}
+.dl .ok{color:#6b7a3f}
+
+/* AI 消息 footer */
+.ai-footer{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:2px;padding-top:6px;border-top:1px dashed var(--line);font-size:11.5px;color:var(--ink-3)}
+.mtag{font-size:10px;font-weight:700;border-radius:4px;padding:0 5px}
+.mtag.llm{color:#6b5b1f;background:#f6efd8}
+.mtag.vlm{color:#5a3e8f;background:#efe8fa}
+.mtag.img{color:#0f6d8f;background:#e2f2f8}
+.f-btn{width:26px;height:26px;display:flex;align-items:center;justify-content:center;border-radius:6px;color:var(--ink-3);transition:.12s}
+.f-btn:hover{background:var(--hover);color:var(--ink)}
+.f-btn.on{color:var(--accent-strong);background:var(--accent-tint)}
+.f-btn[disabled]{opacity:.35;cursor:not-allowed}
+.f-btn[disabled]:hover{background:none;color:var(--ink-3)}
+.f-flash{animation:flash 1.6s ease}
+@keyframes flash{0%{background:var(--accent-tint)}100%{background:transparent}}
+/* token 计费触发 + 明细弹层 */
+.bill-trigger{display:inline-flex;align-items:center;gap:4px;font-size:11.5px;font-weight:600;color:var(--accent-strong);background:var(--accent-tint);border:1px solid var(--accent-line);border-radius:999px;padding:2px 9px;transition:.15s;white-space:nowrap}
+.bill-trigger:hover{background:#d7ebe4}
+.bill-trigger .bt-arr{font-size:9px;opacity:.7}
+.bill-pop{position:fixed;z-index:90;width:282px;background:var(--card);border:1px solid var(--line-strong);border-radius:12px;box-shadow:var(--shadow-pop);padding:10px 12px;animation:pop .14s ease}
+.bill-pop-head{display:flex;align-items:center;justify-content:space-between;font-size:12px;font-weight:700;color:var(--ink);margin-bottom:6px}
+.bill-pop-x{color:var(--ink-3);cursor:pointer;font-size:13px;padding:0 3px;border-radius:4px}
+.bill-pop-x:hover{color:var(--ink);background:var(--hover)}
+.bill-pop-row{border-top:1px solid var(--line);padding:7px 2px;display:flex;flex-direction:column;gap:3px}
+.bill-pop-row:first-of-type{border-top:none}
+.bp-row-head{display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600}
+.bp-row-name{font-size:11px;color:var(--ink-3);word-break:break-all}
+.bp-row-nums{display:flex;align-items:baseline;gap:7px;font-size:11.5px;color:var(--ink-2);flex-wrap:wrap}
+.bp-row-cost{font-weight:700;color:var(--accent-strong);margin-left:auto}
+
+/* 图片块 */
+.img-block{border:1px solid var(--line);border-radius:12px;overflow:hidden;background:var(--card);box-shadow:var(--shadow-card);align-self:flex-start;max-width:340px}
+.img-cap{width:100%;height:180px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;color:var(--ink-3);font-size:12px;
+  background:linear-gradient(135deg,#f3eee4 0%,#e7e2d6 45%,#dfeae4 100%)}
+.img-cap .ic{font-size:40px}
+.img-cap.sub{font-size:12.5px;color:var(--ink-2);padding:6px 12px 8px;background:var(--paper-deep);width:100%;border-top:1px solid var(--line)}
+
+/* 生图占位（生成中） */
+.gen-box{border:1px solid var(--line);border-radius:12px;overflow:hidden;background:var(--card);box-shadow:var(--shadow-card);align-self:flex-start;width:300px}
+.gen-cap{height:170px;position:relative;display:flex;align-items:center;justify-content:center;overflow:hidden;font-size:12px;color:var(--ink-2)}
+.gen-shimmer{position:absolute;inset:0;background:linear-gradient(100deg,#f3eee4 30%,#faf7f0 50%,#f3eee4 70%);background-size:200% 100%;animation:shimmer 1.4s infinite}
+@keyframes shimmer{to{background-position:-200% 0}}
+.gen-cap .gc-txt{position:relative;z-index:1;display:flex;align-items:center;gap:8px}
+.gen-meta{border-top:1px solid var(--line);padding:6px 12px;font-size:11.5px;color:var(--ink-3);display:flex;gap:8px;align-items:center}
+.gen-meta .tag{margin-left:auto}
+
+/* ── 输入区 ── */
+.composer{position:relative;flex:0 0 auto;padding:8px 22px 16px}
+.composer-inner{max-width:760px;margin:0 auto;background:var(--card);border:1px solid var(--line-strong);border-radius:var(--radius-xl);box-shadow:var(--shadow-pop);padding:12px 14px 10px;position:relative}
+.attachments{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px}
+.attach-chip{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--accent-strong);background:var(--accent-tint);border:1px solid var(--accent-line);border-radius:999px;padding:2px 10px}
+.queue-chip{position:absolute;left:14px;top:-12px;font-size:11px;color:var(--accent-strong);background:var(--accent-tint);border:1px solid var(--accent-line);border-radius:999px;padding:1px 9px;box-shadow:var(--shadow-card);z-index:5}
+textarea#input{width:100%;border:none;outline:none;resize:none;font-family:inherit;font-size:14px;color:var(--ink);background:transparent;min-height:46px;max-height:180px;line-height:1.55}
+.composer-row{display:flex;align-items:center;gap:8px;margin-top:6px}
+.composer-hint{font-size:11.5px;color:var(--ink-3)}
+.kbd{font-size:10px;border:1px solid var(--line-strong);border-radius:4px;padding:0 4px;color:var(--ink-2);background:var(--paper-deep)}
+.btn-send{width:34px;height:34px;border-radius:10px;background:var(--accent);color:#fff;display:flex;align-items:center;justify-content:center;margin-left:auto;transition:.15s;box-shadow:var(--shadow-card)}
+.btn-send:hover{background:var(--accent-strong)}
+.btn-send:disabled{background:var(--line-strong);cursor:default}
+.btn-send .q-badge{position:absolute;transform:translate(10px,-10px);background:var(--danger);color:#fff;font-size:10px;border-radius:999px;padding:0 5px;font-weight:700}
+
+/* ── 发送模式选择器（运行中） ── */
+.chooser{position:absolute;left:12px;right:12px;bottom:calc(100% + 8px);background:var(--card);border:1px solid var(--line-strong);border-radius:12px;box-shadow:var(--shadow-pop);padding:8px;z-index:40;animation:pop .14s ease}
+@keyframes pop{from{transform:translateY(6px);opacity:0}to{transform:none;opacity:1}}
+.co-hint{font-size:12px;color:var(--ink-2);padding:4px 8px 8px;display:flex;align-items:center;gap:6px}
+.co-hint .warn{color:var(--danger)}
+.co-btn{display:flex;flex-direction:column;gap:1px;text-align:left;padding:8px 10px;border-radius:8px;width:100%;transition:.1s}
+.co-btn:hover{background:var(--hover)}
+.co-btn .co-t{font-size:13px;font-weight:600;color:var(--ink)}
+.co-btn .co-d{font-size:11.5px;color:var(--ink-3)}
+.co-btn.default{background:var(--accent-tint);border:1px solid var(--accent-line)}
+.co-btn.default .co-t{color:var(--accent-strong)}
+.co-btn.steer .co-t{color:var(--danger-strong)}
+.co-sep{height:1px;background:var(--line);margin:4px 0}
+
+/* ── 命令面板 / 文件下拉 ── */
+.pop-menu{position:absolute;left:12px;right:12px;bottom:calc(100% + 8px);background:var(--card);border:1px solid var(--line-strong);border-radius:12px;box-shadow:var(--shadow-pop);z-index:40;max-height:280px;overflow-y:auto;padding:6px;animation:pop .14s ease}
+.pop-item{display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:8px;cursor:pointer;font-size:13px}
+.pop-item:hover{background:var(--hover)}
+.pop-item .pi-k{font-weight:700;color:var(--accent-strong);white-space:nowrap}
+.pop-item .pi-d{color:var(--ink-3);font-size:12px}
+.pop-item.dir .pi-ico{color:#b98a2f}
+.pop-item.file .pi-ico{color:var(--ink-3)}
+.breadcrumb{display:flex;align-items:center;gap:2px;font-size:12px;color:var(--ink-2);padding:6px 10px;border-bottom:1px solid var(--line);margin-bottom:4px;flex-wrap:wrap}
+.bc-crumb{padding:1px 5px;border-radius:5px;cursor:pointer}
+.bc-crumb:hover{background:var(--hover)}
+.bc-crumb.here{font-weight:700;color:var(--ink)}
+.bc-sep{color:var(--ink-3)}
+.mention-empty{padding:12px;font-size:12.5px;color:var(--ink-3);text-align:center}
+
+/* ── 右侧面板 ── */
+.right{background:var(--paper-deep);border-left:1px solid var(--line);overflow-y:auto;padding:14px}
+.r-sec{margin-bottom:18px}
+.r-title{font-size:11px;font-weight:700;color:var(--ink-3);letter-spacing:.06em;margin:0 0 8px;display:flex;align-items:center;gap:6px}
+.bill-row{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin-bottom:8px;box-shadow:var(--shadow-card)}
+.bill-head{display:flex;align-items:center;gap:6px;font-size:13px;font-weight:600;margin-bottom:2px}
+.bill-sub{font-size:11.5px;color:var(--ink-3)}
+.bill-nums{display:flex;align-items:baseline;gap:8px;margin-top:4px;flex-wrap:wrap}
+.bill-tok{font-size:16px;font-weight:700}
+.bill-cost{font-size:12.5px;font-weight:600;color:var(--accent-strong)}
+.bill-detail{font-size:11px;color:var(--ink-3);margin-top:2px}
+.tour-card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:9px 11px;margin-bottom:8px;box-shadow:var(--shadow-card)}
+.tour-head{display:flex;align-items:center;gap:6px;font-size:12.5px;font-weight:600}
+.tour-head .n{color:var(--accent);font-weight:800}
+.tour-desc{font-size:11px;color:var(--ink-3);margin:3px 0 7px}
+.btn-demo{font-size:11.5px;font-weight:600;color:var(--accent-strong);background:var(--accent-tint);border:1px solid var(--accent-line);border-radius:999px;padding:3px 12px}
+.btn-demo:hover{background:#d7ebe4}
+
+/* 分支横幅 */
+.branch-banner{display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--accent-strong);background:var(--accent-tint);border:1px solid var(--accent-line);border-radius:10px;padding:8px 12px;box-shadow:var(--shadow-card)}
+
+/* toast */
+.toast{position:fixed;left:50%;bottom:26px;transform:translateX(-50%) translateY(20px);background:var(--terminal);color:var(--terminal-text);font-size:13px;border-radius:10px;padding:9px 16px;box-shadow:var(--shadow-pop);opacity:0;pointer-events:none;transition:.2s;z-index:99;max-width:80vw;text-align:center}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+
+@media (max-width:1080px){ .workspace{grid-template-columns:200px 1fr} .right{display:none} }
+</style>
+</head>
+<body>
+<div class="app">
+  <!-- 顶栏 -->
+  <header class="topbar">
+    <div class="top-title">EveryBuddy · 对话体验增强<span class="demo-badge">原型 Demo</span></div>
+    <div class="top-actions">
+      <span class="live-status" id="liveStatus"><span class="dot"></span><span id="liveText">空闲</span></span>
+      <button class="btn-stop hidden" id="stopBtn" onclick="stopStream()">■ 停止</button>
+      <button class="btn-ghost" onclick="location.reload()">重置</button>
+    </div>
+  </header>
+
+  <div class="workspace">
+    <!-- 侧栏会话列表 -->
+    <aside class="sidebar">
+      <div class="side-head"><span class="side-title">会话</span><button class="btn-new" title="新建会话" onclick="newSession()">＋</button></div>
+      <div class="side-list" id="sideList"></div>
+      <div class="side-foot"><div class="ws-card">📁 workspace: <b>everyBuddy</b></div></div>
+    </aside>
+
+    <!-- 对话主区 -->
+    <main class="chat">
+      <div class="chat-head" id="chatHead"></div>
+      <div class="msg-list" id="msgList">
+        <div class="msg-col" id="msgCol"></div>
+      </div>
+      <div class="composer">
+        <div class="composer-inner" id="composerInner">
+          <div class="queue-chip hidden" id="queueChip"></div>
+          <div class="attachments" id="attachments"></div>
+          <!-- 运行中发送选择器 / 命令面板 / 文件下拉 -->
+          <div class="chooser hidden" id="chooser"></div>
+          <div class="pop-menu hidden" id="slashMenu"></div>
+          <div class="pop-menu hidden" id="mentionMenu"></div>
+          <textarea id="input" placeholder="给 EveryBuddy 发送消息…（支持 @ 文件 · / 命令 · 回车发送 / Shift+Enter 换行）" rows="1"></textarea>
+          <div class="composer-row">
+            <span class="composer-hint"><span class="kbd">@</span> 文件 &nbsp;<span class="kbd">/</span> 命令 &nbsp;<span class="kbd">⏎</span> 发送</span>
+            <button class="btn-send" id="sendBtn" onclick="handleSendIntent()" title="发送">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2 11 13"/><path d="M22 2 15 22l-4-9-9-4Z"/></svg>
+              <span class="q-badge hidden" id="qBadge"></span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <!-- 右侧面板：计费汇总 + 特性演示 -->
+    <aside class="right">
+      <section class="r-sec">
+        <h3 class="r-title">💰 会话计费 · 按模型类型</h3>
+        <div id="billBox"></div>
+      </section>
+      <section class="r-sec">
+        <h3 class="r-title">🧪 7 项特性演示</h3>
+        <div id="tourBox"></div>
+      </section>
+    </aside>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+"use strict";
+/* ================================================================
+ * EveryBuddy 对话体验增强 · 原型 Demo
+ * 依据 docs/plans/dialog-experience.md 7 项特性，纯前端模拟：
+ *   ① 取消语义   ② 识图/生图即时取消   ③ 运行中指示
+ *   ④ /steer /follow-up + 运行中发送选择器
+ *   ⑤ AI 消息 footer（复制/赞/踩/转发/分支 + 模型/token/计费）
+ *   ⑥ 分支新建会话   ⑦ @ 工作区文件识别
+ * ================================================================ */
+
+/* ── 工具 ── */
+const $ = s => document.querySelector(s);
+function el(tag, cls, text){
+  const n = document.createElement(tag);
+  if(cls) n.className = cls;
+  if(text != null) n.textContent = text;
+  return n;
+}
+function on(node, ev, fn){ node.addEventListener(ev, fn); return node; }
+let seq = 100;
+const nowTime = () => new Date().toTimeString().slice(0,5);
+const fmtTok = n => n >= 1000 ? (n/1000).toFixed(1).replace(/\.0$/,'') + 'k' : String(Math.round(n));
+const fmtCost = c => c >= 0.001 ? '¥' + c.toFixed(3) : '¥' + c.toFixed(4);
+const esc = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+
+function toast(msg, ms){
+  const t = $('#toast');
+  t.textContent = msg; t.classList.add('show');
+  clearTimeout(toast._h); toast._h = setTimeout(()=>t.classList.remove('show'), ms||2600);
+}
+
+/* ── 模型 ── */
+const MODELS = {
+  llm:  { type:'llm', name:'claude-sonnet-5',       tag:'LLM',  cls:'llm',  disp:'对话 LLM'  },
+  vlm:  { type:'vlm', name:'doubao-1.5-vision-pro', tag:'VLM',  cls:'vlm',  disp:'视觉 VLM'  },
+  img:  { type:'img', name:'doubao-seedream-4-0',   tag:'IMG',  cls:'img',  disp:'生图 Image' },
+};
+function randUsage(type){
+  const r = () => Math.round(Math.random()*400);
+  if(type==='llm') return {input:1100+r(), output:560+r(), cacheRead:2600+r()*2, cost:0.004+Math.random()*0.008};
+  if(type==='vlm') return {input:900+r(), output:420+r(), cacheRead:800+r(), cost:0.003+Math.random()*0.006};
+  return {input:58, output:1024, cacheRead:0, cost:0.04+Math.random()*0.04}; // 生图按图 tokens
+}
+
+/* ── 工作区文件树（模拟 @ 识别） ── */
+const WORKSPACE = {
+  'src': {
+    'auth': { 'login.ts':null, 'token.ts':null, 'index.ts':null },
+    'components': { 'Chat.tsx':null, 'Header.tsx':null, 'Avatar.tsx':null },
+    'main': { 'index.ts':null, 'ipc.ts':null },
+    'utils': { 'format.ts':null, 'storage.ts':null },
+    'index.ts':null,
+  },
+  'docs': { 'plans': { 'dialog-experience.md':null }, 'architecture.md':null },
+  'package.json':null, 'README.md':null, '设计稿.png':null,
+};
+function resolveFile(path){
+  const parts = path.split('/').filter(Boolean);
+  let node = WORKSPACE;
+  for(const p of parts){
+    if(node == null || typeof node !== 'object' || !(p in node)) return null;
+    node = node[p];
+  }
+  return node === null ? { path, name: parts[parts.length-1] } : null; // 叶子 = 文件
+}
+function isDir(path){
+  const parts = path.split('/').filter(Boolean);
+  let node = WORKSPACE;
+  for(const p of parts){ if(node==null||typeof node!=='object'||!(p in node)) return false; node=node[p]; }
+  return node !== null && typeof node === 'object';
+}
+function mimeOf(path){ return /\.(png|jpe?g|webp|gif|svg)$/i.test(path) ? 'image/'+path.split('.').pop() : 'text/plain'; }
+
+/* ── 状态 ── */
+const state = {
+  sessions: [],
+  activeId: null,
+  pending: false,          // 等待首 token
+  streaming: false,
+  currentMsg: null,
+  aborted: false,
+  streamTimer: null,
+  queue: [],               // 排队待处理
+  mention: { open:false, path:[] },
+  slashOpen: false,
+};
+const currentSession = () => state.sessions.find(s => s.id === state.activeId);
+
+/* ── 消息构造 ── */
+function mkMsg(role, extra){
+  return Object.assign({
+    id: 'm' + (seq++),
+    role,
+    parts: [],
+    status: role==='assistant' ? 'streaming' : 'done',
+    streaming: false,
+    currentText: '',
+    text: '',
+    attachments: [],
+    model: null, usage: null, time: nowTime(),
+    entryId: role==='assistant' ? 'e' + (seq++) : null,
+    cancelled: false, branched: false, completedTask: false,
+  }, extra||{});
+}
+
+/* ── 预置演示会话 ── */
+function preloadSession(){
+  const s = { id:'s1', title:'重构登录鉴权模块', isBranch:false, messages:[] };
+  state.sessions.push(s);
+  s.messages.push(mkMsg('user',{ text:'帮我看下 src/auth/login.ts 的实现思路，重点讲一下记住登录态那段', attachments:[{name:'login.ts', path:'src/auth/login.ts', mimeType:'text/plain'}], time:'13:58' }));
+  s.messages.push(mkMsg('assistant',{ status:'done', model:MODELS.llm, usage:randUsage('llm'), time:'13:58',
+    parts:[{type:'text', text:'这段登录态用的是 localStorage + 会话有效期校验：\n\n1. 登录成功后写入 `auth_token` 与 `expires_at`\n2. 每次请求前检查有效期，过期走刷新接口\n3. 刷新失败则静默登出\n\n需要注意**两个竞态**：多标签页同时刷新、以及 401 后并发重试。\n\n要不要我用方案 2（内存态 + 定时刷新的双缓冲）重构？'}],
+    entryId:'e1' }));
+  s.messages.push(mkMsg('user',{ text:'按方案 2 重构，先解释下 token 刷新机制', attachments:[{name:'token.ts', path:'src/auth/token.ts', mimeType:'text/plain'}], time:'14:01' }));
+  s.messages.push(mkMsg('assistant',{ status:'cancelled', cancelled:true, model:MODELS.llm, usage:randUsage('llm'), time:'14:02',
+    parts:[{type:'text', text:'token 刷新机制的核心是**双缓冲**：\n\n- 内存中维护一份 `Promise<token>` 的缓存\n- 首次刷新生成新 token 并替换缓存\n- 并发请求共享同一次刷新，避免…'}], entryId:'e2' }));
+  s.messages.push(mkMsg('user',{ text:'根据这张图生成登录页的背景图', attachments:[{name:'设计稿.png', path:'设计稿.png', mimeType:'image/png'}], time:'14:06' }));
+  s.messages.push(mkMsg('assistant',{ status:'cancelled', cancelled:true, model:MODELS.img, usage:randUsage('img'), time:'14:06',
+    parts:[{type:'gen-placeholder'},{type:'text', text:'正在调用 doubao-seedream-4-0 依据设计稿生成背景图…'}], entryId:'e3' }));
+  s.messages.push(mkMsg('user',{ text:'这张图里大概是什么界面？', attachments:[{name:'设计稿.png', path:'设计稿.png', mimeType:'image/png'}], time:'14:07' }));
+  s.messages.push(mkMsg('assistant',{ status:'done', model:MODELS.vlm, usage:randUsage('vlm'), time:'14:07',
+    parts:[{type:'text', text:'从设计稿看这是一个**深色风格的登录页**：\n\n- 左侧大标题 + 渐变背景\n- 右侧邮箱 / 密码表单\n- 底部「忘记密码」与第三方登录入口\n\n配色以暖黑 + 青碧为主，和 EveryBuddy 的品牌色一致。'}], entryId:'e4' }));
+  // 一个普通完成的工具型消息，展示「任务已完成」折叠卡（正常态，区别于取消）
+  s.messages.push(mkMsg('user',{ text:'顺手把 CI 里那个类型错误修一下吧', time:'14:09' }));
+  s.messages.push(mkMsg('assistant',{ status:'done', model:MODELS.llm, usage:randUsage('llm'), time:'14:11', completedTask:true,
+    toolCard:{name:'修改文件', detail:'src/auth/token.ts · 修复类型推断', steps:['定位类型错误','修正返回类型','运行类型检查']},
+    parts:[{type:'text', text:'已修复：`refreshToken` 的返回类型从 `string` 收窄为 `Promise<string | null>`，消除了 401 分支的 undefined 风险。类型检查已通过 ✅'}], entryId:'e5' }));
+  state.activeId = 's1';
+}
+
+/* ── 渲染：侧栏 ── */
+function renderSidebar(){
+  const box = $('#sideList'); box.innerHTML = '';
+  state.sessions.forEach(s => {
+    const it = el('div','side-item' + (s.id===state.activeId?' active':''));
+    it.appendChild(el('span','ico', s.isBranch ? '⎇' : '●'));
+    it.appendChild(el('span','ti', s.title));
+    it.appendChild(el('span','cnt', String(s.messages.length)));
+    if(s.isBranch) it.appendChild(el('span','b-tag','分支'));
+    if(s.sourceBranched) it.appendChild(el('span','br-tag','已分支'));
+    on(it,'click',()=>selectSession(s.id));
+    box.appendChild(it);
+  });
+}
+
+/* ── 渲染：头部 ── */
+function renderHead(){
+  const s = currentSession(); if(!s) return;
+  const h = $('#chatHead'); h.innerHTML = '';
+  h.appendChild(el('span','t', s.title));
+  if(s.isBranch) h.appendChild(el('span','head-branch','⎇ 分支会话'));
+  h.appendChild(el('span','m-sub',' · 消息 ' + s.messages.length + ' · 模型按类型计费'));
+}
+
+/* ── 渲染：消息列表 ── */
+function renderMessages(){
+  const col = $('#msgCol'); col.innerHTML = '';
+  const s = currentSession(); if(!s) return;
+  s.messages.forEach(m => col.appendChild(renderMessage(m)));
+  // task.pending：等待首 token，消息末尾显示简化的运行中指示（靠左）
+  if(state.pending){
+    const wrap = el('div','ri-standalone'); wrap.appendChild(el('span','','运行中')); wrap.appendChild(dotGroup());
+    col.appendChild(wrap);
+  }
+  if(s.isBranch && s.messages.length){
+    const last = s.messages[s.messages.length-1];
+    if(last.role==='assistant' && last.status!=='streaming' && !state.pending){
+      col.appendChild(el('div','branch-banner','⎇ 分支会话：历史止于该条消息，可继续对话'));
+    }
+  }
+  scrollBottom();
+}
+
+function renderMessage(m){
+  if(m.role==='user'){
+    const wrap = el('div','msg msg-user');
+    const b = el('div','user-bubble');
+    if(m.attachments && m.attachments.length){
+      const cr = el('div','chip-row');
+      m.attachments.forEach(a => { const c = el('span','file-chip','📎 ' + a.path); cr.appendChild(c); });
+      b.appendChild(cr);
+    }
+    b.appendChild(el('div','', m.text));
+    wrap.appendChild(b);
+    wrap.appendChild(el('div','msg-time', m.time));
+    return wrap;
+  }
+  const wrap = el('div','msg msg-ai');
+  const body = el('div','ai-body');
+  if(m.status==='cancelled'){
+    const label = m.parts.some(p=>p.type==='gen-placeholder') ? '已取消 · 生图已中断' : '已取消';
+    body.appendChild(el('span','pill pill-cancelled','⛔ ' + label));
+  }
+  // 工具卡片
+  if(m.toolCard) body.appendChild(toolCardEl(m));
+  // 图片 / 生图
+  m.parts.filter(p=>p.type==='image'||p.type==='gen-placeholder').forEach(p=>{
+    body.appendChild(p.type==='image' ? imageEl(m) : genPlaceholderEl(m));
+  });
+  // 文本
+  const tp = m.parts.find(p=>p.type==='text');
+  if(tp){
+    if(m.streaming && m.currentText===''){
+      body.appendChild(runningIndicator());
+    } else {
+      const t = el('div','ai-text');
+      const sp = document.createElement('span');
+      if(m.streaming){ sp.id='stream-text'; sp.textContent = m.currentText; t.appendChild(sp); t.appendChild(el('span','cursor')); }
+      else { sp.textContent = tp.text; t.appendChild(sp); }
+      body.appendChild(t);
+    }
+  } else if(m.streaming && !m.parts.length){
+    body.appendChild(runningIndicator());
+  }
+  // 正常运行完成的「任务已完成」折叠卡（仅非取消态）
+  if(m.status==='done' && m.completedTask){
+    const dc = el('div','done-card');
+    dc.appendChild(el('span','dk-ico','✓'));
+    dc.appendChild(el('span','','任务已完成 · ' + m.toolCard.steps.length + ' 个步骤'));
+    dc.appendChild(el('span','dk-arr','▾'));
+    const dl = el('div','done-list hidden');
+    m.toolCard.steps.forEach(st => dl.appendChild(el('div','dl','<span class="ok">✓</span> ' + esc(st))));
+    dc.appendChild(dl);
+    on(dc,'click',()=>{ dc.classList.toggle('open'); dl.classList.toggle('hidden'); });
+    body.appendChild(dc);
+  }
+  // footer（仅非流式已结束消息）
+  if(m.status==='done' && !m.streaming) body.appendChild(footerEl(m));
+  wrap.appendChild(body);
+  return wrap;
+}
+
+function dotGroup(){
+  const d = el('span','ri-dots');
+  for(let i=0;i<3;i++) d.appendChild(el('span','dot'));
+  return d;
+}
+function runningIndicator(){
+  const r = el('span','ri'); r.appendChild(el('span','','运行中')); r.appendChild(dotGroup());
+  return r;
+}
+
+function toolCardEl(m){
+  const done = m.status==='done';
+  const card = el('div','tool-card');
+  const row = el('div','tc-row' + (done?' done':''));
+  row.appendChild(el('span','tc-ico'));
+  row.appendChild(el('span','tc-name', esc(m.toolCard.name)));
+  row.appendChild(el('span','',esc(m.toolCard.detail)));
+  if(done) row.appendChild(el('span','tc-ok','✓'));
+  else row.appendChild(el('span','tc-spin'));
+  card.appendChild(row);
+  return card;
+}
+
+function genPlaceholderEl(m){
+  const g = el('div','gen-box');
+  const cap = el('div','gen-cap');
+  cap.appendChild(el('div','gen-shimmer'));
+  const txt = el('span','gc-txt');
+  if(m.status==='cancelled') txt.appendChild(el('span','','⚠ 图片生成已被中断'));
+  else { txt.appendChild(el('span','ri','')); txt.appendChild(el('span','','生成中…')); }
+  cap.appendChild(txt);
+  g.appendChild(cap);
+  const meta = el('div','gen-meta');
+  meta.appendChild(el('span','','doubao-seedream-4-0'));
+  meta.appendChild(el('span','', '1024×1024'));
+  meta.appendChild(el('span','tag mtag img','IMG'));
+  g.appendChild(meta);
+  return g;
+}
+
+function imageEl(m){
+  const g = el('div','img-block');
+  const cap = el('div','img-cap');
+  cap.appendChild(el('div','ic','🖼'));
+  cap.appendChild(el('div','','登录页背景图 · 深色渐变'));
+  g.appendChild(cap);
+  g.appendChild(el('div','img-cap sub','由设计稿生成 · doubao-seedream-4-0'));
+  return g;
+}
+
+/* ── footer：单行靠左 —— 复制/赞/踩/转发/分支/计费/时间 ── */
+function footerEl(m){
+  const f = el('div','ai-footer');
+  f.appendChild(fBtn('复制','<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>', ()=>{
+    const t = [...m.parts].reverse().find(p=>p.type==='text');
+    navigator.clipboard && navigator.clipboard.writeText(t?t.text:'');
+    toast('已复制回复内容');
+  }));
+  f.appendChild(fBtn('赞', upSvg(), ()=>{ m.feedback = m.feedback==='up'?null:'up'; renderMessages(); toast(m.feedback==='up'?'已点赞（本地标记）':'已取消点赞'); }, m.feedback==='up'));
+  f.appendChild(fBtn('踩', downSvg(), ()=>{ m.feedback = m.feedback==='down'?null:'down'; renderMessages(); toast(m.feedback==='down'?'已点踩（本地标记）':'已取消点踩'); }, m.feedback==='down'));
+  f.appendChild(fBtn('转发', shareSvg(), null, null, true));
+  const canBranch = !state.streaming && !!m.entryId && !m.branched;
+  f.appendChild(fBtn('分支', branchSvg(), ()=>{ createBranch(m); }, null, !canBranch, '从该消息新建分支会话'));
+  f.appendChild(billTrigger(m));
+  f.appendChild(el('span','footer-time', m.time));
+  return f;
+}
+/* token 计费触发：按当前 agent 实际用到的模型聚合 token/费用，点击弹出分账明细 */
+function billTrigger(m){
+  const agg = aggregateUsage(currentSession());
+  let tot = 0, cost = 0;
+  Object.values(agg).forEach(a => {
+    tot += a.u.input + a.u.output + a.u.cacheRead;
+    cost += a.u.cost;
+  });
+  const b = el('button','bill-trigger');
+  b.innerHTML = '◈ ' + fmtTok(tot) + ' tok' + (cost>0 ? ' · ' + fmtCost(cost) : '') + ' <span class="bt-arr">▾</span>';
+  b.title = '查看按模型类型（LLM/VLM/IMG）的计费明细';
+  on(b,'click', ev=>{ ev.stopPropagation(); showBillPop(m, b); });
+  return b;
+}
+let billPop = null;
+function closeBillPop(){ if(billPop){ billPop.remove(); billPop = null; } }
+function showBillPop(m, trigger){
+  closeBillPop();
+  const agg = aggregateUsage(currentSession());
+  const pop = el('div','bill-pop');
+  const head = el('div','bill-pop-head');
+  head.appendChild(el('span','','计费明细 · 按模型类型'));
+  const x = el('span','bill-pop-x','✕'); on(x,'click',closeBillPop);
+  head.appendChild(x);
+  pop.appendChild(head);
+  let any = false;
+  Object.entries(agg).forEach(([type,a])=>{
+    if(!a.n) return;
+    any = true;
+    const row = el('div','bill-pop-row');
+    const rh = el('div','bp-row-head');
+    rh.appendChild(el('span','mtag '+MODELS[type].cls, MODELS[type].tag));
+    rh.appendChild(el('span','', MODELS[type].disp));
+    row.appendChild(rh);
+    row.appendChild(el('div','bp-row-name', MODELS[type].name));
+    const nums = el('div','bp-row-nums');
+    const tot = a.u.input + a.u.output + a.u.cacheRead;
+    nums.appendChild(el('span','','in '+fmtTok(a.u.input)));
+    nums.appendChild(el('span','','out '+fmtTok(a.u.output)));
+    if(a.u.cacheRead>0) nums.appendChild(el('span','','cache '+fmtTok(a.u.cacheRead)));
+    nums.appendChild(el('span','','· '+fmtTok(tot)+' tok'));
+    if(a.u.cost>0) nums.appendChild(el('span','bp-row-cost', fmtCost(a.u.cost)));
+    row.appendChild(nums);
+    pop.appendChild(row);
+  });
+  if(!any){ const e=el('div','mention-empty'); e.textContent='暂无计费数据'; pop.appendChild(e); }
+  document.body.appendChild(pop);
+  // 定位：贴近触发点，避免超出视口
+  const r = trigger.getBoundingClientRect();
+  const pw = 282, ph = pop.offsetHeight || 220;
+  let left = r.right - pw;
+  left = Math.max(8, Math.min(left, window.innerWidth - pw - 8));
+  let top = r.bottom + 8;
+  if(top + ph > window.innerHeight - 8) top = Math.max(8, r.top - ph - 8);
+  pop.style.left = left + 'px'; pop.style.top = top + 'px';
+  billPop = pop;
+}
+function fBtn(title, svg, cb, onState, disabled, tip){
+  const b = document.createElement('button');
+  b.className = 'f-btn' + (onState?' on':'');
+  b.title = tip || title;
+  b.innerHTML = svg;
+  if(disabled){ b.disabled = true; if(!tip) b.title = '转发即将推出'; }
+  else if(cb) on(b,'click',cb);
+  return b;
+}
+function upSvg(){ return '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 10v12"/><path d="M15 5.88 14 10h5.83a2 2 0 0 1 1.92 2.56l-2.33 8A2 2 0 0 1 17.5 22H4a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2h2.76a2 2 0 0 0 1.79-1.11L12 2a3.13 3.13 0 0 1 3 3.88Z"/></svg>'; }
+function downSvg(){ return '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 14V2"/><path d="M9 18.12 10 14H4.17a2 2 0 0 1-1.92-2.56l2.33-8A2 2 0 0 1 6.5 2H20a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-2.76a2 2 0 0 0-1.79 1.11L12 22a3.13 3.13 0 0 1-3-3.88Z"/></svg>'; }
+function shareSvg(){ return '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg>'; }
+function branchSvg(){ return '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="6" y1="3" x2="6" y2="15"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/></svg>'; }
+
+/* ── 计费汇总（按模型类型分账，聚合逻辑供右侧面板与 footer 弹层共用） ── */
+function aggregateUsage(s){
+  const agg = { llm:{u:{input:0,output:0,cacheRead:0,cost:0},n:0}, vlm:{u:{input:0,output:0,cacheRead:0,cost:0},n:0}, img:{u:{input:0,output:0,cacheRead:0,cost:0},n:0} };
+  s.messages.forEach(m=>{
+    if(m.role!=='assistant'||!m.usage||!m.model) return;
+    const a = agg[m.model.type]; if(!a) return;
+    a.n++;
+    a.u.input+=m.usage.input; a.u.output+=m.usage.output;
+    a.u.cacheRead+=m.usage.cacheRead||0; a.u.cost+=m.usage.cost||0;
+  });
+  return agg;
+}
+function renderBilling(){
+  const box = $('#billBox'); box.innerHTML = '';
+  const s = currentSession(); if(!s) return;
+  const agg = aggregateUsage(s);
+  Object.entries(agg).forEach(([type,a])=>{
+    if(!a.n) return;
+    const card = el('div','bill-row');
+    const head = el('div','bill-head');
+    head.appendChild(el('span','mtag '+MODELS[type].cls, MODELS[type].tag));
+    head.appendChild(el('span','', MODELS[type].disp));
+    card.appendChild(head);
+    card.appendChild(el('div','bill-sub', MODELS[type].name));
+    const tot = a.u.input+a.u.output+a.u.cacheRead;
+    const nums = el('div','bill-nums');
+    nums.appendChild(el('span','bill-tok', fmtTok(tot)));
+    nums.appendChild(el('span','','tokens'));
+    if(a.u.cost>0) nums.appendChild(el('span','bill-cost', fmtCost(a.u.cost)));
+    card.appendChild(nums);
+    card.appendChild(el('div','bill-detail', `${a.n} 条消息 · ${fmtTok(a.u.input)} in / ${fmtTok(a.u.output)} out / ${fmtTok(a.u.cacheRead)} cache`));
+    box.appendChild(card);
+  });
+  if(!s.messages.some(m=>m.role==='assistant'&&m.usage)){
+    const empty = el('div','bill-row'); empty.appendChild(el('div','bill-sub','暂无计费数据')); box.appendChild(empty);
+  }
+}
+
+/* ── 滚动 ── */
+function scrollBottom(){ const l = $('#msgList'); l.scrollTop = l.scrollHeight; }
+
+/* ================================================================
+ * 发送 / 流式模拟 / 取消
+ * ================================================================ */
+const input = $('#input');
+
+function handleSendIntent(){
+  const text = input.value.trim();
+  if(!text) return;
+  closeAllPopups();
+  if(state.streaming){
+    showChooser(text);           // 运行中 → 转向 / 排队 / 取消
+    return;
+  }
+  input.value = '';
+  renderAttachments();
+  dispatch(text);
+}
+
+/* 命令路由：/steer /follow-up */
+function dispatch(raw){
+  const m = raw.match(/^\/(steer|follow-up)\b([\s\S]*)$/);
+  if(m){
+    const cmd = m[1], rest = m[2].trim();
+    if(!rest){ toast('请输入要发送的内容'); return; }        // 裸命令 → 提示不发送
+    if(cmd==='steer'){
+      if(state.streaming){ abortCurrent(); }
+      doSend(rest, {kind:'text'});                            // 空闲时等同普通发送
+      toast('已转向新指令' + (state.streaming?'：已打断当前生成':''));
+      return;
+    }
+    // follow-up
+    if(state.streaming){ enqueue(rest); }
+    else { doSend(rest, {kind:'text'}); }
+    return;
+  }
+  doSend(raw, null);
+}
+
+function doSend(text, opts){
+  closeAllPopups();
+  const { clean, attachments } = parseFileMentions(text);
+  pushUserMessage(clean, attachments);
+  routeResponse(clean, attachments, opts);
+}
+
+function pushUserMessage(text, attachments){
+  const s = currentSession();
+  s.messages.push(mkMsg('user',{ text, attachments: attachments||[], time:nowTime() }));
+  renderMessages();
+}
+
+/* 内容路由 → 模拟流程 */
+function routeResponse(text, attachments, opts){
+  const hasImg = (attachments||[]).some(a=>/^image\//.test(a.mimeType)||/\.(png|jpe?g|webp|gif|svg)$/i.test(a.path));
+  const genIntent = /生成|画图|配图|背景图|海报/.test(text);
+  const kind = opts && opts.kind;
+  if(kind==='image' || (hasImg && genIntent)) return imageGenFlow(text, attachments);
+  if(hasImg) return visionFlow(text, attachments);
+  if(/重构|修改|修复|优化|代码|实现|看看|查一下|解决|报错/.test(text)) return toolFlow(text);
+  return textFlow(text);
+}
+
+function setRunning(running){
+  state.streaming = running;
+  $('#stopBtn').classList.toggle('hidden', !running);
+  const st = $('#liveStatus');
+  st.classList.toggle('running', running);
+  $('#liveText').textContent = running ? '运行中' : (state.queue.length ? '空闲（'+state.queue.length+' 条排队）' : '空闲');
+}
+
+function startStream(msg, pendingDelay){
+  state.pending = true; state.aborted = false;
+  setRunning(true);
+  renderMessages();
+  state.streamTimer = setTimeout(()=>{
+    state.pending = false;
+    state.currentMsg = msg;
+    currentSession().messages.push(msg);
+    // 首 token 前：组内运行中指示
+    renderMessages();
+    beginTicking(msg);
+  }, pendingDelay || 1000);
+}
+
+function beginTicking(msg){
+  const tokens = msg.plan.split(/(?<=[。！？\n])|(?<=[，;])/).filter(Boolean);
+  const chunks = [];
+  tokens.forEach(t=>{ for(let i=0;i<t.length;i+=3) chunks.push(t.slice(i,i+3)); });
+  let i = 0;
+  const tick = () => {
+    if(state.aborted || msg !== state.currentMsg) return;
+    if(i >= chunks.length){ finalizeStream(msg); return; }
+    msg.currentText += chunks[i++];
+    const el0 = document.getElementById('stream-text');
+    if(el0) el0.textContent = msg.currentText;
+    state.streamTimer = setTimeout(tick, 18 + Math.random()*34);
+  };
+  // 首个 chunk 先落一次渲染（移除指示器，出现文本 + 光标）
+  setTimeout(()=>{ msg.parts = [{type:'text'}]; renderMessages(); tick(); }, 120);
+}
+
+function finalizeStream(msg){
+  msg.status = 'done'; msg.streaming = false;
+  msg.parts = msg.parts.map(p=>p.type==='text' ? {type:'text', text:msg.currentText} : p);
+  if(!msg.usage) msg.usage = randUsage(msg.model.type);
+  state.currentMsg = null;
+  setRunning(false);
+  renderMessages();
+  renderBilling();
+  processQueue();     // 若排队非空 → 自动处理下一条
+}
+
+/* 取消：合成 message_end(aborted) 语义 */
+function abortCurrent(){
+  const msg = state.currentMsg;
+  state.aborted = true;
+  clearTimeout(state.streamTimer);
+  if(msg){
+    msg.status = 'cancelled'; msg.streaming = false; msg.cancelled = true;
+    if(msg.parts.length && msg.parts.every(p=>p.type==='text') && msg.currentText){
+      msg.parts[0].text = msg.currentText;
+    }
+    if(!msg.usage) msg.usage = randUsage(msg.model.type);
+    msg.currentText = '';
+  }
+  state.pending = false;
+  state.currentMsg = null;
+  setRunning(false);
+  renderMessages();
+  renderBilling();
+  if(!msg) toast('已停止');
+  else toast(msg.parts.some(p=>p.type==='gen-placeholder') ? '已中断生成 · 图片未返回' : '已取消 · 保留部分内容');
+}
+
+function stopStream(){ if(state.pending){ state.aborted=true; clearTimeout(state.streamTimer); state.pending=false; setRunning(false); renderMessages(); toast('已停止'); } else abortCurrent(); }
+
+/* ── 各流程 ── */
+const RESP = [
+  '好的，我把思路拆成三步：\n\n1. 先确定边界与依赖\n2. 再写核心实现\n3. 最后补上测试\n\n这是首响应，之后的 token 会逐字流式出现。',
+  '可以这么做。方案如下：\n\n- 复用现有会话上下文\n- 增加幂等保护\n- 失败自动回退\n\n需要我进一步展开第 2 点吗？',
+  '我看了一下，问题出在**竞态条件**上。建议：\n\n1. 串行化写操作\n2. 加上版本号校验\n3. 失败重试带上退避\n\n改成这样就能稳定复现修复了。',
+];
+function textFlow(text){
+  const msg = mkMsg('assistant',{ model:MODELS.llm, plan: RESP[Math.floor(Math.random()*RESP.length)] + '\n\n（你发送的是：' + text + '）' });
+  startStream(msg, 1100);
+}
+function visionFlow(text, attachments){
+  const img = attachments.find(a=>/^image\//.test(a.mimeType)||/\.(png|jpe?g|webp|gif)$/i.test(a.path));
+  const msg = mkMsg('assistant',{ model:MODELS.vlm, plan:'我看到了你上传的 `' + (img?img.path:'图片') + '`：\n\n- 整体是暖纸色系的界面\n- 主视觉是一段深色渐变背景\n- 右上角有品牌标识与操作入口\n\n需要我基于它生成配套的物料吗？' });
+  startStream(msg, 1300);
+}
+function imageGenFlow(text, attachments){
+  const msg = mkMsg('assistant',{ model:MODELS.img,
+    parts:[{type:'gen-placeholder'}],
+    plan:'图片生成完成：深色渐变登录页背景，青碧点缀。' });
+  state.pending = true; state.aborted = false;
+  setRunning(true); renderMessages();
+  state.streamTimer = setTimeout(()=>{
+    if(state.aborted) return;
+    state.pending = false;
+    msg.status='done'; msg.streaming=false; msg.usage = randUsage('img');
+    msg.parts = [{type:'image'},{type:'text', text:'已根据设计稿生成登录页背景图（深色渐变 + 青碧点缀）。可点击上方图片查看大图。'}];
+    state.currentMsg = null; setRunning(false);
+    renderMessages(); renderBilling(); processQueue();
+    toast('图片已生成 ✓');
+  }, 3800);
+}
+function toolFlow(text){
+  const msg = mkMsg('assistant',{ model:MODELS.llm,
+    toolCard:{name:'修改文件', detail:'src/auth/token.ts · 依据需求调整', steps:['读取现状','应用修改','运行类型检查']},
+    completedTask:true,
+    plan:'完成。改动如下：\n\n- `token.ts`：缓存失效后统一走刷新，避免并发 401\n- 新增 `refreshLock` 防抖，多请求共享同一次刷新\n\n类型检查与单测均已通过 ✅' });
+  state.pending = true; state.aborted = false;
+  setRunning(true); renderMessages();
+  state.streamTimer = setTimeout(()=>{
+    if(state.aborted) return;
+    state.pending = false;
+    state.currentMsg = msg;
+    currentSession().messages.push(msg);
+    renderMessages();                      // 先显示工具卡（spin）
+    state.streamTimer = setTimeout(()=>{   // 工具完成后进入文本流
+      if(state.aborted || msg !== state.currentMsg) return;
+      msg.toolDone = true;
+      beginTicking(msg);
+    }, 900);
+  }, 800);
+}
+
+/* ================================================================
+ * ④ 运行中发送选择器：转向 / 排队 / 取消
+ * ================================================================ */
+function showChooser(text){
+  const c = $('#chooser'); c.innerHTML = '';
+  const hint = el('div','co-hint');
+  hint.appendChild(el('span','warn','●'));
+  hint.appendChild(el('span','','Agent 正在生成，如何处理这条新消息？'));
+  c.appendChild(hint);
+  const mk = (label, desc, cls) => {
+    const b = el('button','co-btn '+(cls||''));
+    b.appendChild(el('span','co-t', label));
+    b.appendChild(el('span','co-d', desc));
+    return b;
+  };
+  const steer = mk('转向（打断当前）','立即停止当前生成，优先处理新指令','steer');
+  const queue = mk('排队（完成后处理）','当前生成完成后自动发送（默认推荐）','default');
+  const cancel = mk('取消','放弃发送，保留草稿');
+  on(steer,'click',()=>{ input.value=''; renderAttachments(); steerMsg(text); });
+  on(queue,'click',()=>{ input.value=''; renderAttachments(); enqueue(text); });
+  on(cancel,'click',()=>closeAllPopups());
+  c.appendChild(steer); c.appendChild(el('div','co-sep')); c.appendChild(queue); c.appendChild(el('div','co-sep')); c.appendChild(cancel);
+  c.classList.remove('hidden');
+  state.chooserText = text;
+}
+function steerMsg(text){
+  closeAllPopups();
+  abortCurrent();
+  dispatch(text);   // 打断后立即发送（走正常发送，含 @ 解析/命令识别）
+}
+function enqueue(text){
+  closeAllPopups();
+  state.queue.push(text);
+  renderQueueChip();
+  toast('已排队：当前生成完成后自动发送（' + state.queue.length + ' 条待处理）');
+}
+function renderQueueChip(){
+  const chip = $('#queueChip'), badge = $('#qBadge');
+  if(state.queue.length){
+    chip.classList.remove('hidden');
+    chip.textContent = '⏳ ' + state.queue.length + ' 条已排队 · 完成后自动发送';
+    badge.textContent = state.queue.length;
+    badge.classList.remove('hidden');
+  } else {
+    chip.classList.add('hidden');
+    badge.classList.add('hidden');
+  }
+}
+function processQueue(){
+  if(!state.queue.length) return;
+  const next = state.queue.shift();
+  renderQueueChip();
+  toast('开始处理排队消息…');
+  setTimeout(()=>dispatch(next), 300);
+}
+
+/* ================================================================
+ * ⑦ @ 工作区文件识别
+ * ================================================================ */
+function parseFileMentions(text){
+  const attachments = [];
+  const clean = text.replace(/@([^\s@，。！？]+)/g, (full, token)=>{
+    const f = resolveFile(token);
+    if(f){ attachments.push({ name:f.name, path:f.path, mimeType:mimeOf(f.path) }); return ''; }
+    return full;   // 未命中保持字面（如 @不存在）
+  });
+  return { clean, attachments };
+}
+
+function openMention(){
+  state.mention.open = true; state.mention.path = [];
+  renderMention(); input.focus();
+}
+function closeMention(){ state.mention.open=false; $('#mentionMenu').classList.add('hidden'); }
+function renderMention(){
+  const menu = $('#mentionMenu'); menu.innerHTML = '';
+  const path = state.mention.path;
+  // 面包屑
+  if(path.length){
+    const bc = el('div','breadcrumb');
+    const root = el('span','bc-crumb','everyBuddy'); on(root,'click',()=>{state.mention.path=[];renderMention();});
+    bc.appendChild(root);
+    path.forEach((p,i)=>{
+      bc.appendChild(el('span','bc-sep','/'));
+      const cr = el('span','bc-crumb'+(i===path.length-1?' here':''), p);
+      if(i<path.length-1) on(cr,'click',()=>{state.mention.path=path.slice(0,i+1);renderMention();});
+      bc.appendChild(cr);
+    });
+    menu.appendChild(bc);
+  }
+  // 当前目录条目（单层）
+  let node = WORKSPACE;
+  path.forEach(p=>{ node = node && node[p]; });
+  const entries = Object.keys(node||{});
+  if(!entries.length){ menu.appendChild(el('div','mention-empty','空目录')); }
+  entries.forEach(k=>{
+    const dir = node[k] !== null;
+    const it = el('div','pop-item '+(dir?'dir':'file'));
+    it.appendChild(el('span','pi-ico', dir?'📁':'📄'));
+    it.appendChild(el('span','pi-k', k));
+    if(dir) on(it,'click',()=>{ state.mention.path = path.concat(k); renderMention(); });
+    else on(it,'click',()=>insertMention(path.concat(k).join('/') + ' '));
+    menu.appendChild(it);
+  });
+  menu.classList.remove('hidden');
+}
+function insertMention(relPath){
+  const ta = input;
+  const v = ta.value;
+  const at = v.lastIndexOf('@') + 1;
+  ta.value = v.slice(0, at) + relPath + v.slice(at + relPath.length);
+  closeMention();
+  input.focus();
+  renderAttachments();
+}
+/* 输入框内 @ 命中的文件 → 上方附件 chip 预览（live） */
+function renderAttachments(){
+  const box = $('#attachments'); box.innerHTML = '';
+  const { attachments } = parseFileMentions(input.value);
+  attachments.forEach(a => {
+    const c = el('span','attach-chip','📎 ' + a.path);
+    box.appendChild(c);
+  });
+}
+
+/* ================================================================
+ * / 命令面板
+ * ================================================================ */
+const SLASH = [
+  { k:'/steer ',     d:'打断当前生成，转向新指令' },
+  { k:'/follow-up ', d:'排队处理，完成后自动发送' },
+  { k:'/plan ',      d:'制定实施计划' },
+  { k:'/todo ',      d:'更新待办列表' },
+];
+function openSlash(){
+  state.slashOpen = true;
+  const menu = $('#slashMenu'); menu.innerHTML = '';
+  SLASH.forEach(s=>{
+    const it = el('div','pop-item');
+    it.appendChild(el('span','pi-k', s.k));
+    it.appendChild(el('span','pi-d', s.d));
+    on(it,'click',()=>{ input.value = s.k; input.focus(); closeAllPopups(); });
+    menu.appendChild(it);
+  });
+  menu.classList.remove('hidden');
+}
+function closeSlash(){ state.slashOpen=false; $('#slashMenu').classList.add('hidden'); }
+function closeAllPopups(){ closeMention(); closeSlash(); const c=$('#chooser'); c.classList.add('hidden'); closeBillPop(); }
+
+/* ── 输入事件 ── */
+input.addEventListener('input', ()=>{
+  autoGrow();
+  renderAttachments();
+  const v = input.value;
+  // @ 触发文件下拉（光标紧跟 @）
+  if(/@$/.test(v)){ openMention(); }
+  else if(v === '/'){ openSlash(); }
+  else if(state.mention.open) closeMention();
+});
+input.addEventListener('keydown', e=>{
+  if(e.key === 'Escape'){ closeAllPopups(); return; }
+  if(e.key === 'Enter' && !e.shiftKey){
+    e.preventDefault();
+    if(state.mention.open){ e.preventDefault(); return; }   // 菜单开着时 Enter 由菜单处理
+    handleSendIntent();
+  }
+});
+function autoGrow(){ input.style.height = 'auto'; input.style.height = Math.min(input.scrollHeight,180)+'px'; }
+
+/* ================================================================
+ * ⑥ 分支
+ * ================================================================ */
+function createBranch(anchorMsg){
+  const src = currentSession();
+  const idx = src.messages.indexOf(anchorMsg);
+  if(idx < 0){ toast('找不到该消息'); return; }
+  anchorMsg.branched = true;         // 原会话锚点标记
+  const branch = {
+    id:'s'+(seq++),
+    title: src.title + ' · 分支',
+    isBranch: true,
+    sourceBranched: true,
+    messages: src.messages.slice(0, idx+1).map(m=>{
+      const c = Object.assign({}, m, { streaming:false, currentText:'' });
+      if(c.status==='streaming'){ c.status='cancelled'; c.cancelled=true; }
+      return c;
+    }),
+  };
+  state.sessions.push(branch);
+  renderSidebar();
+  selectSession(branch.id);
+  toast('已从该消息创建分支会话「' + branch.title + '」');
+}
+
+/* ================================================================
+ * 会话切换 / 新建
+ * ================================================================ */
+function selectSession(id){
+  state.activeId = id;
+  closeAllPopups();
+  state.pending = false; state.streaming = false;
+  clearTimeout(state.streamTimer);
+  state.currentMsg = null;
+  setRunning(false);
+  renderSidebar(); renderHead(); renderMessages(); renderBilling();
+}
+function newSession(){
+  state.sessions.push({ id:'s'+(seq++), title:'新会话', isBranch:false, messages:[] });
+  renderSidebar();
+  selectSession(state.sessions[state.sessions.length-1].id);
+  toast('已新建会话');
+}
+
+/* ================================================================
+ * 🧪 特性演示（右侧 7 卡片）
+ * ================================================================ */
+const TOUR = [
+  { n:'①', t:'取消语义',     d:'点停止后显示「已取消」，不再出现「任务已完成」卡', run:()=>{
+      selectSession('s1'); if(state.streaming) abortCurrent();
+      toast('演示：发送后立即停止 → 部分内容 + 红色「已取消」',3000);
+      doSend('演示：取消语义，先输出一小段', {kind:'text'});
+      setTimeout(()=>stopStream(), 1500);
+  }},
+  { n:'②', t:'识图/生图即时取消', d:'生成图片时点停止可立即中断，不等待图片返回', run:()=>{
+      selectSession('s1'); if(state.streaming) abortCurrent();
+      toast('演示：发起生图 → 1.2s 后点停止 → 立即显示「生图已中断」',3000);
+      doSend('演示：生成一张登录页背景图', {kind:'image'});
+      setTimeout(()=>stopStream(), 1200);
+  }},
+  { n:'③', t:'运行中指示',   d:'等待首 token 与首 token 前，显示三颗弹跳圆点', run:()=>{
+      selectSession('s1'); if(state.streaming) abortCurrent();
+      toast('演示：下方出现「运行中」三圆点（等待 Agent 首响应）',3000);
+      doSend('演示：运行中指示', {kind:'text'});
+  }},
+  { n:'④', t:'转向 / 排队',   d:'运行中输入内容回车 → 弹出「转向 / 排队 / 取消」选择器', run:()=>{
+      selectSession('s1'); if(state.streaming) abortCurrent();
+      toast('演示：先启动一个较长的生成，再弹出发送选择器',3000);
+      textFlow('演示：较长的生成任务（持续约 6 秒）');
+      setTimeout(()=>{ if(state.streaming){ input.value='换个思路，用最小改动实现'; showChooser(input.value); input.focus(); } }, 900);
+  }},
+  { n:'⑤', t:'AI 消息 footer', d:'单行靠左：复制 / 赞 / 踩 / 转发 / 分支 / token计费 / 时间；点计费弹 llm/vlm/image 明细', run:()=>{
+      selectSession('s1');
+      toast('每条 AI 消息下方都有操作区：复制、赞、踩、转发（即将推出）、分支；左侧为模型 + 类型标签 + 计费 + 时间，右侧为会话级分账汇总',4200);
+      const done = [...currentSession().messages].reverse().find(m=>m.role==='assistant'&&m.status==='done');
+      flashFooter(done);
+  }},
+  { n:'⑥', t:'分支新建会话', d:'从任意已完成消息分叉出新会话，历史止于此', run:()=>{
+      selectSession('s1'); if(state.streaming) abortCurrent();
+      const anchor = currentSession().messages.find(m=>m.role==='assistant'&&m.status==='done'&&!m.branched);
+      if(anchor) createBranch(anchor);
+      else toast('暂无可用分支锚点');
+  }},
+  { n:'⑦', t:'@ 文件识别',   d:'输入 @ 弹出工作区文件，可进子目录，选中插入', run:()=>{
+      selectSession('s1'); closeAllPopups();
+      input.value = '@';
+      openMention();
+      toast('输入 @ 弹出工作区文件列表，可进入子目录（如 src/auth）',3000);
+  }},
+];
+function renderTour(){
+  const box = $('#tourBox'); box.innerHTML = '';
+  TOUR.forEach(t=>{
+    const card = el('div','tour-card');
+    const head = el('div','tour-head');
+    head.appendChild(el('span','n', t.n));
+    head.appendChild(el('span','', t.t));
+    card.appendChild(head);
+    card.appendChild(el('div','tour-desc', t.d));
+    const b = el('button','btn-demo','▶ 演示'); on(b,'click',()=>{ if(state.streaming) abortCurrent(); t.run(); });
+    card.appendChild(b);
+    box.appendChild(card);
+  });
+}
+function flashFooter(m){
+  if(!m) return;
+  const col = $('#msgCol');
+  const msgs = [...col.children];
+  const idx = currentSession().messages.indexOf(m);
+  const node = msgs[idx];
+  if(node){ const f = node.querySelector('.ai-footer'); if(f){ f.classList.add('f-flash'); setTimeout(()=>f.classList.remove('f-flash'),1800); } node.scrollIntoView({block:'center'}); }
+}
+
+/* ── 初始化 ── */
+function init(){
+  preloadSession();
+  renderSidebar(); renderHead(); renderMessages(); renderBilling(); renderTour();
+  renderQueueChip();
+  on(document,'click', e=>{
+    // 点击外部关闭弹层（选择器 / 计费弹层）
+    if(state.chooserText && !e.target.closest('.chooser') && !e.target.closest('.composer-inner')) closeAllPopups();
+    if(billPop && !e.target.closest('.bill-pop') && !e.target.closest('.bill-trigger')) closeBillPop();
+  });
+  on($('#msgList'),'scroll', ()=>{ if(billPop) closeBillPop(); });
+  on(document,'keydown', e=>{ if(e.key==='Escape') closeAllPopups(); });
+  $('#stopBtn').addEventListener('click', stopStream);
+}
+init();
+</script>
+</body>
+</html>
