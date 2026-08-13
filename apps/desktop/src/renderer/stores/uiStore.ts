@@ -63,7 +63,8 @@ export const useUIStore = create<UIState>((set) => ({
   activeNav: "",
   setActiveNav: (nav) => set({ activeNav: nav }),
 
-  sidebarCollapsed: false,
+  /** 左侧导航边栏默认折叠（对话区需要更大横向空间） */
+  sidebarCollapsed: true,
   setSidebarCollapsed: (collapsed) => set({ sidebarCollapsed: collapsed }),
 
   rightPanelOpen: true,
