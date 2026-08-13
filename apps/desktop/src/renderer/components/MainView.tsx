@@ -1,14 +1,11 @@
-import { useEffect, useMemo, useRef, useState } from "react";
 import type { AttachmentRef } from "@everybuddy/ipc-contract";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
-import {
-  MENTION_TOKEN_RE,
-  type MentionFile,
-  parseFileMentions,
-} from "../fileMentions";
+import { MENTION_TOKEN_RE, type MentionFile, parseFileMentions } from "../fileMentions";
 import { useAttachments } from "../hooks/useAttachments";
 import { useFileMentions } from "../hooks/useFileMentions";
 import { useSlashCommands } from "../hooks/useSlashCommands";
+import { isBareSteerCommand, parseCommandChannel } from "../slashCommands";
 import { type ChatMessage, useSessionStore } from "../stores/sessionStore";
 import { type CategoryId, getChatDefaultId, useUIStore } from "../stores/uiStore";
 import { AttachmentPreview } from "./AttachmentPreview";
@@ -26,7 +23,6 @@ import {
   IconStop,
   IconX,
 } from "./icons";
-import { isBareSteerCommand, parseCommandChannel } from "../slashCommands";
 import { AssistantGroup, MessageBubble } from "./MessageBubble";
 import { ModelSelector } from "./ModelSelector";
 import { ModeSelect } from "./ModeSelect";
@@ -120,7 +116,9 @@ async function resolveMentions(
   cwd: string | null | undefined,
 ): Promise<{ clean: string; attachments: AttachmentRef[] }> {
   if (!cwd) return { clean: text, attachments: [] };
-  const tokens = [...text.matchAll(MENTION_TOKEN_RE)].map((m) => m[1]).filter((t): t is string => Boolean(t));
+  const tokens = [...text.matchAll(MENTION_TOKEN_RE)]
+    .map((m) => m[1])
+    .filter((t): t is string => Boolean(t));
   const files: MentionFile[] = [];
   for (const token of tokens) {
     const f = await resolveMentionFile(cwd, token);
@@ -601,6 +599,11 @@ function ChatView({ taskId }: { taskId: string }) {
   const pushChatNotice = useSessionStore((s) => s.pushChatNotice);
   const queueState = useSessionStore((s) => s.queues[taskId]);
   const queuedCount = (queueState?.followUp.length ?? 0) + (queueState?.steering.length ?? 0);
+  // 排队内容（转向队列在前、排队队列在后），供输入框上方长条展示
+  const queueItems = [
+    ...(queueState?.steering ?? []).map((text) => ({ channel: "steer" as const, text })),
+    ...(queueState?.followUp ?? []).map((text) => ({ channel: "followUp" as const, text })),
+  ];
 
   // 运行中发送选择器（转向 / 排队 / 取消）
   const [chooserOpen, setChooserOpen] = useState(false);
@@ -633,7 +636,11 @@ function ChatView({ taskId }: { taskId: string }) {
     if (!raw && attachments.length === 0) return;
     // 裸 /steer /follow-up：提示不发送
     if (isBareSteerCommand(raw)) {
-      pushChatNotice(taskId, "请输入要发送的内容，如：/steer 换个思路 或 /follow-up 稍后处理", "warn");
+      pushChatNotice(
+        taskId,
+        "请输入要发送的内容，如：/steer 换个思路 或 /follow-up 稍后处理",
+        "warn",
+      );
       return;
     }
     const cmd = parseCommandChannel(raw);
@@ -798,10 +805,32 @@ function ChatView({ taskId }: { taskId: string }) {
               onQueue={() => void doChoose("followUp")}
               onCancel={() => setChooserOpen(false)}
             />
-            {/* 已排队 chip（queue_update：steer/followUp 队列非空） */}
-            {queuedCount > 0 && (
-              <div className="absolute left-3 top-[-10px] rounded-full border border-accent-line bg-accent-tint px-2 py-[1px] text-[11px] font-medium text-accent-strong shadow-card">
-                ⏳ {queuedCount} 条已排队 · 完成后自动发送
+            {/* 已排队长条（queue_update：steer/followUp 队列非空）—— 输入框上方通栏，样式对齐发送选择器 */}
+            {!chooserOpen && queuedCount > 0 && (
+              <div className="absolute bottom-[calc(100%+8px)] left-0 right-0 z-40 rounded-m border border-accent-line bg-card p-1.5 shadow-pop">
+                <div className="flex items-center gap-1.5 px-1.5 pb-1 text-[11.5px] font-semibold text-accent-strong">
+                  <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-accent" />
+                  已排队 {queuedCount} 条 · 完成后自动发送
+                </div>
+                <div className="flex flex-col gap-0.5">
+                  {queueItems.map((q) => (
+                    <div
+                      key={`${q.channel}:${q.text}`}
+                      className="flex items-center gap-1.5 rounded-s px-1.5 py-0.5 text-[11.5px] text-ink-2"
+                    >
+                      <span
+                        className={`shrink-0 rounded px-1 text-[9.5px] font-bold leading-[1.5] ${
+                          q.channel === "steer"
+                            ? "bg-[#faeae7] text-[#9c3a31]"
+                            : "bg-accent-tint text-accent-strong"
+                        }`}
+                      >
+                        {q.channel === "steer" ? "转向" : "排队"}
+                      </span>
+                      <span className="truncate">{q.text}</span>
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
             <textarea

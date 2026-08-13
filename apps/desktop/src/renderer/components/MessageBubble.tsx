@@ -105,7 +105,6 @@ export function AssistantGroup({ messages, taskId }: AssistantGroupProps) {
   const [expanded, setExpanded] = useState(false);
   const first = messages[0];
   const lastMsg = messages[messages.length - 1];
-  const time = lastMsg ? formatTime(lastMsg.timestamp) : "";
   // 取消语义：任一 turn 被取消即整组按「已取消」呈现（合成 abort 落在最后一条流式消息上）
   const cancelled = messages.some((m) => m.cancelled || m.stopReason === "aborted");
 
@@ -165,7 +164,7 @@ export function AssistantGroup({ messages, taskId }: AssistantGroupProps) {
         {cancelled && !isStreaming && (
           <span className="inline-flex w-fit items-center gap-1 rounded-full border border-danger/30 bg-danger/5 px-2.5 py-0.5 text-[12px] font-medium text-danger">
             <IconStop size={10} />
-            已取消
+            任务已取消
           </span>
         )}
         {foldable ? (
@@ -204,8 +203,7 @@ export function AssistantGroup({ messages, taskId }: AssistantGroupProps) {
         )}
         {!isStreaming && (
           <>
-            <div className="mt-0.5 text-[11px] text-ink-3">{time}</div>
-            {/* AI 消息 footer：模型/token/计费 + 复制/赞/踩/转发/分支（非流式已结束消息） */}
+            {/* AI 消息 footer：复制/赞/踩/转发/分支 + token计费 + 时间（单行靠左，时间并入 footer） */}
             <MessageFooter taskId={taskId} messages={messages} />
           </>
         )}

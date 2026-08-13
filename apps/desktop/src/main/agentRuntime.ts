@@ -402,9 +402,7 @@ class AgentRuntime {
 
       // 视觉自动调度：当前模型无视觉 + 图片附件 → 用视觉模型描述并注入文本，不把裸图发给非视觉模型
       const providerIdEffective = providerId ?? task.providerId;
-      const currentModel = providerIdEffective
-        ? this.resolveModel(providerIdEffective)
-        : undefined;
+      const currentModel = providerIdEffective ? this.resolveModel(providerIdEffective) : undefined;
       const supportsVision = Boolean(currentModel?.input?.includes("image"));
       const imageFiles = staged.filter((s) => !s.skipped && s.category === "image");
 
@@ -483,7 +481,9 @@ class AgentRuntime {
   /**
    * 转向/排队发送（/steer /follow-up 与运行中「转向/排队」选择器）。
    * SDK steer()/followUp() 仅排队、空闲时不启动 run（agent 循环未运行），
-   * 故空闲必须回退 session.prompt；运行中 steer=打断、followUp=排队。
+   * 故空闲必须回退 session.prompt。
+   * 运行中：steer=**打断**（abort 当前生成再普通 prompt，而非 session.steer 仅排队）、
+   * followUp=排队（session.followUp，完成后自动处理）。
    */
   async steerMessage(
     taskId: string,
@@ -504,10 +504,14 @@ class AgentRuntime {
 
     try {
       if (state.session.isIdle) {
+        // 空闲：steer/followUp 都等同普通发送
         await state.session.prompt(fullText);
       } else if (channel === "steer") {
-        await state.session.steer(fullText);
+        // 转向 = 打断当前生成（abort 内部等待 idle），再以普通 prompt 处理新指令
+        await this.abort(taskId);
+        await state.session.prompt(fullText);
       } else {
+        // 排队 = 当前生成完成后自动处理
         await state.session.followUp(fullText);
       }
     } catch (err) {
@@ -573,13 +577,8 @@ class AgentRuntime {
     if (!newSessionFile) throw new Error("创建分支失败：会话未持久化");
 
     // 新任务：复制类型/模式/模型/空间，解析新 sessionDir（临时任务取新 workDir）
-    const workspace = task.workspaceId
-      ? configStore.getWorkspace(task.workspaceId)
-      : undefined;
-    const { sessionDir: newSessionDir, workDir } = resolveSessionLocation(
-      task.type,
-      workspace,
-    );
+    const workspace = task.workspaceId ? configStore.getWorkspace(task.workspaceId) : undefined;
+    const { sessionDir: newSessionDir, workDir } = resolveSessionLocation(task.type, workspace);
     const now = new Date().toISOString();
     const newTask: TaskMeta = {
       id: randomUUID(),
@@ -771,6 +770,11 @@ class AgentRuntime {
         break;
       }
       case "agent_settled": {
+        // 兜底：SDK 某些路径（如工具执行中 abort）可能只发 agent_settled 不发 agent_end，
+        // 此时若 abortRequested 仍在 → 同样合成 aborted message_end，取消语义一致
+        if (this.abortRequested.delete(taskId)) {
+          emit({ type: "message_end", payload: { stopReason: "aborted" } });
+        }
         emit({ type: "agent_settled" });
         // 结算后条目已落盘，下发 assistant 条目 id 映射（分支锚点）
         this.emitEntryIds(taskId);

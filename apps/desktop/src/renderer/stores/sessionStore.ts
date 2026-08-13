@@ -45,6 +45,8 @@ export interface Task extends TaskMeta {
   streamMessageId?: string | null;
   /** 已发送、等待首个 assistant 消息（覆盖首 token 前的空白期，渲染「运行中」指示） */
   pending?: boolean;
+  /** 用户已请求中止（渲染层意图标记）：finalizeMessage 时据此把在途流式消息置 cancelled */
+  abortRequested?: boolean;
 }
 
 /** 扩展状态（extension_status 事件负载；state 为扩展自有状态机，如 plan-mode 的 off/plan/ready/executing） */
@@ -671,6 +673,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
     set((state) => ({
       tasks: state.tasks.map((t) => {
         if (t.id !== taskId) return t;
+        const aborting = Boolean(t.abortRequested);
         return {
           ...t,
           // agent 消息结算（agent_end/agent_settled）：翻转消息级 isStreaming、清流式指针、
@@ -679,20 +682,27 @@ export const useSessionStore = create<SessionState>((set, get) => ({
           // 一定发出 *_end（pi-ai 协议：流以 done/error 终止，中途 *_end 可能丢失），
           // 故在此兜底，避免思考跳动点/文本光标永不消失。
           messages: t.messages
-            .map((m) =>
-              m.isStreaming
-                ? {
-                    ...m,
-                    isStreaming: false,
-                    endedAt: Date.now(),
-                    blocks: m.blocks.map((b) => (b.done ? b : { ...b, done: true })),
-                  }
-                : m,
-            )
-            .filter((m) => !(m.blocks.length === 0 && !m.errorMessage && !m.isStreaming)),
+            .map((m) => {
+              if (!m.isStreaming) return m;
+              const finalized = {
+                ...m,
+                isStreaming: false,
+                endedAt: Date.now(),
+                blocks: m.blocks.map((b) => (b.done ? b : { ...b, done: true })),
+              };
+              // 用户已请求中止 → 在途消息呈现「已取消」（不折叠为「任务已完成」）；
+              // 与 message_end stopReason="aborted" 路径互补，兜底工具执行中 abort 不回发该事件
+              return aborting ? { ...finalized, cancelled: true } : finalized;
+            })
+            // 保留「已取消但空块」的消息：abort 早于首个 block（或跨 turn 的第二个空 turn）
+            // 时若不保留，分组会回退到上一 turn 而误显「任务已完成」卡
+            .filter(
+              (m) => !(m.blocks.length === 0 && !m.errorMessage && !m.isStreaming && !m.cancelled),
+            ),
           isStreaming: false,
           streamMessageId: null,
           pending: false,
+          abortRequested: false,
         };
       }),
     })),
@@ -738,6 +748,11 @@ export const useSessionStore = create<SessionState>((set, get) => ({
     })),
 
   abortTask: async (taskId) => {
+    // 记录中止意图：finalizeMessage 时据此把在途流式消息置「已取消」，
+    // 兜底 SDK 工具执行中 abort 不回发 stopReason="aborted" 的 message_end 的情况
+    set((state) => ({
+      tasks: state.tasks.map((t) => (t.id === taskId ? { ...t, abortRequested: true } : t)),
+    }));
     await window.electronAPI.agent.abort(taskId);
   },
 

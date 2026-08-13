@@ -1,20 +1,13 @@
 /**
  * MessageFooter - AI 消息 footer（见 docs/plans/dialog-experience.md 特性⑤）。
  *
- * 左簇：模型名 + 类型标签 + 本条 token/费用（JSONL 真实 usage）+ 时间；
- * 计费触发 chip 展示会话级汇总，点击弹出按模型类型（llm/vlm/image）分账明细。
- * 右簇：复制（末个文本块）、赞、踩（本地 UI 状态）、转发（预留置灰）、分支（从该消息新建会话）。
+ * 单行靠左：复制（末个文本块）/ 赞 / 踩 / 转发（预留置灰）/ 分支（从该消息新建会话）
+ * + 会话级 token 计费 chip（点击弹按模型类型 llm/vlm/image 分账明细）+ 时间。
+ * 对齐 docs/demos/dialog-experience.html：不展示模型名 / 类型标签 / 本条 usage。
  */
 
 import { useState } from "react";
-import {
-  aggregateBilling,
-  formatCost,
-  formatTokens,
-  resolveMessageModel,
-  sumUsage,
-  TYPE_LABELS,
-} from "../billing";
+import { aggregateBilling, formatCost, formatTokens, TYPE_LABELS } from "../billing";
 import type { ChatMessage } from "../stores/sessionStore";
 import { useSessionStore } from "../stores/sessionStore";
 import { useUIStore } from "../stores/uiStore";
@@ -57,7 +50,6 @@ export function MessageFooter({ taskId, messages }: MessageFooterProps) {
   const [billOpen, setBillOpen] = useState(false);
 
   const models = useUIStore((s) => s.models);
-  const task = useSessionStore((s) => s.tasks.find((t) => t.id === taskId));
   const setMessageFeedback = useSessionStore((s) => s.setMessageFeedback);
   const branchTask = useSessionStore((s) => s.branchTask);
   const pushChatNotice = useSessionStore((s) => s.pushChatNotice);
@@ -65,13 +57,6 @@ export function MessageFooter({ taskId, messages }: MessageFooterProps) {
   const lastMsg = messages[messages.length - 1];
   if (lastMsg?.role !== "assistant") return null;
 
-  const { type, model } = resolveMessageModel(
-    lastMsg.provider ?? task?.providerId,
-    lastMsg.model,
-    models,
-  );
-  const usage = lastMsg.usage;
-  const usageSum = usage ? sumUsage(usage) : null;
   const feedback = lastMsg.feedback;
   const canBranch = Boolean(lastMsg.entryId);
   const time = new Date(lastMsg.timestamp).toLocaleTimeString("zh-CN", {
@@ -118,44 +103,9 @@ export function MessageFooter({ taskId, messages }: MessageFooterProps) {
     "flex h-[26px] w-[26px] items-center justify-center rounded-s text-ink-3 transition hover:bg-hover hover:text-ink disabled:opacity-35 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-ink-3";
 
   return (
-    <div className="relative mt-1 flex items-center gap-1 border-t border-dashed border-line pt-1.5">
-      {/* 左簇：模型 + 类型标签 + 本条 token/cost + 计费汇总触发 + 时间 */}
-      <div className="flex min-w-0 flex-1 items-center gap-2 text-[11px] text-ink-3">
-        {model && (
-          <span className="max-w-[160px] truncate font-medium text-ink-2" title={model}>
-            {model}
-          </span>
-        )}
-        {type && (
-          <span
-            className={`shrink-0 rounded px-1 text-[9.5px] font-bold leading-[1.5] ${TYPE_TAG_CLASS[type] ?? ""}`}
-          >
-            {type === "llm" ? "LLM" : type === "vlm" ? "VLM" : "IMG"}
-          </span>
-        )}
-        {usage && (
-          <span className="shrink-0 tabular-nums">
-            in {formatTokens(usage.input)} · out {formatTokens(usage.output)}
-            {usage.cacheRead > 0 && ` · cache ${formatTokens(usage.cacheRead)}`}
-            {usageSum && usageSum.totalTokens > 0 && ` · ${formatTokens(usageSum.totalTokens)} tok`}
-            {usageSum && usageSum.cost > 0 && ` · ${formatCost(usageSum.cost)}`}
-          </span>
-        )}
-        {totalTokens > 0 && (
-          <button
-            type="button"
-            onClick={() => setBillOpen((v) => !v)}
-            title="查看按模型类型（LLM/VLM/IMG）的计费明细"
-            className="shrink-0 rounded-full border border-accent-line bg-accent-tint px-2 py-[1px] font-semibold text-accent-strong transition hover:bg-[#d7ebe4]"
-          >
-            ◈ {formatTokens(totalTokens)} tok{totalCost > 0 ? ` · ${formatCost(totalCost)}` : ""}
-          </button>
-        )}
-        <span className="ml-auto shrink-0 tabular-nums">{time}</span>
-      </div>
-
-      {/* 右簇：操作图标 */}
-      <div className="flex shrink-0 items-center gap-0.5">
+    <div className="relative mt-1 flex items-center gap-2 border-t border-dashed border-line pt-1.5">
+      {/* 操作图标：复制 / 赞 / 踩 / 转发（置灰「即将推出」）/ 分支 */}
+      <div className="flex min-w-0 items-center gap-0.5">
         <button type="button" onClick={handleCopy} title="复制" className={iconBtn}>
           {copied ? <IconCheck size={13} strokeWidth={2.5} /> : <IconCopy size={13} />}
         </button>
@@ -188,6 +138,21 @@ export function MessageFooter({ taskId, messages }: MessageFooterProps) {
           <IconGitBranch size={13} />
         </button>
       </div>
+
+      {/* 会话级 token 计费 chip（点击弹明细） */}
+      {totalTokens > 0 && (
+        <button
+          type="button"
+          onClick={() => setBillOpen((v) => !v)}
+          title="查看按模型类型（LLM/VLM/IMG）的计费明细"
+          className="shrink-0 rounded-full border border-accent-line bg-accent-tint px-2 py-[1px] font-semibold text-accent-strong transition hover:bg-[#d7ebe4]"
+        >
+          ◈ {formatTokens(totalTokens)} tok{totalCost > 0 ? ` · ${formatCost(totalCost)}` : ""}
+        </button>
+      )}
+
+      {/* 时间（并入 footer，单行靠左） */}
+      <span className="shrink-0 text-[11px] tabular-nums text-ink-3">{time}</span>
 
       {/* 计费明细弹层：按模型类型分账 */}
       {billOpen && (

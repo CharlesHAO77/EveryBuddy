@@ -3,8 +3,8 @@ import { create } from "zustand";
 
 export type CategoryId = "daily" | "coding";
 
-/** 右侧面板 tab：待办/计划 / 文件 / 预览 / 计费 */
-export type RightPanelViewId = "todo-plan" | "files" | "preview" | "billing";
+/** 右侧面板 tab：待办/计划 / 文件 / 预览（token 计费仅保留 footer chip 点击弹明细） */
+export type RightPanelViewId = "todo-plan" | "files" | "preview";
 
 /** 设置侧栏分区 id：通用 → 模型设置（用户确认顺序） */
 export type SettingsSectionId = "models" | "general";
