@@ -31,9 +31,6 @@ export function SendModeChooser({ open, onSteer, onQueue, onCancel }: SendModeCh
           className="flex flex-1 flex-col items-start gap-0.5 rounded-s px-2.5 py-1.5 text-left transition hover:bg-hover"
         >
           <span className="text-[12.5px] font-semibold text-danger-strong">转向（打断当前）</span>
-          <span className="text-[11px] leading-tight text-ink-3">
-            立即停止当前生成，优先处理新指令
-          </span>
         </button>
         <button
           type="button"
@@ -41,7 +38,6 @@ export function SendModeChooser({ open, onSteer, onQueue, onCancel }: SendModeCh
           className="flex flex-1 flex-col items-start gap-0.5 rounded-s px-2.5 py-1.5 text-left transition hover:bg-hover"
         >
           <span className="text-[12.5px] font-semibold text-ink">排队（完成后处理）</span>
-          <span className="text-[11px] leading-tight text-ink-3">当前生成完成后自动发送</span>
         </button>
         <button
           type="button"

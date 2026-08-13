@@ -16,6 +16,7 @@ const api: ElectronAPI = {
     abort: (streamId) => ipcRenderer.invoke("agent:abort", { streamId }),
     steer: (req) => ipcRenderer.invoke("agent:steer", req),
     followUp: (req) => ipcRenderer.invoke("agent:followUp", req),
+    clearQueue: (streamId) => ipcRenderer.invoke("agent:clearQueue", { streamId }),
     onEvent: (cb) => {
       const handler = (_: unknown, event: unknown) => cb(event as never);
       ipcRenderer.on("agent:event", handler);

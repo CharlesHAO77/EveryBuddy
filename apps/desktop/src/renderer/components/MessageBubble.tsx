@@ -12,6 +12,7 @@ import {
   IconChevronDown,
   IconChevronRight,
   IconFile,
+  IconRedirect,
   IconStop,
 } from "./icons";
 import { MessageFooter } from "./MessageFooter";
@@ -77,6 +78,13 @@ export function MessageBubble({ message }: MessageBubbleProps) {
         )}
         {text && <div className="whitespace-pre-wrap">{text}</div>}
       </div>
+      {/* 原生 steer 交付前：琥珀「转向中」指示（当前 turn 边界处交付后由 message_start 清除） */}
+      {message.steerPending && (
+        <span className="inline-flex items-center gap-1 rounded-full border border-[#ecd9a4] bg-[#fdf3d7] px-2 py-[1.5px] text-[11px] font-medium text-[#8a6d1f]">
+          <span className="h-1 w-1 animate-pulse rounded-full bg-[#8a6d1f]" />
+          转向中
+        </span>
+      )}
       <div className="pr-1 text-[11px] text-ink-3">{time}</div>
     </div>
   );
@@ -107,6 +115,8 @@ export function AssistantGroup({ messages, taskId }: AssistantGroupProps) {
   const lastMsg = messages[messages.length - 1];
   // 取消语义：任一 turn 被取消即整组按「已取消」呈现（合成 abort 落在最后一条流式消息上）
   const cancelled = messages.some((m) => m.cancelled || m.stopReason === "aborted");
+  // 转向语义：原生 steer 发送时在途消息被标记 redirected（渲染层自持）→ 琥珀「已转向」，区别于取消
+  const redirected = !cancelled && messages.some((m) => m.redirected);
 
   // 拍平所有 turn 的 blocks；notice（上下文压缩提示）作为独立块一并纳入，使其可折叠进同一过程
   const blocks: FlatBlock[] = messages.flatMap((m): FlatBlock[] => {
@@ -140,8 +150,21 @@ export function AssistantGroup({ messages, taskId }: AssistantGroupProps) {
   // 过程块 = 除最终结果外的全部块；若无 text 结果则整组为过程
   const processBlocks = lastTextIdx >= 0 ? blocks.filter((_, i) => i !== lastTextIdx) : blocks;
   const resultBlock = lastTextIdx >= 0 ? blocks[lastTextIdx] : undefined;
-  // 取消的消息不折叠为「任务已完成」卡：平铺保留部分内容 + 危险色「已取消」pill
-  const foldable = !isStreaming && !cancelled && hasProcess && processBlocks.length > 0;
+  // 有可折叠的过程块（思考/工具/压缩提示）才用卡片；三态对仗：已完成(绿) / 已取消(红) / 已转向(琥珀)
+  const canCard = !isStreaming && hasProcess && processBlocks.length > 0;
+  const cancelCard = canCard && cancelled;
+  // 已转向：`redirected` 在**转向交付时**（当前执行完成、steer 真正接管的 turn 边界）才被标记——
+  // 卡片于此显示，不等 run 结束、也不在发送瞬间
+  const redirectCard = redirected && hasProcess && processBlocks.length > 0;
+  // 正常完成：折叠为「任务已完成」卡
+  const foldable = canCard && !cancelled && !redirected;
+  // 已转向卡 + 新 turn 已开始但尚无内容块（首 token 前）→ 卡片下方补「运行中」指示。
+  // 必须 gate 在 redirectCard 上，否则所有流式空块组都会重复渲染 RunningIndicator
+  const steerFollowUpStreaming =
+    redirectCard &&
+    isStreaming &&
+    Boolean(lastMsg?.isStreaming) &&
+    (lastMsg?.blocks.length ?? 0) === 0;
 
   // 执行时长：当前会话用 endedAt 精确；历史回放无 endedAt 时退化为末条 timestamp（近似）
   const endTs = lastMsg?.endedAt ?? lastMsg?.timestamp ?? first?.timestamp ?? 0;
@@ -160,15 +183,81 @@ export function AssistantGroup({ messages, taskId }: AssistantGroupProps) {
   return (
     <div className="flex w-full justify-start">
       <div className="flex max-w-[85%] flex-col gap-1.5">
-        {/* 已取消：危险色 pill（替代「任务已完成」卡，下方平铺保留的部分内容） */}
-        {cancelled && !isStreaming && (
+        {/* 已转向且无过程可折叠（首 block 前转向）：退化为琥珀 pill + 平铺 */}
+        {redirected && !redirectCard && !isStreaming && (
+          <span className="inline-flex w-fit items-center gap-1 rounded-full border border-[#ecd9a4] bg-[#fdf3d7] px-2.5 py-0.5 text-[12px] font-medium text-[#8a6d1f]">
+            <IconRedirect size={10} />
+            任务已转向
+          </span>
+        )}
+        {/* 已取消且无过程可折叠（首 token 前取消）：退化为危险色 pill + 平铺 */}
+        {cancelled && !cancelCard && !isStreaming && (
           <span className="inline-flex w-fit items-center gap-1 rounded-full border border-danger/30 bg-danger/5 px-2.5 py-0.5 text-[12px] font-medium text-danger">
             <IconStop size={10} />
             任务已取消
           </span>
         )}
-        {foldable ? (
+        {cancelCard ? (
           <>
+            {/* 「已取消」卡：与「任务已完成」卡对仗（危险圆标 + 时长 + 可展开已执行过程 + 保留文本） */}
+            <button
+              type="button"
+              onClick={() => setExpanded((v) => !v)}
+              className="group flex w-full items-center gap-[9px] rounded-m border border-danger/30 bg-danger/5 px-3 py-[9px] shadow-card transition hover:bg-danger/10"
+            >
+              <span className="flex h-[20px] w-[20px] shrink-0 items-center justify-center rounded-full bg-danger text-white shadow-sm">
+                <IconStop size={11} strokeWidth={3} />
+              </span>
+              <span className="text-[12.5px] font-semibold text-danger">任务已取消</span>
+              {durationLabel && (
+                <span className="rounded-full bg-hover px-2 py-[2px] text-[11px] font-medium text-ink-2 tabular-nums">
+                  {durationLabel}
+                </span>
+              )}
+              <span className="ml-auto flex items-center gap-1 text-[11px] text-ink-3 transition group-hover:text-ink-2">
+                <span>{expanded ? "收起" : "详情"}</span>
+                {expanded ? (
+                  <IconChevronDown size={12} strokeWidth={2.5} />
+                ) : (
+                  <IconChevronRight size={12} strokeWidth={2.5} />
+                )}
+              </span>
+            </button>
+            {expanded && processBlocks.map(renderBlock)}
+            {resultBlock ? renderBlock(resultBlock) : null}
+          </>
+        ) : redirectCard ? (
+          <>
+            {/* 「任务已转向」卡：被原生 steer 打断（工具已执行、未产出最终结果），琥珀色与已取消/已完成对仗 */}
+            <button
+              type="button"
+              onClick={() => setExpanded((v) => !v)}
+              className="group flex w-full items-center gap-[9px] rounded-m border border-[#ecd9a4] bg-[#fdf3d7] px-3 py-[9px] shadow-card transition hover:bg-[#f9edc9]"
+            >
+              <span className="flex h-[20px] w-[20px] shrink-0 items-center justify-center rounded-full bg-[#8a6d1f] text-white shadow-sm">
+                <IconRedirect size={11} strokeWidth={2.5} />
+              </span>
+              <span className="text-[12.5px] font-semibold text-[#8a6d1f]">任务已转向</span>
+              {durationLabel && (
+                <span className="rounded-full bg-hover px-2 py-[2px] text-[11px] font-medium text-ink-2 tabular-nums">
+                  {durationLabel}
+                </span>
+              )}
+              <span className="ml-auto flex items-center gap-1 text-[11px] text-ink-3 transition group-hover:text-ink-2">
+                <span>{expanded ? "收起" : "详情"}</span>
+                {expanded ? (
+                  <IconChevronDown size={12} strokeWidth={2.5} />
+                ) : (
+                  <IconChevronRight size={12} strokeWidth={2.5} />
+                )}
+              </span>
+            </button>
+            {expanded && processBlocks.map(renderBlock)}
+            {resultBlock ? renderBlock(resultBlock) : null}
+          </>
+        ) : foldable ? (
+          <>
+            {/* 「任务已完成」卡：折叠过程，展示最终文本结果 */}
             <button
               type="button"
               onClick={() => setExpanded((v) => !v)}
@@ -201,6 +290,8 @@ export function AssistantGroup({ messages, taskId }: AssistantGroupProps) {
         ) : (
           blocks.map(renderBlock)
         )}
+        {/* 已转向卡即时显示后，若新 turn（steer 响应）已开始但尚无内容块 → 卡下方补「运行中」 */}
+        {steerFollowUpStreaming && <RunningIndicator />}
         {!isStreaming && (
           <>
             {/* AI 消息 footer：复制/赞/踩/转发/分支 + token计费 + 时间（单行靠左，时间并入 footer） */}

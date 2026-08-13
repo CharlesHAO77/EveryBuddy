@@ -244,6 +244,16 @@ export function IconStop(props: IconProps) {
   );
 }
 
+/** 转向/重定向（corner-up-left，Lucide 风格）：原生 steer 打断当前生成时「已转向」卡用 */
+export function IconRedirect(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <polyline points="9 14 4 9 9 4" />
+      <path d="M20 20v-7a4 4 0 0 0-4-4H4" />
+    </Svg>
+  );
+}
+
 export function IconClock(props: IconProps) {
   return (
     <Svg {...props}>

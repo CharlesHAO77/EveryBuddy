@@ -7,7 +7,14 @@
  */
 
 import { useState } from "react";
-import { aggregateBilling, formatCost, formatTokens, TYPE_LABELS } from "../billing";
+import {
+  aggregateBilling,
+  type BillingRow,
+  formatCost,
+  formatTokens,
+  sumBillingRows,
+  TYPE_LABELS,
+} from "../billing";
 import type { ChatMessage } from "../stores/sessionStore";
 import { useSessionStore } from "../stores/sessionStore";
 import { useUIStore } from "../stores/uiStore";
@@ -45,6 +52,41 @@ const TYPE_TAG_CLASS: Record<string, string> = {
   image: "bg-[#e2f2f8] text-[#0f6d8f]",
 };
 
+/** 计费弹层内的单区块行（按模型类型分账；空 → 「暂无计费数据」） */
+function BillingRows({ rows }: { rows: BillingRow[] }) {
+  if (rows.length === 0) {
+    return <div className="py-1 text-center text-[12px] text-ink-3">暂无计费数据</div>;
+  }
+  return (
+    <>
+      {rows.map((r) => (
+        <div key={r.type} className="border-t border-line py-1.5 first:border-t-0">
+          <div className="flex items-center gap-1.5 text-[12px] font-semibold text-ink">
+            <span
+              className={`rounded px-1 text-[9.5px] font-bold leading-[1.5] ${TYPE_TAG_CLASS[r.type] ?? ""}`}
+            >
+              {r.type === "llm" ? "LLM" : r.type === "vlm" ? "VLM" : "IMG"}
+            </span>
+            <span>{TYPE_LABELS[r.type]}</span>
+          </div>
+          {r.model && <div className="mt-0.5 break-all text-[11px] text-ink-3">{r.model}</div>}
+          <div className="mt-0.5 flex flex-wrap items-baseline gap-1.5 text-[11.5px] text-ink-2 tabular-nums">
+            <span>in {formatTokens(r.usage.input)}</span>
+            <span>out {formatTokens(r.usage.output)}</span>
+            {r.usage.cacheRead > 0 && <span>cache {formatTokens(r.usage.cacheRead)}</span>}
+            <span>· {formatTokens(r.usage.totalTokens)} tok</span>
+            {r.usage.cost > 0 && (
+              <span className="ml-auto font-bold text-accent-strong">
+                {formatCost(r.usage.cost)}
+              </span>
+            )}
+          </div>
+        </div>
+      ))}
+    </>
+  );
+}
+
 export function MessageFooter({ taskId, messages }: MessageFooterProps) {
   const [copied, setCopied] = useState(false);
   const [billOpen, setBillOpen] = useState(false);
@@ -64,13 +106,14 @@ export function MessageFooter({ taskId, messages }: MessageFooterProps) {
     minute: "2-digit",
   });
 
-  // 会话级汇总（计费触发 chip + 弹层明细共用）
-  const rows = aggregateBilling(
+  // 本条 run 汇总（footer chip 用，取本组消息——修复"每个 footer 都显示整会话总额"）
+  const runRows = aggregateBilling(messages, models);
+  const { totalTokens, cost: totalCost } = sumBillingRows(runRows);
+  // 会话累计（弹层「会话累计」区块用）
+  const sessionRows = aggregateBilling(
     useSessionStore.getState().tasks.find((t) => t.id === taskId)?.messages ?? [],
     models,
   );
-  const totalTokens = rows.reduce((s, r) => s + r.usage.totalTokens, 0);
-  const totalCost = rows.reduce((s, r) => s + r.usage.cost, 0);
 
   const handleCopy = () => {
     void navigator.clipboard
@@ -163,7 +206,7 @@ export function MessageFooter({ taskId, messages }: MessageFooterProps) {
             className="fixed inset-0 z-40 cursor-default"
             onClick={() => setBillOpen(false)}
           />
-          <div className="absolute bottom-full right-0 z-50 mb-1 w-[280px] rounded-m border border-line-strong bg-card p-2.5 shadow-pop">
+          <div className="absolute bottom-full right-0 z-50 mb-1 w-[300px] rounded-m border border-line-strong bg-card p-2.5 shadow-pop">
             <div className="mb-1 flex items-center justify-between">
               <span className="text-[12px] font-bold text-ink">计费明细 · 按模型类型</span>
               <button
@@ -174,36 +217,13 @@ export function MessageFooter({ taskId, messages }: MessageFooterProps) {
                 ✕
               </button>
             </div>
-            {rows.length === 0 ? (
-              <div className="py-2 text-center text-[12.5px] text-ink-3">暂无计费数据</div>
-            ) : (
-              rows.map((r) => (
-                <div key={r.type} className="border-t border-line py-1.5 first:border-t-0">
-                  <div className="flex items-center gap-1.5 text-[12px] font-semibold text-ink">
-                    <span
-                      className={`rounded px-1 text-[9.5px] font-bold leading-[1.5] ${TYPE_TAG_CLASS[r.type] ?? ""}`}
-                    >
-                      {r.type === "llm" ? "LLM" : r.type === "vlm" ? "VLM" : "IMG"}
-                    </span>
-                    <span>{TYPE_LABELS[r.type]}</span>
-                  </div>
-                  {r.model && (
-                    <div className="mt-0.5 break-all text-[11px] text-ink-3">{r.model}</div>
-                  )}
-                  <div className="mt-0.5 flex flex-wrap items-baseline gap-1.5 text-[11.5px] text-ink-2 tabular-nums">
-                    <span>in {formatTokens(r.usage.input)}</span>
-                    <span>out {formatTokens(r.usage.output)}</span>
-                    {r.usage.cacheRead > 0 && <span>cache {formatTokens(r.usage.cacheRead)}</span>}
-                    <span>· {formatTokens(r.usage.totalTokens)} tok</span>
-                    {r.usage.cost > 0 && (
-                      <span className="ml-auto font-bold text-accent-strong">
-                        {formatCost(r.usage.cost)}
-                      </span>
-                    )}
-                  </div>
-                </div>
-              ))
-            )}
+            <div className="text-[11px] font-bold text-ink-3">
+              本条运行 · <span className="text-accent-strong">{messages.length} 次模型调用</span>
+            </div>
+            <BillingRows rows={runRows} />
+            <div className="mt-1 border-t border-line" />
+            <div className="pt-1 text-[11px] font-bold text-ink-3">会话累计</div>
+            <BillingRows rows={sessionRows} />
           </div>
         </>
       )}

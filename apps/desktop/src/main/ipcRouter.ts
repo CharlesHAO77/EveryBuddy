@@ -142,6 +142,12 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
     return { streamId: req.sessionId };
   });
 
+  // 清空排队（steer + followUp）-> 返回被清空内容，供单项取消后重排
+  ipcMain.handle("agent:clearQueue", async (_evt, raw) => {
+    const req = validate(abortRequestSchema, raw);
+    return agentRuntime.clearQueue(req.streamId);
+  });
+
   // 扩展命令（如 plan-mode toggle/execute）-> 扩展控制器侧信道
   ipcMain.handle("agent:extension-command", async (_evt, raw) => {
     const req = validate(extensionCommandRequestSchema, raw);

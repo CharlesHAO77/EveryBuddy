@@ -309,6 +309,10 @@ class AgentRuntime {
       resourceLoader,
     });
 
+    // 多次转向合并：steeringMode "all" 把同一时刻排队的多条转向消息一起注入、
+    // 合并为一个响应（默认 one-at-a-time 会各自产生一个 turn）；持久化到 SDK settings
+    session.setSteeringMode("all");
+
     const unsubscribe = session.subscribe((event: unknown) => {
       this.translateAndEmit(task.id, event);
     });
@@ -482,7 +486,8 @@ class AgentRuntime {
    * 转向/排队发送（/steer /follow-up 与运行中「转向/排队」选择器）。
    * SDK steer()/followUp() 仅排队、空闲时不启动 run（agent 循环未运行），
    * 故空闲必须回退 session.prompt。
-   * 运行中：steer=**打断**（abort 当前生成再普通 prompt，而非 session.steer 仅排队）、
+   * 运行中：steer=**原生转向**（session.steer 在下一 turn 边界以 user 消息注入并开新 turn，
+   * 不再 abort+prompt 硬打断；被转向的在途消息自然结束，渲染层据 queue_update 标记「已转向」）、
    * followUp=排队（session.followUp，完成后自动处理）。
    */
   async steerMessage(
@@ -507,9 +512,8 @@ class AgentRuntime {
         // 空闲：steer/followUp 都等同普通发送
         await state.session.prompt(fullText);
       } else if (channel === "steer") {
-        // 转向 = 打断当前生成（abort 内部等待 idle），再以普通 prompt 处理新指令
-        await this.abort(taskId);
-        await state.session.prompt(fullText);
+        // 原生转向：入 steering 队列，当前 turn 边界处注入（不再先取消再发送）
+        await state.session.steer(fullText);
       } else {
         // 排队 = 当前生成完成后自动处理
         await state.session.followUp(fullText);
@@ -517,6 +521,13 @@ class AgentRuntime {
     } catch (err) {
       this.emitError(taskId, `发送消息失败: ${err instanceof Error ? err.message : String(err)}`);
     }
+  }
+
+  /** 清空排队（steer + followUp），返回被清空的内容；渲染层单项取消后据此重排剩余项 */
+  async clearQueue(taskId: string): Promise<{ steering: string[]; followUp: string[] }> {
+    const state = this.sessions.get(taskId);
+    if (!state) return { steering: [], followUp: [] };
+    return state.session.clearQueue();
   }
 
   /** 中止当前流（置 abortRequested 标志；若 abort 落在工具执行期，agent_end 时合成 aborted message_end） */

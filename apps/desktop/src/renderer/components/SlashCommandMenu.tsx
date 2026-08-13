@@ -2,14 +2,7 @@
  * SlashCommandMenu - / 命令建议下拉面板（照 ModelSelector dropdown 样式）。
  * 由 useSlashCommands 驱动：open + items + highlightIndex；键盘/鼠标选中走 onSelect。
  */
-import type { ReactNode } from "react";
 import type { SlashCommand } from "../slashCommands";
-import { IconClipboardCheck } from "./icons";
-
-function commandIcon(id: string): ReactNode {
-  if (id === "plan") return <IconClipboardCheck size={13} />;
-  return null;
-}
 
 interface Props {
   open: boolean;
@@ -33,7 +26,6 @@ export function SlashCommandMenu({ open, items, highlightIndex, onSelect }: Prop
           }`}
         >
           <span className="flex min-w-0 items-center gap-2">
-            {commandIcon(c.id)}
             <b className="shrink-0 font-semibold">/{c.id}</b>
             <span className="truncate">{c.label}</span>
           </span>

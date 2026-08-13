@@ -516,6 +516,8 @@ export interface ElectronAPI {
     steer: (req: PromptRequest) => Promise<PromptResponse>;
     /** 排队：当前生成完成后自动处理（空闲时等同 prompt） */
     followUp: (req: PromptRequest) => Promise<PromptResponse>;
+    /** 清空排队（steer + followUp），返回被清空的内容；用于单项取消后重排 */
+    clearQueue: (streamId: string) => Promise<{ steering: string[]; followUp: string[] }>;
     onEvent: (cb: (event: AgentEvent) => void) => () => void;
     extensionCommand: (req: ExtensionCommandRequest) => Promise<void>;
     /** 切换任务执行模式（auto/manual/plan） */

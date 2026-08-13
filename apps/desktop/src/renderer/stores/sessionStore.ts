@@ -12,6 +12,7 @@ import type {
   Workspace,
 } from "@everybuddy/ipc-contract";
 import { create } from "zustand";
+import { buildUserBlocks, diffDeliveredFollowUps } from "../queue";
 
 // ────────────────────────────────────────────────
 // 内容块与消息模型（见 §0.4 卡片化消息模型）
@@ -30,12 +31,27 @@ export interface ChatMessage extends HistoryMessage {
   endedAt?: number;
   /** 用户取消（abort）标记：呈现「已取消」而非「任务已完成」 */
   cancelled?: boolean;
+  /** 原生 steer 转向时被截断的在途消息（渲染层自持，不依赖 stopReason）→ 琥珀「已转向」 */
+  redirected?: boolean;
+  /** steer 用户消息待交付（原生 steer 在 turn 边界注入）→ 「转向中」chip；交付后清除 */
+  steerPending?: boolean;
+  /** 单项取消排队时重发 steer 用（渲染层自持） */
+  steerReq?: { text: string; providerId?: string; attachments?: AttachmentRef[] };
   /** SDK 消息时间戳（message_start 透传），用于 message_entry_ids 按时间匹配写 entryId */
   sdkTimestamp?: number;
   /** 会话 JSONL 条目 id（分支锚点；回放消息 = 消息 id，流式消息由 message_entry_ids 回填） */
   entryId?: string;
   /** 赞/踩本地 UI 状态（不持久化） */
   feedback?: "up" | "down" | null;
+}
+
+/** 渲染层自持的排队记录（显示 + 交付插入 + 单项取消；交付时经 buildUserBlocks 重建用户消息） */
+export interface PendingFollowUpItem {
+  id: string;
+  text: string;
+  attachments: AttachmentRef[];
+  providerId?: string;
+  createdAt: number;
 }
 
 export interface Task extends TaskMeta {
@@ -47,6 +63,8 @@ export interface Task extends TaskMeta {
   pending?: boolean;
   /** 用户已请求中止（渲染层意图标记）：finalizeMessage 时据此把在途流式消息置 cancelled */
   abortRequested?: boolean;
+  /** 原生 steer 的目标消息 id（首次转向时捕获在途消息；多次转向合并指向同一目标，交付时置一次 `redirected` 并清除） */
+  steerTargetId?: string | null;
 }
 
 /** 扩展状态（extension_status 事件负载；state 为扩展自有状态机，如 plan-mode 的 off/plan/ready/executing） */
@@ -115,9 +133,25 @@ interface SessionState {
   chatNotices: Record<string, ChatNotice[]>;
   pushChatNotice: (taskId: string, message: string, level?: ChatNotice["level"]) => void;
   dismissChatNotice: (taskId: string, id: string) => void;
-  /** SDK 排队状态：taskId -> steer/followUp 队列（queue_update 事件，驱动「已排队」chip） */
+  /** SDK 排队状态：taskId -> steer/followUp 队列（queue_update 事件；steer 供状态参考，队列区只渲染 followUp） */
   queues: Record<string, { steering: string[]; followUp: string[] }>;
-  setQueueState: (taskId: string, queue: { steering: string[]; followUp: string[] }) => void;
+  /** 渲染层自持排队记录：taskId -> FIFO 排队项（显示 + 交付插入 + 单项取消） */
+  pendingFollowUps: Record<string, PendingFollowUpItem[]>;
+  /** 单项取消进行中（clearQueue + 重发期间屏蔽 queue_update 交付判定，避免误交付） */
+  clearingQueues: Record<string, boolean>;
+  /** 更新队列状态 + 按 diff 交付已送达的 followUp（queue_update 事件） */
+  handleQueueUpdate: (taskId: string, queue: { steering: string[]; followUp: string[] }) => void;
+  enqueueFollowUpItem: (taskId: string, item: PendingFollowUpItem) => void;
+  /** 从 pendingFollowUps 队首交付 count 条到对话（用 buildUserBlocks 重建用户消息） */
+  deliverPendingFollowUps: (taskId: string, count: number) => void;
+  /** 兜底交付：SDK followUp 队列已空但 pending 非空（空闲→prompt 无 queue_update 移除的路径 / message_start 前） */
+  flushPendingFollowUps: (taskId: string) => void;
+  /** 单项取消：clearQueue 后重发剩余项（followUp 带完整附件；steer 用对话内 steerReq 重发） */
+  cancelFollowUpItem: (taskId: string, id: string) => Promise<void>;
+  /** 转向交付时标记目标消息（steerTargetId）为「已转向」并清除目标（多次转向合并指向同一目标） */
+  markSteerTargetRedirected: (taskId: string) => void;
+  /** 清除最早一条「转向中」用户消息（steer 的 assistant turn 到达时） */
+  clearOldestSteerPending: (taskId: string) => void;
 
   initFromBackend: (tasks: TaskMeta[], workspaces: Workspace[]) => void;
   upsertTask: (task: Task) => void;
@@ -243,9 +277,140 @@ export const useSessionStore = create<SessionState>((set, get) => ({
   alwaysAllowedTools: {},
   chatNotices: {},
   queues: {},
+  pendingFollowUps: {},
+  clearingQueues: {},
 
-  setQueueState: (taskId, queue) =>
-    set((state) => ({ queues: { ...state.queues, [taskId]: queue } })),
+  handleQueueUpdate: (taskId, queue) => {
+    const prev = get().queues[taskId]?.followUp ?? [];
+    set((state) => ({ queues: { ...state.queues, [taskId]: queue } }));
+    // 单项取消重排期间（clearQueue 的 queue_update）不做交付判定，避免误交付被清项
+    if (get().clearingQueues[taskId]) return;
+    const delivered = diffDeliveredFollowUps(prev, queue.followUp);
+    if (delivered > 0) get().deliverPendingFollowUps(taskId, delivered);
+  },
+
+  enqueueFollowUpItem: (taskId, item) =>
+    set((state) => ({
+      pendingFollowUps: {
+        ...state.pendingFollowUps,
+        [taskId]: [...(state.pendingFollowUps[taskId] ?? []), item],
+      },
+    })),
+
+  deliverPendingFollowUps: (taskId, count) =>
+    set((state) => {
+      const pending = state.pendingFollowUps[taskId] ?? [];
+      if (pending.length === 0) return state;
+      const toDeliver = Math.min(count, pending.length);
+      const delivered = pending.slice(0, toDeliver);
+      const rest = pending.slice(toDeliver);
+      return {
+        pendingFollowUps: { ...state.pendingFollowUps, [taskId]: rest },
+        tasks: state.tasks.map((t) =>
+          t.id === taskId
+            ? {
+                ...t,
+                messages: [
+                  ...t.messages,
+                  ...delivered.map(
+                    (item): ChatMessage => ({
+                      id: item.id,
+                      role: "user",
+                      blocks: buildUserBlocks(item.text, item.attachments),
+                      timestamp: item.createdAt,
+                    }),
+                  ),
+                ],
+                updatedAt: new Date().toISOString(),
+              }
+            : t,
+        ),
+      };
+    }),
+
+  flushPendingFollowUps: (taskId) => {
+    const state = get();
+    const pending = state.pendingFollowUps[taskId] ?? [];
+    if (pending.length === 0) return;
+    // 交付信号：SDK followUp 队列已空（已交付，或空闲→prompt 从未入队）
+    if ((state.queues[taskId]?.followUp ?? []).length > 0) return;
+    get().deliverPendingFollowUps(taskId, pending.length);
+  },
+
+  cancelFollowUpItem: async (taskId, id) => {
+    const pending = get().pendingFollowUps[taskId] ?? [];
+    const target = pending.find((x) => x.id === id);
+    if (!target) return;
+    const remaining = pending.filter((x) => x.id !== id);
+    set((s) => ({
+      pendingFollowUps: { ...s.pendingFollowUps, [taskId]: remaining },
+      clearingQueues: { ...s.clearingQueues, [taskId]: true },
+    }));
+    try {
+      const cleared = await window.electronAPI.agent.clearQueue(taskId);
+      // 重发剩余 followUp（带完整附件信息，避免清空后丢失）
+      for (const item of remaining) {
+        await window.electronAPI.agent.followUp({
+          sessionId: taskId,
+          text: item.text,
+          providerId: item.providerId,
+          attachments: item.attachments,
+        });
+      }
+      // 重发被清掉的 steer（best-effort：用对话内 steer 用户消息存的 steerReq）
+      if (cleared.steering.length > 0) {
+        const steerReqs =
+          get()
+            .tasks.find((t) => t.id === taskId)
+            ?.messages.filter(
+              (m): m is ChatMessage & { steerReq: NonNullable<ChatMessage["steerReq"]> } =>
+                m.role === "user" && Boolean(m.steerReq),
+            ) ?? [];
+        for (const text of cleared.steering) {
+          const req = steerReqs.find((m) => m.steerReq.text === text)?.steerReq;
+          await window.electronAPI.agent.steer({
+            sessionId: taskId,
+            text,
+            providerId: req?.providerId,
+            attachments: req?.attachments,
+          });
+        }
+      }
+    } catch (err) {
+      console.error("[cancelFollowUpItem] 取消排队失败:", err);
+    } finally {
+      set((s) => ({ clearingQueues: { ...s.clearingQueues, [taskId]: false } }));
+    }
+  },
+
+  markSteerTargetRedirected: (taskId) =>
+    set((state) => ({
+      tasks: state.tasks.map((t) => {
+        if (t.id !== taskId || !t.steerTargetId) return t;
+        const targetId = t.steerTargetId;
+        return {
+          ...t,
+          steerTargetId: null,
+          messages: t.messages.map((m) => (m.id === targetId ? { ...m, redirected: true } : m)),
+        };
+      }),
+    })),
+
+  clearOldestSteerPending: (taskId) =>
+    set((state) => ({
+      tasks: state.tasks.map((t) => {
+        if (t.id !== taskId) return t;
+        let cleared = false;
+        return {
+          ...t,
+          messages: t.messages.map((m) => {
+            if (cleared || !m.steerPending) return m;
+            cleared = true;
+            return { ...m, steerPending: false };
+          }),
+        };
+      }),
+    })),
 
   initFromBackend: (tasks, workspaces) =>
     set({
@@ -357,6 +522,9 @@ export const useSessionStore = create<SessionState>((set, get) => ({
       const { [id]: _es, ...extensionStates } = state.extensionStates;
       const { [id]: _pi, ...previewItems } = state.previewItems;
       const { [id]: _ps, ...previewSelection } = state.previewSelection;
+      const { [id]: _q, ...queues } = state.queues;
+      const { [id]: _pf, ...pendingFollowUps } = state.pendingFollowUps;
+      const { [id]: _cq, ...clearingQueues } = state.clearingQueues;
       return {
         tasks: state.tasks.filter((t) => t.id !== id),
         currentTaskId: state.currentTaskId === id ? null : state.currentTaskId,
@@ -367,6 +535,9 @@ export const useSessionStore = create<SessionState>((set, get) => ({
         extensionStates,
         previewItems,
         previewSelection,
+        queues,
+        pendingFollowUps,
+        clearingQueues,
       };
     });
   },
@@ -402,55 +573,84 @@ export const useSessionStore = create<SessionState>((set, get) => ({
   setPendingWorkspace: (id) => set({ pendingWorkspaceId: id }),
 
   sendMessage: async (taskId, text, attachments, channel) => {
-    // 用户消息 blocks：附件 chips 在前，文本块在后（可仅有附件无文本）
-    const blocks: ContentBlock[] = (attachments ?? []).map((a, i) => ({
-      id: String(i),
-      kind: "file",
-      name: a.name,
-      size: a.size,
-      done: true,
-    }));
-    if (text.trim()) {
-      blocks.push({ id: String(blocks.length), kind: "text", content: text, done: true });
+    const existing = get().tasks.find((t) => t.id === taskId);
+    const providerId = existing?.providerId;
+
+    // 排队：驻留队列区，不进对话（交付时经 queue_update diff / message_start 兜底插入）
+    if (channel === "followUp") {
+      const item: PendingFollowUpItem = {
+        id: genId(),
+        text,
+        attachments: attachments ?? [],
+        providerId,
+        createdAt: Date.now(),
+      };
+      get().enqueueFollowUpItem(taskId, item);
+      try {
+        await window.electronAPI.agent.followUp({
+          sessionId: taskId,
+          text,
+          providerId,
+          attachments,
+        });
+      } catch (err) {
+        get().addErrorMessage(taskId, err instanceof Error ? err.message : String(err));
+        // 发送失败：移除排队项，避免队列区残留
+        set((s) => ({
+          pendingFollowUps: {
+            ...s.pendingFollowUps,
+            [taskId]: (s.pendingFollowUps[taskId] ?? []).filter((x) => x.id !== item.id),
+          },
+        }));
+      }
+      return;
     }
+
+    // steer / 普通 prompt：用户消息乐观进对话
+    const blocks: ContentBlock[] = buildUserBlocks(text, attachments ?? []);
     const userMsg: ChatMessage = {
       id: genId(),
       role: "user",
       blocks,
       timestamp: Date.now(),
+      // 转向：标记「转向中」（交付前），存 steerReq（单项取消重发用）
+      ...(channel === "steer"
+        ? {
+            steerPending: true,
+            steerReq: { text, providerId, attachments: attachments ?? [] },
+          }
+        : {}),
     };
-    let providerId: string | undefined;
-    set((state) => {
-      const task = state.tasks.find((t) => t.id === taskId);
-      providerId = task?.providerId;
-      return {
-        tasks: state.tasks.map((t) =>
-          t.id === taskId
-            ? {
-                ...t,
-                messages: [...t.messages, userMsg],
-                updatedAt: new Date().toISOString(),
-                // 等待首个 assistant 消息期间置 pending（首 token 前渲染「运行中」指示）；
-                // 流式中发送（steer/followUp）不置，避免与在途流的指示重复
-                pending: t.isStreaming ? t.pending : true,
-              }
-            : t,
-        ),
-      };
-    });
+    set((state) => ({
+      tasks: state.tasks.map((t) =>
+        t.id === taskId
+          ? {
+              ...t,
+              messages: [...t.messages, userMsg],
+              updatedAt: new Date().toISOString(),
+              // 等待首个 assistant 消息期间置 pending（首 token 前渲染「运行中」指示）；
+              // 流式中发送（steer）不置，避免与在途流的指示重复
+              pending: t.isStreaming ? t.pending : true,
+              // 转向目标：首次转向捕获当前在途消息；同一在途 turn 内多次转向合并指向同一目标
+              // （避免第二次转向把第一次的响应误标「已转向」）
+              steerTargetId:
+                channel === "steer"
+                  ? (t.steerTargetId ?? t.streamMessageId ?? null)
+                  : t.steerTargetId,
+            }
+          : t,
+      ),
+    }));
     try {
       const req = { sessionId: taskId, text, providerId, attachments };
-      // 转向/排队路由到对应 IPC（主进程空闲时二者都回退普通 prompt）
       if (channel === "steer") await window.electronAPI.agent.steer(req);
-      else if (channel === "followUp") await window.electronAPI.agent.followUp(req);
       else await window.electronAPI.agent.prompt(req);
     } catch (err) {
       // 主进程通常已通过 error 事件报错；此处兜底，避免 unhandled rejection
       get().addErrorMessage(taskId, err instanceof Error ? err.message : String(err));
-    } finally {
-      // 兜底：确保 agent 消息结束（即便 SDK 未发 agent_end/agent_settled）
-      get().finalizeMessage(taskId);
     }
+    // 注意：不再 finally finalizeMessage —— 原生 steer 非阻塞立即返回，
+    // finally 会提前结算在途消息、丢 usage；agent_end/agent_settled 已负责 finalize
   },
 
   // ── 流式块操作 ────────────────────────────
@@ -683,16 +883,19 @@ export const useSessionStore = create<SessionState>((set, get) => ({
           // 故在此兜底，避免思考跳动点/文本光标永不消失。
           messages: t.messages
             .map((m) => {
-              if (!m.isStreaming) return m;
-              const finalized = {
-                ...m,
-                isStreaming: false,
-                endedAt: Date.now(),
-                blocks: m.blocks.map((b) => (b.done ? b : { ...b, done: true })),
-              };
-              // 用户已请求中止 → 在途消息呈现「已取消」（不折叠为「任务已完成」）；
-              // 与 message_end stopReason="aborted" 路径互补，兜底工具执行中 abort 不回发该事件
-              return aborting ? { ...finalized, cancelled: true } : finalized;
+              if (m.isStreaming) {
+                const finalized = {
+                  ...m,
+                  isStreaming: false,
+                  endedAt: Date.now(),
+                  blocks: m.blocks.map((b) => (b.done ? b : { ...b, done: true })),
+                };
+                // 用户已请求中止 → 在途消息呈现「已取消」（不折叠为「任务已完成」）；
+                // 与 message_end stopReason="aborted" 路径互补，兜底工具执行中 abort 不回发该事件
+                return aborting ? { ...finalized, cancelled: true } : finalized;
+              }
+              // 非流式消息：兜底清除残留「转向中」（stranded steer 未交付时防 chip 卡死）
+              return m.steerPending ? { ...m, steerPending: false } : m;
             })
             // 保留「已取消但空块」的消息：abort 早于首个 block（或跨 turn 的第二个空 turn）
             // 时若不保留，分组会回退到上一 turn 而误显「任务已完成」卡
@@ -703,6 +906,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
           streamMessageId: null,
           pending: false,
           abortRequested: false,
+          steerTargetId: null,
         };
       }),
     })),

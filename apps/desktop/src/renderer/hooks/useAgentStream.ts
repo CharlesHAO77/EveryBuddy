@@ -17,6 +17,20 @@ export function useAgentStream(): void {
 
       switch (event.type) {
         case "message_start":
+          // 先交付排队/转向：交付的 followUp user 消息插到新 assistant turn 之前；
+          // 若存在「转向中」用户消息 → 本次 message_start 即该 steer 的响应 turn：
+          // 标记 steerTargetId（首次转向捕获的原始在途消息）为「已转向」并清除目标——
+          // 多次转向合并指向同一目标，只有原始 turn 被标记，后续转向的响应不会被误标
+          store.flushPendingFollowUps(taskId);
+          if (
+            useSessionStore
+              .getState()
+              .tasks.find((t) => t.id === taskId)
+              ?.messages.some((m) => m.steerPending)
+          ) {
+            store.markSteerTargetRedirected(taskId);
+          }
+          store.clearOldestSteerPending(taskId);
           store.startAssistantMessage(taskId, event.payload.sdkTimestamp);
           break;
         case "message_end":
@@ -33,7 +47,8 @@ export function useAgentStream(): void {
           store.markMessageEntryIds(taskId, event.payload.entries);
           break;
         case "queue_update":
-          store.setQueueState(taskId, event.payload);
+          // 更新队列状态 + 按 diff 交付已送达的 followUp
+          store.handleQueueUpdate(taskId, event.payload);
           break;
         case "error":
           store.addErrorMessage(taskId, event.payload.message);

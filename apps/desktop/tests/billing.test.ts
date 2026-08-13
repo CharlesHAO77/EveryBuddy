@@ -9,6 +9,7 @@ import {
   formatCost,
   formatTokens,
   resolveMessageModel,
+  sumBillingRows,
 } from "../src/renderer/billing";
 import type { ChatMessage } from "../src/renderer/stores/sessionStore";
 
@@ -173,5 +174,83 @@ describe("formatTokens / formatCost", () => {
     expect(formatCost(0.005)).toBe("¥0.005");
     expect(formatCost(0.0005)).toBe("¥0.0005");
     expect(formatCost(0.12345)).toBe("¥0.123");
+  });
+});
+
+describe("sumBillingRows", () => {
+  it("空 → 0", () => {
+    expect(sumBillingRows([])).toEqual({ totalTokens: 0, cost: 0 });
+  });
+
+  it("单行累加", () => {
+    const rows = aggregateBilling(
+      [
+        mkMsg({
+          provider: "p-llm",
+          usage: {
+            input: 100,
+            output: 200,
+            cacheRead: 0,
+            cacheWrite: 0,
+            totalTokens: 300,
+            cost: { input: 0.1, output: 0.2, total: 0.3 },
+          },
+        }),
+      ],
+      MODELS,
+    );
+    expect(sumBillingRows(rows)).toEqual({ totalTokens: 300, cost: 0.3 });
+  });
+
+  it("多行跨类型累加（本条 run 与整会话口径一致）", () => {
+    // 本条 run：2 条 llm
+    const runMsgs = [
+      mkMsg({
+        provider: "p-llm",
+        usage: {
+          input: 100,
+          output: 100,
+          cacheRead: 0,
+          cacheWrite: 0,
+          totalTokens: 200,
+          cost: { total: 0.1 },
+        },
+      }),
+      mkMsg({
+        provider: "p-llm",
+        usage: {
+          input: 200,
+          output: 200,
+          cacheRead: 50,
+          cacheWrite: 0,
+          totalTokens: 450,
+          cost: { total: 0.2 },
+        },
+      }),
+    ];
+    const runRows = aggregateBilling(runMsgs, MODELS);
+    const runSum = sumBillingRows(runRows);
+    expect(runSum.totalTokens).toBe(650);
+    expect(runSum.cost).toBeCloseTo(0.3, 5);
+
+    // 整会话：加上一条 img —— 会话累计应大于本条 run
+    const sessionMsgs = [
+      ...runMsgs,
+      mkMsg({
+        provider: "p-img",
+        usage: {
+          input: 50,
+          output: 1024,
+          cacheRead: 0,
+          cacheWrite: 0,
+          totalTokens: 1074,
+          cost: { total: 0.05 },
+        },
+      }),
+    ];
+    const sessionRows = aggregateBilling(sessionMsgs, MODELS);
+    const sessionSum = sumBillingRows(sessionRows);
+    expect(sessionSum.totalTokens).toBe(650 + 1074);
+    expect(sessionSum.cost).toBeCloseTo(0.35, 5);
   });
 });

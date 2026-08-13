@@ -1,0 +1,422 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>交互优化 · 效果示意</title>
+<style>
+:root{
+  --paper:#faf8f4; --paper-deep:#f4f0e9; --card:#ffffff;
+  --hover:#f1ede4; --active:#eae4d8;
+  --ink:#1f1c18; --ink-2:#57534b; --ink-3:#a39e93;
+  --line:#e9e4da; --line-strong:#dcd5c7;
+  --accent:#0d7a5f; --accent-strong:#0a6450; --accent-tint:#e7f2ee; --accent-line:#bcddd2;
+  --danger:#b4453a; --danger-strong:#9c3a31;
+  --amber-ink:#8a6d1f; --amber-bg:#fdf3d7; --amber-line:#ecd9a4;
+  --shadow-card:0 1px 2px rgba(31,28,24,.05);
+  --shadow-pop:0 8px 24px rgba(31,28,24,.12);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,"Noto Sans SC","PingFang SC","Microsoft YaHei",sans-serif;background:var(--paper);color:var(--ink);font-size:14px;line-height:1.55;-webkit-font-smoothing:antialiased}
+button{font-family:inherit;cursor:pointer;border:none;background:none;color:inherit}
+::selection{background:var(--accent-tint)}
+
+/* ── 顶栏 ── */
+.top{display:flex;align-items:center;gap:10px;padding:14px 22px;border-bottom:1px solid var(--line);background:var(--paper-deep);position:sticky;top:0;z-index:50}
+.top .t{font-size:15px;font-weight:700}
+.top .badge{font-size:11px;font-weight:600;color:var(--accent-strong);background:var(--accent-tint);border:1px solid var(--accent-line);border-radius:999px;padding:1px 8px}
+.top .sub{margin-left:auto;font-size:11px;color:var(--ink-3)}
+.top .live{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--ink-2);background:var(--card);border:1px solid var(--line);border-radius:999px;padding:2px 10px;margin-left:10px}
+.top .live .dot{width:7px;height:7px;border-radius:50%;background:var(--ink-3)}
+.top .live.running .dot{background:var(--accent);animation:blink 1s infinite}
+@keyframes blink{50%{opacity:.25}}
+@keyframes bounce{0%,100%{transform:translateY(0)}50%{transform:translateY(-3px)}}
+@keyframes pulse{50%{opacity:.35}}
+
+/* ── 主布局 ── */
+.wrap{display:flex;gap:22px;padding:22px;max-width:1180px;margin:0 auto}
+.col{flex:1;min-width:0;display:flex;flex-direction:column;gap:18px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow-card);overflow:hidden}
+.card .sec-head{display:flex;align-items:center;gap:8px;padding:11px 16px;border-bottom:1px solid var(--line);background:var(--paper-deep)}
+.card .sec-head .n{font-size:11px;font-weight:700;color:var(--accent-strong);background:var(--accent-tint);border-radius:5px;padding:0 6px}
+.card .sec-head .t{font-size:13px;font-weight:700}
+.card .sec-head .tag{font-size:10.5px;color:var(--ink-3);margin-left:auto;font-weight:600}
+.card .sec-body{padding:16px}
+
+/* 会话容器 */
+.chat{background:var(--paper);border:1px solid var(--line);border-radius:10px;padding:14px;display:flex;flex-direction:column;gap:13px;position:relative}
+.msg{display:flex;justify-content:flex-start}
+.msg.user{justify-content:flex-end}
+.user-bubble{max-width:76%;background:var(--accent-tint);border:1px solid var(--accent-line);border-radius:14px 14px 4px 14px;padding:8px 13px;font-size:13.5px;position:relative}
+.ai{max-width:88%;display:flex;flex-direction:column;gap:7px;min-width:0}
+.ai-body{display:flex;flex-direction:column;gap:7px}
+
+/* 运行中 */
+.ri{display:inline-flex;align-items:center;gap:7px;font-size:12.5px;color:var(--accent-strong)}
+.ri-dots{display:inline-flex;gap:3px}
+.ri-dots span{width:5px;height:5px;border-radius:50%;background:var(--accent);animation:bounce 1s infinite}
+.ri-dots span:nth-child(2){animation-delay:.15s}
+.ri-dots span:nth-child(3){animation-delay:.3s}
+
+/* 思考块 */
+.thinking{display:inline-flex;align-items:center;gap:8px;font-size:12.5px;color:var(--ink-2);background:var(--hover);border-radius:8px;padding:6px 10px;width:fit-content}
+.thinking.done{color:var(--ink-3)}
+
+/* 工具卡 */
+.tool-card{display:flex;align-items:center;gap:8px;font-size:12.5px;border:1px solid var(--line);border-radius:8px;padding:6px 10px;background:var(--card);color:var(--ink-2)}
+.tool-card .ico{width:9px;height:9px;border-radius:3px;background:var(--accent-tint);border:1px solid var(--accent-line);flex:0 0 auto}
+.tool-card .ok{color:var(--accent-strong);font-weight:700;margin-left:auto}
+.tool-card .spin{width:10px;height:10px;border:2px solid var(--accent-line);border-top-color:var(--accent);border-radius:50%;animation:spin 1s linear infinite;margin-left:auto}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* 文本 */
+.ai-text{font-size:13.5px;white-space:pre-wrap}
+.ai-text.partial{color:var(--ink-2)}
+
+/* ── 已取消卡 ── */
+.cancel-card{display:flex;align-items:center;gap:9px;width:100%;border:1px solid #eccfc9;background:#fdf6f5;border-radius:10px;padding:9px 12px;transition:.15s}
+.cancel-card:hover{background:#faeae7}
+.cancel-circle{display:flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:50%;background:var(--danger);color:#fff;flex:0 0 auto}
+.dur{font-size:11px;color:var(--ink-2);background:var(--hover);border-radius:999px;padding:2px 8px;font-variant-numeric:tabular-nums}
+.toggle{margin-left:auto;display:flex;align-items:center;gap:4px;font-size:11px;color:var(--ink-3)}
+.hidden{display:none}
+.process{display:flex;flex-direction:column;gap:7px;padding-left:2px}
+
+/* ── 已转向卡 ── */
+.redirect-card{display:flex;align-items:center;gap:9px;width:100%;border:1px solid var(--amber-line);background:var(--amber-bg);border-radius:10px;padding:9px 12px;transition:.15s}
+.redirect-card:hover{background:#f9edc9}
+.redirect-circle{display:flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:50%;background:var(--amber-ink);color:#fff;flex:0 0 auto}
+
+/* ── pill ── */
+.pill{display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:600;border-radius:999px;padding:2.5px 10px;width:fit-content}
+.pill-cancelled{color:var(--danger-strong);background:#faeae7;border:1px solid #eccfc9}
+.pill-redirected{color:var(--amber-ink);background:var(--amber-bg);border:1px solid var(--amber-line)}
+.chip-steer{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:600;color:var(--amber-ink);background:var(--amber-bg);border:1px solid var(--amber-line);border-radius:999px;padding:1.5px 8px;margin-top:5px}
+.chip-steer .dot{width:6px;height:6px;border-radius:50%;background:var(--amber-ink);animation:pulse 1.2s infinite}
+
+/* 完成卡（对照） */
+.done-card{display:flex;align-items:center;gap:9px;width:100%;border:1px solid var(--line);background:var(--card);border-radius:10px;padding:9px 12px;transition:.15s}
+.done-card:hover{background:var(--accent-tint);border-color:var(--accent-line)}
+.done-circle{display:flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:50%;background:var(--accent);color:#fff;flex:0 0 auto}
+
+/* ── footer ── */
+.ai-footer{display:flex;align-items:center;gap:8px;border-top:1px dashed var(--line);padding-top:7px;margin-top:3px}
+.ic{display:flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:6px;color:var(--ink-3);transition:.15s}
+.ic:hover{background:var(--hover);color:var(--ink)}
+.ic.off{opacity:.4;cursor:default}
+.ic.off:hover{background:none;color:var(--ink-3)}
+.ic.on{background:var(--accent-tint);color:var(--accent-strong)}
+.bill-chip{display:inline-flex;align-items:center;gap:4px;font-size:11.5px;font-weight:600;color:var(--accent-strong);background:var(--accent-tint);border:1px solid var(--accent-line);border-radius:999px;padding:1.5px 9px;transition:.15s;position:relative}
+.bill-chip:hover{background:#d7ebe4}
+.bill-pop{position:absolute;bottom:calc(100% + 6px);right:0;width:290px;background:var(--card);border:1px solid var(--line-strong);border-radius:10px;box-shadow:var(--shadow-pop);padding:10px 12px;z-index:30}
+.bill-pop h4{font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:space-between;margin-bottom:6px}
+.bill-pop h4 .x{font-size:13px;color:var(--ink-3);padding:0 3px}
+.bill-pop .sec-t{font-size:11px;font-weight:700;color:var(--ink-3);margin:8px 0 4px;display:flex;align-items:center;gap:5px}
+.bill-pop .sec-t:first-of-type{margin-top:2px}
+.bill-pop .sec-t .cnt{color:var(--accent-strong)}
+.bill-row{display:flex;align-items:flex-start;gap:6px;font-size:11.5px;color:var(--ink-2);padding:3px 0}
+.type-tag{font-size:9.5px;font-weight:700;border-radius:4px;padding:0 4px;flex:0 0 auto;margin-top:1px}
+.t-llm{background:#f6efd8;color:#6b5b1f}
+.t-vlm{background:#efe8fa;color:#5a3e8f}
+.t-img{background:#e2f2f8;color:#0f6d8f}
+.bill-row .model{font-size:10.5px;color:var(--ink-3);margin-left:auto}
+.bill-row .nums{font-size:11px;color:var(--ink-2);font-variant-numeric:tabular-nums}
+.bill-row .cost{margin-left:auto;font-weight:700;color:var(--accent-strong);font-variant-numeric:tabular-nums}
+.time{font-size:11px;color:var(--ink-3);margin-left:auto;font-variant-numeric:tabular-nums}
+
+/* ── 队列条（PendingQueueBar） ── */
+.queue-wrap{position:relative;margin-top:14px}
+.queue-bar{position:absolute;bottom:calc(100% + 8px);left:0;right:0;background:var(--card);border:1px solid var(--accent-line);border-radius:10px;box-shadow:var(--shadow-pop);padding:9px 11px;display:flex;flex-direction:column;gap:5px}
+.q-head{display:flex;align-items:center;gap:6px;font-size:11.5px;font-weight:700;color:var(--accent-strong);padding:2px 4px;border-radius:6px;width:100%;text-align:left;transition:.12s}
+.q-head:hover{background:var(--accent-tint)}
+.q-head .dot{width:7px;height:7px;border-radius:50%;background:var(--accent);flex:0 0 auto}
+.q-head .q-cnt{font-size:10.5px;color:var(--ink-3);font-weight:600}
+.q-head .q-chev{display:flex;align-items:center;justify-content:center;width:16px;height:16px;border-radius:5px;color:var(--ink-3);margin-left:auto;transition:transform .18s;font-size:11px}
+.q-head:hover .q-chev{color:var(--accent-strong)}
+.q-head.collapsed .q-chev{transform:rotate(-90deg)}
+.q-items{display:flex;flex-direction:column;gap:4px;overflow:hidden;transition:max-height .18s ease, opacity .15s ease}
+.q-items.collapsed{max-height:0;opacity:0}
+.q-head-ct{font-size:10.5px;color:var(--ink-3);font-weight:600;background:var(--hover);border-radius:5px;padding:0 5px}
+.q-item{display:flex;align-items:center;gap:7px;border-radius:7px;padding:4px 7px;transition:.12s}
+.q-item:hover{background:var(--hover)}
+.q-item .q-tag{font-size:9.5px;font-weight:700;color:var(--accent-strong);background:var(--accent-tint);border-radius:4px;padding:1px 5px;flex:0 0 auto}
+.q-item .q-n{font-size:11px;color:var(--ink-3);font-variant-numeric:tabular-nums;flex:0 0 auto}
+.q-item .q-text{font-size:11.5px;color:var(--ink-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1}
+.q-item .q-x{width:18px;height:18px;border-radius:5px;color:var(--ink-3);font-size:12px;line-height:1;display:flex;align-items:center;justify-content:center;flex:0 0 auto}
+.q-item .q-x:hover{background:var(--active);color:var(--ink)}
+.q-placeholder{border:1px solid var(--line);border-radius:10px;padding:8px 11px;color:var(--ink-3);font-size:12px;background:var(--card);display:flex;align-items:center;gap:7px}
+.q-placeholder .mic{width:20px;height:20px;border-radius:50%;background:var(--accent-tint);display:flex;align-items:center;justify-content:center;color:var(--accent-strong);font-size:11px}
+
+/* 图例 */
+.legend{font-size:11px;color:var(--ink-3);padding:0 16px 14px;display:flex;flex-wrap:wrap;gap:6px}
+.legend .li{display:inline-flex;align-items:center;gap:5px}
+.legend .sw{width:10px;height:10px;border-radius:3px;display:inline-block}
+.note{font-size:11px;color:var(--ink-3);background:var(--hover);border-radius:7px;padding:7px 10px;margin-top:10px;line-height:1.5}
+</style>
+</head>
+<body>
+
+<div class="top">
+  <span class="t">交互优化 · 效果示意</span>
+  <span class="badge">原生 steer / 排队驻留 / 结构化取消卡 / 按 run 计费</span>
+  <span class="live running"><span class="dot"></span>设计稿</span>
+  <span class="sub">warm-paper tokens · 点击卡片可交互</span>
+</div>
+
+<div class="wrap">
+
+  <!-- ── 左列 ── -->
+  <div class="col">
+
+    <!-- ① 取消任务卡片 -->
+    <div class="card">
+      <div class="sec-head">
+        <span class="n">①</span><span class="t">取消效果 · 结构化「已取消」卡</span>
+        <span class="tag">参考「任务已完成」对仗</span>
+      </div>
+      <div class="sec-body">
+        <div class="chat">
+          <!-- 已完成（对照） -->
+          <div class="msg user"><div class="user-bubble">顺手把 CI 里那个类型错误修一下吧</div></div>
+          <div class="msg"><div class="ai">
+            <div class="ai-body">
+              <button class="done-card" onclick="this.nextElementSibling.classList.toggle('hidden');this.querySelector('.toggle').innerHTML=this.nextElementSibling.classList.contains('hidden')?'详情 ▾':'收起 ▴'">
+                <span class="done-circle">✓</span>
+                <span style="font-size:12.5px;font-weight:600">任务已完成</span>
+                <span class="dur">1m 23s</span>
+                <span class="toggle">详情 ▾</span>
+              </button>
+              <div class="process hidden">
+                <div class="thinking done">已思考 · 定位类型错误</div>
+                <div class="tool-card"><span class="ico"></span>修改文件 · src/auth/token.ts<span class="ok">✓</span></div>
+              </div>
+              <div class="ai-text">已修复：`refreshToken` 返回类型收窄为 `Promise&lt;string | null&gt;`，消除了 401 分支的 undefined 风险。类型检查已通过 ✅</div>
+              <div class="ai-footer">
+                <button class="ic" title="复制">▣</button>
+                <button class="ic" title="赞">↑</button>
+                <button class="ic" title="踩">↓</button>
+                <button class="bill-chip" onclick="document.querySelector('#billPop1').classList.toggle('hidden')">◈ 3.5k tok · ¥0.004 ▾</button>
+                <span class="time">14:11</span>
+              </div>
+            </div>
+          </div></div>
+
+          <!-- 已取消（新卡片） -->
+          <div class="msg user"><div class="user-bubble">按方案 2 重构登录态，先解释 token 刷新机制</div></div>
+          <div class="msg"><div class="ai">
+            <div class="ai-body">
+              <button class="cancel-card" onclick="this.nextElementSibling.classList.toggle('hidden');this.querySelector('.toggle').innerHTML=this.nextElementSibling.classList.contains('hidden')?'详情 ▾':'收起 ▴'">
+                <span class="cancel-circle"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5"><rect x="6" y="6" width="12" height="12" rx="2"/><path d="M10 10h4M14 14h-4"/></svg></span>
+                <span style="font-size:12.5px;font-weight:600">任务已取消</span>
+                <span class="dur">3.2s</span>
+                <span class="toggle">详情 ▾</span>
+              </button>
+              <div class="process hidden">
+                <div class="thinking">思考中<span class="ri-dots" style="margin-left:2px"><span></span><span></span><span></span></span></div>
+                <div class="tool-card"><span class="ico"></span>读取 src/auth/token.ts<span class="spin"></span></div>
+              </div>
+              <div class="ai-text partial">正在重构登录态：核心思路是<b>双缓冲</b>——内存维护一份 `Promise&lt;token&gt;` 缓存，并发请求共享同一次刷新，避免…</div>
+              <div class="ai-footer">
+                <button class="ic" title="复制">▣</button>
+                <button class="ic" title="赞">↑</button>
+                <button class="ic" title="踩">↓</button>
+                <button class="bill-chip" onclick="document.querySelector('#billPop2').classList.toggle('hidden')">◈ 1.2k tok · ¥0.001 ▾</button>
+                <span class="time">14:02</span>
+              </div>
+            </div>
+          </div></div>
+        </div>
+        <div class="note">点停止 → 危险圆标 + 时长 + 可展开的「已执行过程」+ 保留的部分文本 + footer（本条计费）。与绿色完成卡视觉对仗；首 token 前取消则退化为单个红色 pill。</div>
+      </div>
+    </div>
+
+    <!-- ② 转向中 / 已转向 -->
+    <div class="card">
+      <div class="sec-head">
+        <span class="n">②</span><span class="t">转向效果 · 原生 steer</span>
+        <span class="tag">转向进对话</span>
+      </div>
+      <div class="sec-body">
+        <div class="chat">
+          <div class="msg user"><div class="user-bubble">帮我改登录页的布局</div></div>
+          <div class="msg"><div class="ai">
+            <div class="ai-body">
+              <!-- 「任务已转向」卡：工具已执行、未产出最终结果（被 steer 在 turn 边界截断），琥珀与已取消/已完成对仗 -->
+              <button class="redirect-card" onclick="this.nextElementSibling.classList.toggle('hidden');this.querySelector('.toggle').innerHTML=this.nextElementSibling.classList.contains('hidden')?'详情 ▾':'收起 ▴'">
+                <span class="redirect-circle"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 14 4 9 9 4"/><path d="M20 20v-7a4 4 0 0 0-4-4H4"/></svg></span>
+                <span style="font-size:12.5px;font-weight:600;color:var(--amber-ink)">任务已转向</span>
+                <span class="dur">18s</span>
+                <span class="toggle">详情 ▾</span>
+              </button>
+              <div class="process hidden">
+                <div class="thinking done">已思考 · 调整布局方案</div>
+                <div class="tool-card"><span class="ico"></span>修改 src/pages/login.tsx<span class="ok">✓</span></div>
+              </div>
+              <div class="ai-text partial">正在调整整体布局，把主视觉换成深色渐变…</div>
+              <div class="ai-footer" style="position:relative">
+                <button class="ic" title="复制">▣</button>
+                <button class="ic" title="赞">↑</button>
+                <button class="ic" title="踩">↓</button>
+                <button class="bill-chip" onclick="document.getElementById('billPop4').classList.toggle('hidden')">◈ 1.8k tok · ¥0.002 ▾</button>
+                <span class="time">14:04</span>
+                <div class="bill-pop hidden" id="billPop4">
+                  <h4>计费明细 <button class="x" onclick="this.parentElement.parentElement.classList.add('hidden')">✕</button></h4>
+                  <div class="sec-t">本条运行 · <span class="cnt">2 次模型调用</span></div>
+                  <div class="bill-row"><span class="type-tag t-llm">LLM</span><span>对话 LLM</span><span class="nums">in 0.8k · out 1.0k · 1.8k tok</span><span class="cost">¥0.002</span></div>
+                  <div class="sec-t">会话累计</div>
+                  <div class="bill-row"><span class="type-tag t-llm">LLM</span><span>对话 LLM</span><span class="nums">9.1k tok</span><span class="cost">¥0.040</span></div>
+                </div>
+              </div>
+            </div>
+          </div></div>
+          <!-- steer 用户消息（转向中） -->
+          <div class="msg user">
+            <div style="display:flex;flex-direction:column;align-items:flex-end">
+              <div class="user-bubble" style="border:1.5px solid var(--amber-line)">换成深色方案，突出登录表单</div>
+              <span class="chip-steer"><span class="dot"></span>转向中</span>
+            </div>
+          </div>
+          <div class="msg"><div class="ai">
+            <div class="ri">运行中<span class="ri-dots"><span></span><span></span><span></span></span></div>
+          </div></div>
+        </div>
+        <div class="note">steer 消息立即进对话带琥珀「转向中」chip，旧消息继续正常思考/执行。<b>当前执行完成后（turn 边界，steer 真正接管）才显示「任务已转向」卡</b>——保留已执行的过程 + 部分文本；新 turn「运行中」接手。交付后「转向中」chip 清除、新 turn 应答。<b>不再显示「任务已完成」</b>。三态对仗：已完成(绿) / 已转向(琥珀) / 已取消(红)。</div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ── 右列 ── -->
+  <div class="col">
+
+    <!-- ③ 队列展示 -->
+    <div class="card">
+      <div class="sec-head">
+        <span class="n">③</span><span class="t">排队效果 · 驻队列区</span>
+        <span class="tag">排队不进对话</span>
+      </div>
+      <div class="sec-body">
+        <div class="chat" style="min-height:150px">
+          <div class="msg user"><div class="user-bubble">帮我看下 src/auth/login.ts 的实现思路</div></div>
+          <div class="msg"><div class="ai">
+            <div class="ai-body">
+              <div class="tool-card"><span class="ico"></span>grep 记住登录态<span class="spin"></span></div>
+              <div class="ri">运行中<span class="ri-dots"><span></span><span></span><span></span></span></div>
+            </div>
+          </div></div>
+
+          <!-- 排队条 -->
+          <div class="queue-wrap">
+            <div class="queue-bar">
+              <button class="q-head" id="qHead" onclick="toggleQueue()" title="点击折叠/展开排队列表">
+                <span class="dot"></span>排队中 <span class="q-head-ct">2</span> 条 · 当前任务完成后依次处理
+                <span class="q-chev">▾</span>
+              </button>
+              <div class="q-items" id="qItems">
+                <div class="q-item" id="q1">
+                  <span class="q-tag">排队</span><span class="q-n">#1</span>
+                  <span class="q-text">再生成一版海报配色</span>
+                  <button class="q-x" onclick="event.stopPropagation();document.getElementById('q1').remove();updQ()" title="取消该条">✕</button>
+                </div>
+                <div class="q-item" id="q2">
+                  <span class="q-tag">排队</span><span class="q-n">#2</span>
+                  <span class="q-text">用刚才的思路补一段单元测试</span>
+                  <button class="q-x" onclick="event.stopPropagation();document.getElementById('q2').remove();updQ()" title="取消该条">✕</button>
+                </div>
+              </div>
+            </div>
+            <div class="q-placeholder">
+              <span class="mic">▁▂</span>
+              今天帮你做些什么？ @引用对话文件，/调用技能与指令
+            </div>
+          </div>
+        </div>
+        <div class="note">排队消息<b>不出现在对话里</b>，只驻留输入框上方队列区（序号 + 预览 + ✕ 单项取消）。<b>点头部可折叠/展开</b>列表——折叠成一行「排队中 2 条 · 完成后依次处理」，展开看明细。当前任务完成后按 FIFO 自动进对话并处理。转向消息则直接进对话，绝不进队列区。</div>
+      </div>
+    </div>
+
+    <!-- ④ 计费展示 -->
+    <div class="card">
+      <div class="sec-head">
+        <span class="n">④</span><span class="t">计费效果 · 按 run 单列</span>
+        <span class="tag">本条 run + 会话累计</span>
+      </div>
+      <div class="sec-body">
+        <div class="chat">
+          <div class="msg"><div class="ai">
+            <div class="ai-body">
+              <button class="done-card" onclick="this.nextElementSibling.classList.toggle('hidden')">
+                <span class="done-circle">✓</span>
+                <span style="font-size:12.5px;font-weight:600">任务已完成</span>
+                <span class="dur">42s</span>
+              </button>
+              <div class="process hidden">
+                <div class="thinking done">已思考 · 确定方案</div>
+                <div class="tool-card"><span class="ico"></span>读取 token.ts<span class="ok">✓</span></div>
+              </div>
+              <div class="ai-text">方案已确定，细节见上一条。</div>
+              <div class="ai-footer" style="position:relative">
+                <button class="ic" title="复制">▣</button>
+                <button class="ic" title="赞">↑</button>
+                <button class="ic" title="踩">↓</button>
+                <button class="bill-chip" onclick="document.getElementById('billPop3').classList.toggle('hidden')">◈ 3.5k tok · ¥0.004 ▾</button>
+                <span class="time">14:06</span>
+
+                <!-- 计费弹层 -->
+                <div class="bill-pop hidden" id="billPop3">
+                  <h4>计费明细 <button class="x" onclick="this.parentElement.parentElement.classList.add('hidden')">✕</button></h4>
+                  <div class="sec-t">本条运行 · <span class="cnt">2 次模型调用</span></div>
+                  <div class="bill-row"><span class="type-tag t-llm">LLM</span><span>对话 LLM</span><span class="nums">in 1.2k · out 2.3k · 3.5k tok</span><span class="cost">¥0.004</span></div>
+                  <div class="sec-t">会话累计</div>
+                  <div class="bill-row"><span class="type-tag t-llm">LLM</span><span>对话 LLM</span><span class="nums">8.4k tok</span><span class="cost">¥0.038</span></div>
+                  <div class="bill-row"><span class="type-tag t-vlm">VLM</span><span>视觉 VLM</span><span class="nums">2.1k tok</span><span class="cost">¥0.006</span></div>
+                  <div class="bill-row"><span class="type-tag t-img">IMG</span><span>生图 Image</span><span class="nums">1.4k tok</span><span class="cost">¥0.004</span></div>
+                </div>
+              </div>
+            </div>
+          </div></div>
+        </div>
+        <div class="note">每个 AI 消息 footer 的计费 chip 只显示<b>本条 run</b> 的用量（修复了当前"每个 footer 都显示整会话总额"的 bug）。点开弹层可见「本条运行」+「会话累计」两区块，按模型类型 llm/vlm/image 分账。取消/转向的 run 同样计费。</div>
+      </div>
+    </div>
+
+    <!-- 图例 -->
+    <div class="card">
+      <div class="sec-head"><span class="n">◆</span><span class="t">色板</span></div>
+      <div class="legend">
+        <span class="li"><span class="sw" style="background:#b4453a"></span>危险 · 已取消</span>
+        <span class="li"><span class="sw" style="background:#fdf3d7;border:1px solid #ecd9a4"></span>琥珀 · 转向中 / 已转向</span>
+        <span class="li"><span class="sw" style="background:#0d7a5f"></span>accent · 完成 / 排队</span>
+        <span class="li"><span class="sw" style="background:#faf8f4;border:1px solid #e9e4da"></span>paper 底</span>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+// 计费弹层点击外部关闭
+document.addEventListener('click',(e)=>{
+  if(!e.target.closest('.bill-chip') && !e.target.closest('.bill-pop')){
+    document.querySelectorAll('.bill-pop').forEach(p=>p.classList.add('hidden'));
+  }
+});
+function toggleQueue(){
+  const items = document.getElementById('qItems');
+  const head = document.getElementById('qHead');
+  const collapsed = items.classList.toggle('collapsed');
+  head.classList.toggle('collapsed', collapsed);
+  head.title = collapsed ? '点击展开排队列表' : '点击折叠排队列表';
+}
+function updQ(){
+  document.querySelectorAll('.q-item').forEach((el,i)=>{
+    el.querySelector('.q-n').textContent = '#'+(i+1);
+  });
+  const q = document.querySelectorAll('.q-item').length;
+  const h = document.getElementById('qHead');
+  h.innerHTML = '<span class="dot"></span>排队中 <span class="q-head-ct">'+q+'</span> 条 · 当前任务完成后依次处理<span class="q-chev">▾</span>';
+}
+</script>
+</body>
+</html>

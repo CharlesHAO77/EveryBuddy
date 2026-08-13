@@ -102,6 +102,17 @@ export function sumUsage(usage: MessageUsage): {
   };
 }
 
+/** 汇总多条 BillingRow 的 totalTokens/cost（本条 run 计费 chip 用） */
+export function sumBillingRows(rows: BillingRow[]): { totalTokens: number; cost: number } {
+  return rows.reduce(
+    (acc, r) => ({
+      totalTokens: acc.totalTokens + r.usage.totalTokens,
+      cost: acc.cost + r.usage.cost,
+    }),
+    { totalTokens: 0, cost: 0 },
+  );
+}
+
 /** token 数格式化：≥1000 → "1.2k"，否则整数 */
 export function formatTokens(n: number): string {
   if (!Number.isFinite(n) || n <= 0) return "0";
