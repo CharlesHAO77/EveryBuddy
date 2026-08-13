@@ -13,19 +13,13 @@ import { randomUUID } from "node:crypto";
 import { existsSync, mkdirSync } from "node:fs";
 import { readFile, stat } from "node:fs/promises";
 import path from "node:path";
-import type { ReadFileResult, TaskMeta, TaskType, Workspace } from "@everybuddy/ipc-contract";
+import type { ReadFileResult, TaskMeta, Workspace } from "@everybuddy/ipc-contract";
 import { type BrowserWindow, dialog, shell } from "electron";
-import { APP_ROOT, configStore, SESSIONS_DIR, WORK_SPACES_DIR } from "./configStore";
+import { APP_ROOT, configStore, WORK_SPACES_DIR } from "./configStore";
 import { detectImageMimeType } from "./fileParser";
 
-/** 格式化日期时间为目录名：2026-08-05_143020-a1b2 */
-function datetimeDir(): string {
-  const d = new Date();
-  const pad = (n: number) => String(n).padStart(2, "0");
-  const stamp = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}_${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}`;
-  const short = randomUUID().slice(0, 4);
-  return `${stamp}-${short}`;
-}
+// 目录解析（datetime 命名 + 会话/工作目录拆分）迁至 sessionDirs.ts，此处重导出保持既有 import 不变
+export { resolveSessionLocation } from "./sessionDirs";
 
 /** 弹出原生目录选择器，返回所选目录路径或 null */
 export async function selectDirectory(parent?: BrowserWindow | null): Promise<string | null> {
@@ -82,32 +76,6 @@ export async function revealInFolder(filePath: string): Promise<void> {
     console.warn(`[workspaceManager] 文件不存在，改打开父目录: ${normalized}`);
     await openInFinder(path.dirname(normalized));
   }
-}
-
-/**
- * 为新任务解析目录。
- * 所有任务的会话 JSONL 统一存放在 ~/EveryBuddy/sessions/<datetime>-<short>/，与工作目录解耦；
- * cwd 按任务类型确定：空间任务 -> workspace.path（agent 在工作空间内操作），
- * 临时任务 -> work-spaces/<datetime>-<short>（工作目录与会话目录拆分，共用同一 datetime 命名便于关联）。
- */
-export function resolveSessionLocation(
-  type: TaskType,
-  workspace?: Workspace,
-): { sessionDir: string; cwd: string; workDir?: string } {
-  const stamp = datetimeDir();
-  const sessionDir = path.join(SESSIONS_DIR, stamp);
-  if (!existsSync(sessionDir)) mkdirSync(sessionDir, { recursive: true });
-  let cwd = sessionDir;
-  let workDir: string | undefined;
-  if (type === "workspace" && workspace) {
-    cwd = workspace.path;
-  } else {
-    // 临时任务：工作目录从 sessions 拆分到 work-spaces/<stamp>
-    workDir = path.join(WORK_SPACES_DIR, stamp);
-    if (!existsSync(workDir)) mkdirSync(workDir, { recursive: true });
-    cwd = workDir;
-  }
-  return { sessionDir, cwd, workDir };
 }
 
 /** 获取任务的工作目录（用于 agent cwd）。空间任务 -> workspacePath；临时任务 -> workDir */

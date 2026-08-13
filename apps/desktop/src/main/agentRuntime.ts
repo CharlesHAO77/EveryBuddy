@@ -88,8 +88,8 @@ class AgentRuntime {
   private sdk: CodingAgentSDK | null = null;
   private modelRuntime: ModelRuntime | null = null;
   private sessions = new Map<string, RuntimeState>();
-  /** 事件输出回调（由 ipcRouter 注入，广播到渲染进程） */
-  private emitter: ((event: AgentEvent) => void) | null = null;
+  /** 事件输出监听器（多订阅：ipcRouter 广播到渲染进程，scheduler 采集定时运行结果） */
+  private listeners = new Set<(event: AgentEvent) => void>();
   /** 工具可用性机器级快照（探测一次，进程内缓存；见 tools/toolAvailability.ts） */
   private availability: ToolAvailability | null = null;
   /** 任务执行模式（auto/manual/plan），由渲染进程经 agent:set-mode 下发，供权限扩展实时读取 */
@@ -111,8 +111,12 @@ class AgentRuntime {
     return this.taskModes.get(taskId) ?? "auto";
   }
 
-  setEmitter(fn: (event: AgentEvent) => void): void {
-    this.emitter = fn;
+  /** 订阅归一化事件流（返回退订函数；支持多订阅者） */
+  onEvent(fn: (event: AgentEvent) => void): () => void {
+    this.listeners.add(fn);
+    return () => {
+      this.listeners.delete(fn);
+    };
   }
 
   /** 向渲染进程推送错误事件（供 ipcRouter 在会话初始化失败时调用） */
@@ -700,7 +704,9 @@ class AgentRuntime {
   // ── 事件映射（见 §3.2） ───────────────────
 
   private emit(streamId: string, event: WithoutStreamId<AgentEvent>): void {
-    if (this.emitter) this.emitter({ streamId, ...event } as AgentEvent);
+    for (const listener of this.listeners) {
+      listener({ streamId, ...event } as AgentEvent);
+    }
   }
 
   private translateAndEmit(taskId: string, event: unknown): void {

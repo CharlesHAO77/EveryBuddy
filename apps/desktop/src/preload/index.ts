@@ -62,6 +62,19 @@ const api: ElectronAPI = {
     // 用系统默认浏览器打开外链（markdown 链接用；主进程仅放行 http/https）
     openExternal: (url) => ipcRenderer.invoke("system:openExternal", { url }),
   },
+  schedule: {
+    listTasks: () => ipcRenderer.invoke("schedule:list-tasks"),
+    createTask: (req) => ipcRenderer.invoke("schedule:create-task", req),
+    updateTask: (req) => ipcRenderer.invoke("schedule:update-task", req),
+    deleteTask: (id) => ipcRenderer.invoke("schedule:delete-task", { id }),
+    runNow: (id) => ipcRenderer.invoke("schedule:run-now", { id }),
+    listRuns: (taskId) => ipcRenderer.invoke("schedule:list-runs", { id: taskId }),
+    onEvent: (cb) => {
+      const handler = (_: unknown, event: unknown) => cb(event as never);
+      ipcRenderer.on("schedule:event", handler);
+      return () => ipcRenderer.off("schedule:event", handler);
+    },
+  },
 };
 
 contextBridge.exposeInMainWorld("electronAPI", api);

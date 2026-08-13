@@ -1,0 +1,673 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>自动化 · 效果示意</title>
+<style>
+/* ────────────────────────────────────────────────
+   EveryBuddy 温暖纸感 token（与 globals.css 一致）
+   ──────────────────────────────────────────────── */
+:root{
+  --paper:#faf8f4; --paper-deep:#f4f0e9; --card:#ffffff;
+  --hover:#f1ede4; --active:#eae4d8;
+  --ink:#1f1c18; --ink-2:#57534b; --ink-3:#a39e93;
+  --line:#e9e4da; --line-strong:#dcd5c7;
+  --accent:#0d7a5f; --accent-strong:#0a6450; --accent-tint:#e7f2ee; --accent-line:#bcddd2;
+  --danger:#b4453a; --danger-strong:#9c3a31;
+  --danger-bg:#fdf6f5; --danger-line:#eccfc9;
+  --terminal:#2a2723; --terminal-text:#e8e4dc;
+  --shadow-card:0 1px 2px rgb(31 28 24/.04), 0 1px 6px rgb(31 28 24/.03);
+  --shadow-pop:0 4px 16px rgb(31 28 24/.10), 0 1px 3px rgb(31 28 24/.06);
+  --shadow-modal:0 12px 40px rgb(31 28 24/.16), 0 2px 8px rgb(31 28 24/.08);
+  --radius-s:6px; --radius-m:10px; --radius-xl:16px;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,"Noto Sans SC","PingFang SC","Microsoft YaHei",sans-serif;
+  background:var(--paper); color:var(--ink); font-size:15px; font-weight:500; line-height:1.5;
+  -webkit-font-smoothing:antialiased;
+}
+button{font-family:inherit;cursor:pointer;border:none;background:none;color:inherit}
+input,select,textarea{font-family:inherit;color:inherit}
+::selection{background:var(--accent-tint)}
+::-webkit-scrollbar{width:6px;height:6px}
+::-webkit-scrollbar-thumb{background:#d6d0c4;border-radius:3px}
+::-webkit-scrollbar-track{background:transparent}
+
+/* ── 应用壳 ── */
+.app{display:flex;height:100vh;overflow:hidden}
+
+/* ── 侧栏（复刻 Sidebar.tsx） ── */
+.sidebar{width:260px;flex:0 0 260px;height:100%;display:flex;flex-direction:column;background:var(--paper-deep);border-right:1px solid var(--line)}
+.titlebar{height:40px;flex:0 0 40px;display:flex;align-items:center;gap:8px;padding:0 10px}
+.titlebar .traffic{display:flex;gap:6px;padding:0 4px}
+.titlebar .traffic i{width:11px;height:11px;border-radius:50%;background:#d8d2c6}
+.toolbar{height:40px;flex:0 0 40px;display:flex;align-items:center;justify-content:space-between;padding:0 10px}
+.iconbtn{display:flex;align-items:center;justify-content:center;width:30px;height:30px;border-radius:6px;color:var(--ink-2);transition:.15s}
+.iconbtn:hover{background:var(--hover);color:var(--ink)}
+.sb-new{display:flex;align-items:center;gap:10px;height:40px;margin:0 10px;padding:0 12px;border-radius:6px;color:var(--ink);font-size:15px;transition:.15s}
+.sb-new:hover{background:var(--hover);transform:scale(.99)}
+.sb-nav{display:flex;flex-direction:column;padding:0 10px}
+.sb-nav button{display:flex;align-items:center;gap:10px;height:40px;padding:0 12px;border-radius:6px;font-size:15px;color:var(--ink-2);transition:.15s;text-align:left}
+.sb-nav button:hover{background:var(--hover)}
+.sb-nav button.active{background:var(--accent-tint);color:var(--ink);font-weight:600}
+.sb-nav button.active svg{color:var(--accent)}
+.sb-nav button svg{color:var(--ink-2);flex:0 0 auto}
+.sb-divider{margin:6px 14px;border-top:1px solid var(--line)}
+.sb-scroll{flex:1;overflow-y:auto;padding:0 10px;min-height:0}
+.sb-group{display:flex;align-items:center;justify-content:space-between;height:30px;padding:0 10px;border-radius:6px;font-size:12px;font-weight:600;letter-spacing:.08em;color:var(--ink-3);transition:.15s}
+.sb-group:hover{background:var(--hover)}
+.sb-group .chev{display:flex;align-items:center;transition:transform .15s}
+.sb-item{display:flex;align-items:center;gap:8px;height:34px;padding:0 12px;border-radius:6px;font-size:13.5px;color:var(--ink-2);transition:.15s;width:100%;text-align:left}
+.sb-item:hover{background:var(--hover)}
+.sb-item.active{background:var(--active);color:var(--ink);font-weight:600}
+.sb-item .time{margin-left:auto;font-size:11px;color:var(--ink-3);flex:0 0 auto}
+.sb-item .more{opacity:0;display:flex;align-items:center;color:var(--ink-3);flex:0 0 auto;transition:.15s}
+.sb-item:hover .more{opacity:1}
+.sb-foot{flex:0 0 auto;display:flex;align-items:center;justify-content:space-between;border-top:1px solid var(--line);padding:10px 14px}
+.sb-user{display:flex;align-items:center;gap:8px}
+.sb-avatar{width:28px;height:28px;border-radius:50%;background:var(--accent);color:#fff;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600}
+.sb-name{font-size:14px;color:var(--ink-2)}
+.sb-actions{display:flex;gap:6px}
+
+/* ── 主区 ── */
+.main{flex:1;display:flex;flex-direction:column;min-width:0;background:var(--paper)}
+.main-titlebar{height:40px;flex:0 0 40px;display:flex;align-items:center;padding:0 16px;border-bottom:1px solid var(--line);font-size:13px;font-weight:600;color:var(--ink-2)}
+
+/* ── 自动化页 ── */
+.auto{flex:1;display:flex;flex-direction:column;min-height:0}
+.auto-head{display:flex;align-items:center;gap:10px;padding:18px 22px 14px}
+.auto-head h1{font-size:20px;font-weight:700}
+.auto-head .cnt{font-size:11px;font-weight:600;color:var(--accent-strong);background:var(--accent-tint);border:1px solid var(--accent-line);border-radius:999px;padding:1px 8px}
+.auto-head .spacer{flex:1}
+.btn{display:inline-flex;align-items:center;gap:6px;height:34px;padding:0 14px;border-radius:6px;font-size:13.5px;font-weight:600;transition:.15s}
+.btn-primary{background:var(--accent);color:#fff}
+.btn-primary:hover{background:var(--accent-strong)}
+.btn-ghost{color:var(--ink-2);border:1px solid var(--line-strong)}
+.btn-ghost:hover{background:var(--hover);color:var(--ink)}
+.btn-danger{color:var(--danger);border:1px solid var(--danger-line)}
+.btn-danger:hover{background:var(--danger-bg)}
+.btn:active{transform:scale(.98)}
+
+.auto-body{flex:1;display:flex;min-height:0}
+.auto-list{width:300px;flex:0 0 300px;border-right:1px solid var(--line);overflow-y:auto;padding:6px 10px 16px}
+.auto-list .cards{display:flex;flex-direction:column;gap:8px}
+.auto-list .list-tip{display:flex;align-items:center;gap:6px;padding:8px 6px 6px;font-size:11px;font-weight:600;letter-spacing:.08em;color:var(--ink-3)}
+
+/* 空态 */
+.empty{margin-top:6px;border:1px dashed var(--line-strong);border-radius:10px;padding:34px 20px;display:flex;flex-direction:column;align-items:center;gap:10px;text-align:center}
+.empty .e-ico{width:44px;height:44px;border-radius:12px;background:var(--accent-tint);color:var(--accent);display:flex;align-items:center;justify-content:center}
+.empty .e-t{font-size:14px;font-weight:600}
+.empty .e-s{font-size:12.5px;color:var(--ink-3);line-height:1.6}
+.empty .btn{margin-top:6px}
+
+/* 任务卡片 */
+.task-card{background:var(--card);border:1px solid var(--line);border-radius:10px;box-shadow:var(--shadow-card);padding:11px 13px;cursor:pointer;transition:.15s;position:relative}
+.task-card:hover{border-color:var(--line-strong);background:#fffdf9}
+.task-card.active{border-color:var(--accent-line);box-shadow:0 0 0 1px var(--accent-line);background:#fbfcf8}
+.task-card .tc-top{display:flex;align-items:center;gap:6px}
+.task-card .tc-title{font-size:14px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0}
+.task-card .tc-menu{opacity:0;display:flex;align-items:center;color:var(--ink-3);flex:0 0 auto;transition:.15s}
+.task-card:hover .tc-menu{opacity:1}
+.task-card .tc-prompt{margin-top:5px;font-size:12.5px;color:var(--ink-2);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;line-height:1.5}
+.task-card .tc-sched{margin-top:7px;display:flex;align-items:center;gap:5px;font-size:12px;color:var(--ink-3)}
+.task-card .tc-meta{margin-top:7px;display:flex;align-items:center;gap:6px;font-size:11.5px;color:var(--ink-3);border-top:1px dashed var(--line);padding-top:7px}
+.task-card .tc-meta .run{display:inline-flex;align-items:center;gap:4px}
+.task-card .tc-meta .cost{margin-left:auto;color:var(--accent-strong);font-weight:600;font-variant-numeric:tabular-nums}
+.task-card.running{border-color:var(--accent-line)}
+.task-card.paused{opacity:.82}
+
+/* 徽标 */
+.chip{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:600;border-radius:999px;padding:1.5px 8px;white-space:nowrap;flex:0 0 auto}
+.chip .dot{width:6px;height:6px;border-radius:50%;flex:0 0 auto}
+.chip-suc{color:var(--accent-strong);background:var(--accent-tint);border:1px solid var(--accent-line)}
+.chip-suc .dot{background:var(--accent)}
+.chip-fail{color:var(--danger-strong);background:var(--danger-bg);border:1px solid var(--danger-line)}
+.chip-fail .dot{background:var(--danger)}
+.chip-run{color:var(--accent-strong);background:var(--accent-tint);border:1px solid var(--accent-line)}
+.chip-run .dot{background:var(--accent);animation:blink 1s infinite}
+.chip-pause{color:var(--ink-3);background:var(--hover);border:1px solid var(--line)}
+.chip-pause .dot{background:var(--ink-3)}
+.chip-skip{color:var(--ink-3);background:var(--hover);border:1px solid var(--line)}
+.chip-skip .dot{background:var(--ink-3)}
+@keyframes blink{50%{opacity:.25}}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* 详情 */
+.auto-detail{flex:1;overflow-y:auto;padding:6px 26px 30px;min-width:0}
+.ad-head{display:flex;align-items:flex-start;gap:12px;padding:14px 0 8px}
+.ad-title{font-size:19px;font-weight:700;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.ad-sched{margin-top:6px;display:flex;align-items:center;gap:6px;font-size:13px;color:var(--ink-2)}
+.ad-next{margin-top:4px;font-size:12px;color:var(--ink-3)}
+.ad-actions{display:flex;gap:8px;flex-wrap:wrap;margin:14px 0 20px}
+
+/* 运行历史（简化 + 点击展开结果） */
+.ad-hist .h-head{display:flex;align-items:center;gap:8px;font-size:12px;font-weight:700;letter-spacing:.08em;color:var(--ink-3);margin-bottom:8px}
+.ad-hist .h-head .n{color:var(--accent-strong)}
+.ad-hist .h-head .tip{margin-left:auto;font-size:11px;color:var(--ink-3);font-weight:500;letter-spacing:0}
+.h-list{display:flex;flex-direction:column;gap:6px}
+.h-row{background:var(--card);border:1px solid var(--line);border-radius:10px;box-shadow:var(--shadow-card);cursor:pointer;transition:.15s;overflow:hidden}
+.h-row:hover{border-color:var(--line-strong)}
+.h-row.open{border-color:var(--accent-line)}
+.hr-line{display:flex;align-items:center;gap:8px;padding:9px 13px}
+.h-dot{width:8px;height:8px;border-radius:50%;flex:0 0 auto}
+.hd-success{background:var(--accent)}
+.hd-failed{background:var(--danger)}
+.hd-running{background:var(--accent);animation:blink 1s infinite}
+.hd-cancelled{background:var(--danger-strong)}
+.hd-skipped{background:var(--ink-3)}
+.h-st{font-size:11.5px;font-weight:600;flex:0 0 auto}
+.hst-success{color:var(--accent-strong)}
+.hst-failed{color:var(--danger)}
+.hst-running{color:var(--accent-strong)}
+.hst-cancelled{color:var(--danger-strong)}
+.hst-skipped{color:var(--ink-3)}
+.h-time{font-size:12.5px;color:var(--ink-2);font-variant-numeric:tabular-nums}
+.h-dur{font-size:11.5px;color:var(--ink-3);font-variant-numeric:tabular-nums}
+.h-cost{margin-left:auto;font-size:11.5px;color:var(--accent-strong);font-weight:600;font-variant-numeric:tabular-nums;white-space:nowrap}
+.h-chev{margin-left:6px;color:var(--ink-3);flex:0 0 auto;display:flex;transition:transform .2s}
+.h-row.open .h-chev{transform:rotate(180deg)}
+.h-dots{margin-left:auto;display:inline-flex;gap:3px}
+.h-dots i{width:5px;height:5px;border-radius:50%;background:var(--accent);animation:bounce 1s infinite}
+.h-dots i:nth-child(2){animation-delay:.15s}
+.h-dots i:nth-child(3){animation-delay:.3s}
+.h-detail{display:none;padding:0 13px 12px}
+.h-row.open .h-detail{display:block;border-top:1px dashed var(--line);padding-top:10px}
+.h-result{background:var(--terminal);color:var(--terminal-text);border-radius:8px;padding:9px 12px;font-size:12.5px;line-height:1.65;white-space:pre-wrap;font-family:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace;max-height:240px;overflow:auto}
+.h-error{font-size:12.5px;color:var(--danger);display:flex;align-items:flex-start;gap:6px;background:var(--danger-bg);border:1px solid var(--danger-line);border-radius:8px;padding:8px 11px}
+.h-empty{text-align:center;color:var(--ink-3);font-size:13px;padding:28px 0;border:1px dashed var(--line-strong);border-radius:10px}
+@keyframes bounce{0%,100%{transform:translateY(0)}50%{transform:translateY(-3px)}}
+
+/* ── 弹窗 ── */
+.overlay{position:fixed;inset:0;background:rgb(31 28 24/.2);display:flex;align-items:center;justify-content:center;z-index:100}
+.modal{width:560px;max-width:calc(100vw - 40px);max-height:calc(100vh - 48px);overflow-y:auto;background:var(--paper);border:1px solid var(--line-strong);border-radius:16px;box-shadow:var(--shadow-modal);padding:20px 22px}
+.modal .m-head{display:flex;align-items:center;margin-bottom:16px}
+.modal .m-title{font-size:16px;font-weight:700}
+.modal .m-x{margin-left:auto;display:flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:6px;color:var(--ink-3);transition:.15s}
+.modal .m-x:hover{background:var(--hover);color:var(--ink)}
+.field{margin-bottom:14px}
+.field .f-lab{display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:var(--ink-2);margin-bottom:6px}
+.field .f-lab .req{color:var(--danger)}
+.field .f-lab .hint{margin-left:auto;font-size:11px;color:var(--ink-3);font-weight:500}
+.f-input{width:100%;height:36px;border:1px solid var(--line-strong);border-radius:8px;background:var(--card);padding:0 12px;font-size:13.5px;transition:.15s}
+.f-input:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 2px var(--accent-tint)}
+.f-input::placeholder{color:var(--ink-3)}
+textarea.f-input{height:auto;padding:9px 12px;resize:vertical;line-height:1.6}
+.seg{display:flex;background:var(--hover);border-radius:8px;padding:3px;gap:2px}
+.seg button{flex:1;height:28px;border-radius:6px;font-size:12.5px;font-weight:600;color:var(--ink-2);transition:.15s}
+.seg button.active{background:var(--card);color:var(--ink);box-shadow:var(--shadow-card)}
+.preset-row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.select{height:34px;border:1px solid var(--line-strong);border-radius:8px;background:var(--card);padding:0 10px;font-size:13px}
+.cron-input{flex:1;min-width:180px}
+.hint-txt{font-size:11.5px;color:var(--ink-3);margin-top:5px;line-height:1.55}
+.hint-txt code{background:var(--hover);border:1px solid var(--line);border-radius:4px;padding:0 4px;font-size:11px}
+.check{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--ink-2);cursor:pointer;user-select:none}
+.check input{width:15px;height:15px;accent-color:var(--accent);cursor:pointer}
+.m-foot{display:flex;justify-content:flex-end;gap:10px;margin-top:18px;padding-top:14px;border-top:1px solid var(--line)}
+
+/* ── 演示工具条 ── */
+.demo{position:fixed;left:14px;bottom:14px;z-index:200;display:flex;align-items:center;gap:12px;background:var(--card);border:1px solid var(--line-strong);border-radius:10px;box-shadow:var(--shadow-pop);padding:8px 12px;font-size:12px;color:var(--ink-2)}
+.demo .d-lab{font-weight:700;color:var(--ink-3);letter-spacing:.06em;font-size:10.5px}
+.demo label{display:flex;align-items:center;gap:5px;cursor:pointer;user-select:none}
+.demo input{accent-color:var(--accent);cursor:pointer}
+
+.hidden{display:none}
+</style>
+</head>
+<body data-plat="mac">
+
+<div class="app">
+  <!-- ════════════ 侧栏（复刻现有 App） ════════════ -->
+  <aside class="sidebar">
+    <div class="titlebar">
+      <div class="traffic"><i></i><i></i><i></i></div>
+      <div style="margin-left:auto"></div>
+    </div>
+    <div class="toolbar">
+      <button class="iconbtn" title="折叠侧栏">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 6h18M3 12h12M3 18h18"/><path d="M17 9l3 3-3 3"/></svg>
+      </button>
+      <button class="iconbtn" title="搜索">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+      </button>
+    </div>
+    <button class="sb-new">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+      新建任务
+    </button>
+    <nav class="sb-nav">
+      <button>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 2l9 4.5V11c0 5.5-3.8 9.7-9 11-5.2-1.3-9-5.5-9-11V6.5L12 2z"/><path d="m9 12 2 2 4-4"/></svg>
+        专家·技能·连接器
+      </button>
+      <button class="active">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M13 2 4.5 13.5H11L9.5 22 19 10.5h-6.5L13 2z"/></svg>
+        自动化
+      </button>
+    </nav>
+    <div class="sb-divider"></div>
+    <div class="sb-scroll">
+      <div class="sb-group"><span>任务 (3)</span><span class="chev"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="m6 9 6 6 6-6"/></svg></span></div>
+      <button class="sb-item"><span style="width:8px;flex:0 0 auto;height:8px;border-radius:2px;background:var(--accent-tint);border:1px solid var(--accent-line)"></span>分析竞品定价<span class="time">5分钟前</span><span class="more"><svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg></span></button>
+      <button class="sb-item"><span style="width:8px;flex:0 0 auto;height:8px;border-radius:2px;background:var(--accent-tint);border:1px solid var(--accent-line)"></span>整理会议纪要<span class="time">1小时前</span><span class="more"><svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg></span></button>
+      <button class="sb-item"><span style="width:8px;flex:0 0 auto;height:8px;border-radius:2px;background:var(--accent-tint);border:1px solid var(--accent-line)"></span>每日站会摘要<span class="time">昨天</span><span class="more"><svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg></span></button>
+      <div style="height:10px"></div>
+      <div class="sb-group"><span>空间 (1)</span><span class="chev"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="m6 9 6 6 6-6"/></svg></span></div>
+      <button class="sb-item"><span style="width:8px;flex:0 0 auto;height:8px;border-radius:2px;background:var(--active)"></span>工作空间<span style="width:9px;flex:0 0 auto;height:9px;border-radius:2px;border:1px solid var(--line-strong)"></span>产品需求文档<span class="time">2小时前</span></button>
+    </div>
+    <div class="sb-foot">
+      <div class="sb-user"><div class="sb-avatar">C</div><span class="sb-name">Charles.Hao</span></div>
+      <div class="sb-actions">
+        <button class="iconbtn" title="通知">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 9a6 6 0 1 1 12 0c0 5 2 6 2 6H4s2-1 2-6"/><path d="M10 20a2 2 0 0 0 4 0"/></svg>
+        </button>
+        <button class="iconbtn" title="设置">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.6 1.6 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-1.8-.3 1.6 1.6 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.6 1.6 0 0 0-1-1.5 1.6 1.6 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.6 1.6 0 0 0 .3-1.8 1.6 1.6 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.6 1.6 0 0 0 1.5-1 1.6 1.6 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.6 1.6 0 0 0 1.8.3h.1a1.6 1.6 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.6 1.6 0 0 0 1 1.5h.1a1.6 1.6 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0-.3 1.8v.1a1.6 1.6 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.6 1.6 0 0 0-1.5 1z"/></svg>
+        </button>
+      </div>
+    </div>
+  </aside>
+
+  <!-- ════════════ 主区 · 自动化 ════════════ -->
+  <main class="main">
+    <div class="main-titlebar">自动化</div>
+    <div class="auto">
+      <div class="auto-head">
+        <h1>自动化</h1>
+        <span class="cnt" id="taskCount">4</span>
+        <div class="spacer"></div>
+        <button class="btn btn-primary" id="btnNew">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+          新建自动化
+        </button>
+      </div>
+
+      <div class="auto-body">
+        <!-- 左：任务列表 -->
+        <div class="auto-list">
+          <div class="list-tip">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg>
+            定时任务
+          </div>
+          <div class="cards" id="taskCards">
+            <div class="task-card active" data-task="1"></div>
+            <div class="task-card" data-task="2"></div>
+            <div class="task-card paused" data-task="3"></div>
+            <div class="task-card" data-task="4"></div>
+          </div>
+
+          <!-- 空态（演示 toggle） -->
+          <div class="empty hidden" id="emptyState">
+            <div class="e-ico">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg>
+            </div>
+            <div class="e-t">还没有自动化任务</div>
+            <div class="e-s">设置一条定时任务，EveryBuddy 会到点自动为你运行提示词，<br>结果沉淀在下方历史里。</div>
+            <button class="btn btn-primary" id="btnNew2">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+              新建自动化
+            </button>
+          </div>
+        </div>
+
+        <!-- 右：详情 + 运行历史 -->
+        <div class="auto-detail" id="detail">
+          <div class="ad-head">
+            <div>
+              <div class="ad-title">
+                <span id="dTitle">每日工作摘要</span>
+                <span class="chip chip-suc" id="dEnabled"><span class="dot"></span>启用</span>
+              </div>
+              <div class="ad-sched" id="dSched"></div>
+              <div class="ad-next" id="dNext"></div>
+            </div>
+          </div>
+          <div class="ad-actions">
+            <button class="btn btn-primary">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7L8 5z"/></svg>
+              立即执行
+            </button>
+            <button class="btn btn-ghost" id="btnEdit">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M17 3a2.8 2.8 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg>
+              编辑
+            </button>
+            <button class="btn btn-ghost" id="btnPause">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 4h12M6 4v16M6 4H4a1 1 0 0 0-1 1v14a1 1 0 0 0 1 1h16a1 1 0 0 0 1-1V5a1 1 0 0 0-1-1h-2M9 4V2h6v2M9 10h6"/></svg>
+              <span id="btnPauseLabel">暂停</span>
+            </button>
+            <button class="btn btn-danger">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14M10 11v6M14 11v6"/></svg>
+              删除
+            </button>
+          </div>
+
+          <div class="ad-hist">
+            <div class="h-head">运行历史 <span class="n" id="histCount">0</span><span class="tip">点击条目展开结果</span></div>
+            <div class="h-list" id="histList"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<!-- ════════════ 新建/编辑弹窗 ════════════ -->
+<div class="overlay hidden" id="formOverlay">
+  <div class="modal" role="dialog" aria-modal="true">
+    <div class="m-head">
+      <div class="m-title" id="mTitle">新建自动化</div>
+      <button class="m-x" data-close aria-label="关闭"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+    </div>
+
+    <div class="field">
+      <div class="f-lab">标题 <span class="req">*</span></div>
+      <input class="f-input" id="fTitle" value="每日工作摘要" placeholder="给这条自动化起个名字">
+    </div>
+
+    <div class="field">
+      <div class="f-lab">提示词 <span class="req">*</span><span class="hint">到点自动执行的内容</span></div>
+      <textarea class="f-input" id="fPrompt" rows="4" placeholder="例如：总结昨天的待办完成情况，输出今日工作要点">总结昨天所有待办任务的完成情况，梳理今天需要优先推进的工作要点，用 3 条以内输出。</textarea>
+    </div>
+
+    <div class="field">
+      <div class="f-lab">调度</div>
+      <div class="seg" id="schedTabs">
+        <button class="active" data-tab="preset">预设</button>
+        <button data-tab="cron">Cron</button>
+        <button data-tab="once">一次性</button>
+      </div>
+
+      <div style="margin-top:10px" id="panelPreset">
+        <div class="preset-row">
+          <select class="select" id="fPreset">
+            <option value="daily">每天</option>
+            <option value="weekly">每周</option>
+            <option value="monthly">每月</option>
+            <option value="hourly">每小时</option>
+          </select>
+          <input class="select" id="fHour" type="number" min="0" max="23" value="9" style="width:64px" title="时">
+          <span style="color:var(--ink-3);font-size:13px">:</span>
+          <input class="select" id="fMin" type="number" min="0" max="59" value="0" style="width:64px" title="分">
+          <select class="select" id="fDOW" style="display:none">
+            <option value="1">周一</option><option value="2">周二</option><option value="3">周三</option>
+            <option value="4">周四</option><option value="5">周五</option><option value="6">周六</option><option value="0">周日</option>
+          </select>
+          <select class="select" id="fDOM" style="display:none">
+            <option>1日</option><option>2日</option><option>3日</option><option>5日</option><option>10日</option><option>15日</option><option>20日</option><option>25日</option>
+          </select>
+        </div>
+        <div class="hint-txt" id="presetPreview">每天 09:00 触发</div>
+      </div>
+
+      <div style="margin-top:10px" class="hidden" id="panelCron">
+        <input class="f-input cron-input" id="fCron" value="0 9 * * *" placeholder="分 时 日 月 星期">
+        <div class="hint-txt">标准 5 段 cron（本地时区）。例如 <code>0 9 * * 1-5</code> = 每个工作日 09:00；<code>*/30 * * * *</code> = 每 30 分钟。</div>
+      </div>
+
+      <div style="margin-top:10px" class="hidden" id="panelOnce">
+        <div class="preset-row">
+          <input class="select" id="fDelay" type="number" min="1" value="30" style="width:88px">
+          <span style="color:var(--ink-2);font-size:13px">分钟后执行一次</span>
+        </div>
+        <div class="hint-txt">创建后立即开始倒计时；到期运行一次后自动停用。</div>
+      </div>
+    </div>
+
+    <div class="field">
+      <div class="f-lab">模式</div>
+      <div class="seg" id="modeTabs">
+        <button class="active">日常</button>
+        <button>代码</button>
+      </div>
+    </div>
+
+    <div class="field">
+      <label class="check">
+        <input type="checkbox" checked>完成后通知我
+      </label>
+    </div>
+
+    <div class="m-foot">
+      <button class="btn btn-ghost" data-close>取消</button>
+      <button class="btn btn-primary" data-close>创建</button>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════ 演示工具条 ════════════ -->
+<div class="demo">
+  <span class="d-lab">原型预览</span>
+  <label><input type="checkbox" id="tEmpty">空态</label>
+  <label><input type="checkbox" id="tRunning">运行中</label>
+</div>
+
+<script>
+(function(){
+  /* ── 演示数据 ── */
+  var DEMO = { running: false };
+  var TASKS = {
+    "1": {
+      title:"每日工作摘要", enabled:true, mode:"日常",
+      sched:"每天 09:00", lastRun:"今天 09:00", nextRun:"明天 09:00",
+      prompt:"总结昨天所有待办任务的完成情况，梳理今天需要优先推进的工作要点，用 3 条以内输出。",
+      last:"success",
+      hist:[
+        {st:"success", label:"成功", time:"今天 09:00", dur:"2 分 18 秒", cost:"¥0.23 · 1,240 tokens",
+         result:"今日工作要点：\n1. 完成支付模块回归测试，重点覆盖退款链路；\n2. 跟进客户 A 的报价确认，今天内给到折扣方案；\n3. 下午 4 点参加版本发布评审会，准备好变更清单。"},
+        {st:"success", label:"成功", time:"昨天 09:00", dur:"1 分 47 秒", cost:"¥0.19 · 1,015 tokens",
+         result:"昨日要点：1. 修复了登录态失效问题，已在预发环境验证；2. 输出了竞品对比初稿，等待评审；3. 整理了周报素材。"},
+        {st:"failed", label:"失败", time:"周一 09:00", dur:"3 分 02 秒", cost:"¥0.11",
+         error:"模型请求超时（provider: doubao · 请求耗时超过 120s），已自动重试 1 次仍失败。可稍后手动「立即执行」。"}
+      ]
+    },
+    "2": {
+      title:"每周发布素材", enabled:true, mode:"日常",
+      sched:"每周一 18:30", lastRun:"5 分钟前", nextRun:"下周一 18:30",
+      prompt:"根据本周工作内容生成 3 条社交媒体发布素材，每条包含标题与正文草稿。",
+      last:"success",
+      hist:[
+        {st:"success", label:"成功", time:"今天 18:30", dur:"2 分 05 秒", cost:"¥0.31 · 1,672 tokens",
+         result:"素材 1｜标题：支付回归完成，退款链路更稳了\n正文：本周完成支付模块回归…\n\n素材 2｜标题：竞品对比初稿出炉\n正文：…\n\n素材 3｜标题：版本评审会纪要已同步\n正文：…"}
+      ]
+    },
+    "3": {
+      title:"下载文件夹整理", enabled:false, mode:"日常",
+      sched:"每天 12:30 · 已暂停", lastRun:"昨天 12:30", nextRun:"已暂停",
+      prompt:"扫描下载文件夹，按文件类型自动归档到对应子目录，并输出整理结果清单。",
+      last:"failed",
+      hist:[
+        {st:"failed", label:"失败", time:"昨天 12:30", dur:"已运行 38 秒", cost:"¥0.03",
+         error:"工作目录不存在或不可写：~/Downloads。请先在设置中授权目录权限，再重新运行。"},
+        {st:"success", label:"成功", time:"周二 12:30", dur:"1 分 12 秒", cost:"¥0.16 · 862 tokens",
+         result:"已归档 24 个文件：图片 8 / 文档 6 / 压缩包 4 / 其它 6，重复文件跳过 3 个。"}
+      ]
+    },
+    "4": {
+      title:"提醒我喝水平衡", enabled:true, mode:"日常",
+      sched:"30 分钟后 · 一次性", lastRun:null, nextRun:"今天 15:20",
+      prompt:"提醒我该喝水了，顺便回顾一下今天的完成情况，用一句鼓励的话收尾。",
+      last:null,
+      hist:[]
+    }
+  };
+
+  var $ = function(id){ return document.getElementById(id); };
+
+  /* ── 卡片渲染 ── */
+  function renderCards(){
+    var box = $("taskCards");
+    box.innerHTML = "";
+    Object.keys(TASKS).forEach(function(id){
+      var t = TASKS[id];
+      var lastChip;
+      if(DEMO.running && id === "2"){
+        lastChip = '<span class="chip chip-run"><span class="dot"></span>运行中</span>';
+      } else if(t.last === "success"){
+        lastChip = '<span class="chip chip-suc"><span class="dot"></span>成功</span>';
+      } else if(t.last === "failed"){
+        lastChip = '<span class="chip chip-fail"><span class="dot"></span>上次失败</span>';
+      } else {
+        lastChip = '<span class="chip chip-skip"><span class="dot"></span>待运行</span>';
+      }
+      var enabledChip = t.enabled
+        ? '<span class="chip chip-suc"><span class="dot"></span>启用</span>'
+        : '<span class="chip chip-pause"><span class="dot"></span>已暂停</span>';
+      var cost;
+      if(DEMO.running && id === "2"){ cost = '<span class="cost">—</span>'; }
+      else if(t.last === "success"){ cost = '<span class="cost">'+t.hist[0].cost.split(" · ")[0]+'</span>'; }
+      else { cost = '<span class="cost">—</span>'; }
+      var card = document.createElement("div");
+      card.className = "task-card" + (t.enabled ? "" : " paused") + (id === selectedId ? " active" : "");
+      card.dataset.task = id;
+      var lastTxt = t.lastRun || "未运行";
+      card.innerHTML =
+        '<div class="tc-top">' +
+          '<span class="tc-title">'+t.title+'</span>' + enabledChip + lastChip +
+          '<span class="tc-menu"><svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg></span>' +
+        '</div>' +
+        '<div class="tc-prompt">'+t.prompt+'</div>' +
+        '<div class="tc-sched"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg>'+t.sched+'</div>' +
+        '<div class="tc-meta">' +
+          '<span class="run"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 12a9 9 0 1 0 9-9"/><path d="M3 4v5h5"/></svg>'+lastTxt+'</span>' +
+          '<span class="run"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M13 2 4.5 13.5H11L9.5 22 19 10.5h-6.5L13 2z"/></svg>'+(t.nextRun || "—")+'</span>' + cost +
+        '</div>';
+      card.addEventListener("click", function(){ selectTask(id); });
+      box.appendChild(card);
+    });
+    $("taskCount").textContent = Object.keys(TASKS).length;
+  }
+
+  var selectedId = "1";
+
+  /* ── 详情渲染 ── */
+  function dotClass(st){ return { success:"hd-success", failed:"hd-failed", running:"hd-running", cancelled:"hd-cancelled", skipped:"hd-skipped" }[st] || "hd-skipped"; }
+  function stClass(st){ return { success:"hst-success", failed:"hst-failed", running:"hst-running", cancelled:"hst-cancelled", skipped:"hst-skipped" }[st] || "hst-skipped"; }
+
+  function detailNext(t){
+    var s = "";
+    if(t.lastRun) s += "上次运行 " + t.lastRun;
+    if(t.nextRun) s += (s ? " · " : "") + "下次运行 " + t.nextRun;
+    return s;
+  }
+
+  function renderDetail(){
+    var t = TASKS[selectedId];
+    $("dTitle").textContent = t.title;
+    $("dSched").innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg>' + t.sched + ' · ' + t.mode + '模式';
+    $("dNext").textContent = detailNext(t);
+    var en = $("dEnabled");
+    if(t.enabled){ en.className = "chip chip-suc"; en.innerHTML = '<span class="dot"></span>启用'; }
+    else { en.className = "chip chip-pause"; en.innerHTML = '<span class="dot"></span>已暂停'; }
+    $("btnPauseLabel").textContent = t.enabled ? "暂停" : "恢复";
+
+    var hist = t.hist;
+    if(DEMO.running && selectedId === "2"){
+      hist = [{st:"running", label:"运行中", time:"今天 18:30", dur:"已运行 1 分 20 秒", cost:null, result:"正在执行「每周发布素材」…"}].concat(hist);
+    }
+    $("histCount").textContent = hist.length;
+    var list = $("histList");
+    list.innerHTML = "";
+    if(hist.length === 0){
+      list.innerHTML = '<div class="h-empty">还没有运行记录，创建后到点自动执行，或点击上方「立即执行」先跑一次。</div>';
+      return;
+    }
+    hist.forEach(function(h){
+      var row = document.createElement("div");
+      row.className = "h-row";
+      var right;
+      if(h.st === "running"){
+        right = '<span class="h-dots"><i></i><i></i><i></i></span>';
+      } else {
+        right = '<span class="h-cost">'+h.cost+'</span>';
+      }
+      var body = "";
+      if(h.result){
+        body = '<div class="h-detail"><div class="h-result">'+h.result+'</div></div>';
+      } else if(h.error){
+        body = '<div class="h-detail"><div class="h-error"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="flex:0 0 auto;margin-top:1px"><circle cx="12" cy="12" r="9"/><path d="M12 8v4M12 16h.01"/></svg><div>'+h.error+'</div></div></div>';
+      }
+      row.innerHTML =
+        '<div class="hr-line">' +
+          '<span class="h-dot '+dotClass(h.st)+'"></span>' +
+          '<span class="h-st '+stClass(h.st)+'">'+h.label+'</span>' +
+          '<span class="h-time">'+h.time+'</span>' +
+          '<span class="h-dur">'+h.dur+'</span>' + right +
+          '<span class="h-chev"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="m6 9 6 6 6-6"/></svg></span>' +
+        '</div>' + body;
+      row.addEventListener("click", function(){ row.classList.toggle("open"); });
+      list.appendChild(row);
+    });
+  }
+
+  function selectTask(id){
+    selectedId = id;
+    var cards = document.querySelectorAll(".task-card");
+    cards.forEach(function(c){ c.classList.toggle("active", c.dataset.task === id); });
+    renderDetail();
+  }
+
+  /* ── 弹窗 ── */
+  var overlay = $("formOverlay");
+  function openForm(){ overlay.classList.remove("hidden"); }
+  function closeForm(){ overlay.classList.add("hidden"); }
+  $("btnNew").addEventListener("click", openForm);
+  $("btnNew2").addEventListener("click", openForm);
+  $("btnEdit").addEventListener("click", function(){ $("mTitle").textContent = "编辑自动化"; openForm(); });
+  document.querySelectorAll("[data-close]").forEach(function(el){ el.addEventListener("click", closeForm); });
+  overlay.addEventListener("click", function(e){ if(e.target === overlay) closeForm(); });
+  document.addEventListener("keydown", function(e){ if(e.key === "Escape") closeForm(); });
+
+  /* ── 调度 tab ── */
+  var tabs = $("schedTabs").querySelectorAll("button");
+  var panels = { preset: $("panelPreset"), cron: $("panelCron"), once: $("panelOnce") };
+  tabs.forEach(function(t){
+    t.addEventListener("click", function(){
+      tabs.forEach(function(x){ x.classList.remove("active"); });
+      t.classList.add("active");
+      Object.keys(panels).forEach(function(k){ panels[k].classList.toggle("hidden", k !== t.dataset.tab); });
+    });
+  });
+
+  var preset = $("fPreset"), dow = $("fDOW"), dom = $("fDOM"), preview = $("presetPreview");
+  function fmt(n){ n = Number(n) || 0; return String(n).padStart(2,"0"); }
+  function refreshPreset(){
+    var v = preset.value;
+    dow.style.display = v === "weekly" ? "" : "none";
+    dom.style.display = v === "monthly" ? "" : "none";
+    if(v === "daily") preview.textContent = "每天 " + fmt($("fHour").value) + ":" + fmt($("fMin").value) + " 触发";
+    else if(v === "weekly") preview.textContent = "每周" + dow.options[dow.selectedIndex].text + " " + fmt($("fHour").value) + ":" + fmt($("fMin").value) + " 触发";
+    else if(v === "monthly") preview.textContent = "每月" + dom.options[dom.selectedIndex].text + " " + fmt($("fHour").value) + ":" + fmt($("fMin").value) + " 触发";
+    else preview.textContent = "每小时 0 分触发";
+  }
+  ["fHour","fMin"].forEach(function(id){ $(id).addEventListener("input", refreshPreset); });
+  preset.addEventListener("change", refreshPreset);
+  dow.addEventListener("change", refreshPreset);
+  dom.addEventListener("change", refreshPreset);
+  refreshPreset();
+
+  /* ── 演示 toggles ── */
+  $("tEmpty").addEventListener("change", function(e){
+    $("taskCards").classList.toggle("hidden", e.target.checked);
+    $("emptyState").classList.toggle("hidden", !e.target.checked);
+  });
+  $("tRunning").addEventListener("change", function(e){
+    DEMO.running = e.target.checked;
+    renderCards();
+    renderDetail();
+  });
+
+  /* ── 初始化 + URL 参数 ── */
+  renderCards();
+  renderDetail();
+  var params = new URLSearchParams(location.search);
+  if(params.get("empty") !== null){ $("tEmpty").checked = true; $("tEmpty").dispatchEvent(new Event("change")); }
+  if(params.get("running") !== null){ $("tRunning").checked = true; $("tRunning").dispatchEvent(new Event("change")); }
+  if(params.get("modal") !== null){ openForm(); }
+  var sel = params.get("task");
+  if(sel && TASKS[sel]) selectTask(sel);
+})();
+</script>
+</body>
+</html>

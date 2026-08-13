@@ -9,6 +9,7 @@ import { isBareSteerCommand, parseCommandChannel } from "../slashCommands";
 import { type ChatMessage, useSessionStore } from "../stores/sessionStore";
 import { type CategoryId, getChatDefaultId, useUIStore } from "../stores/uiStore";
 import { AttachmentPreview } from "./AttachmentPreview";
+import { AutomationView } from "./automation/AutomationView";
 import { CompactionNoticeCard } from "./CompactionNoticeCard";
 import { ConversationTitle } from "./ConversationTitle";
 import { FileMentionMenu } from "./FileMentionMenu";
@@ -137,23 +138,32 @@ export function MainView() {
   );
   // 侧栏折叠状态：折叠时标题左内边距让位红绿灯（50+30=80 > 红绿灯右缘 73）
   const sidebarCollapsed = useUIStore((s) => s.sidebarCollapsed);
+  // 侧栏「自动化」导航选中：主区渲染自动化页
+  const activeNav = useUIStore((s) => s.activeNav);
 
   return (
     <main className="flex flex-1 flex-col overflow-hidden bg-paper">
-      {/* ── 标题栏拖动层·对话区部分：与对话区一体（纸色），mac 下 40px 拖动区；对话标题可点击重命名靠左 ── */}
-      <div
-        className={`eb-top-spacer titlebar-drag flex shrink-0 items-center transition-[padding-left] duration-200 ${
-          sidebarCollapsed ? "pl-[30px]" : "pl-[12px]"
-        }`}
-      >
-        {currentTaskId && currentTaskTitle && (
-          <ConversationTitle taskId={currentTaskId} title={currentTaskTitle} />
-        )}
-      </div>
-      {/* 拖动层占位后的剩余高度交给 ChatView/WelcomeView（二者 root 用 h-full / min-h-full，需容器定高） */}
-      <div className="flex min-h-0 flex-1 flex-col">
-        {currentTaskId ? <ChatView taskId={currentTaskId} /> : <WelcomeView />}
-      </div>
+      {activeNav === "auto" ? (
+        // 自动化页：标题/数量/新建按钮都在自带顶栏（兼作窗口拖动区，win 右侧让位系统按钮）
+        <AutomationView />
+      ) : (
+        <>
+          {/* ── 标题栏拖动层·对话区部分：与对话区一体（纸色），mac 下 40px 拖动区；对话标题可点击重命名靠左 ── */}
+          <div
+            className={`eb-top-spacer titlebar-drag flex shrink-0 items-center transition-[padding-left] duration-200 ${
+              sidebarCollapsed ? "pl-[30px]" : "pl-[12px]"
+            }`}
+          >
+            {currentTaskId && currentTaskTitle && (
+              <ConversationTitle taskId={currentTaskId} title={currentTaskTitle} />
+            )}
+          </div>
+          {/* 拖动层占位后的剩余高度交给 ChatView/WelcomeView（二者 root 用 h-full / min-h-full，需容器定高） */}
+          <div className="flex min-h-0 flex-1 flex-col">
+            {currentTaskId ? <ChatView taskId={currentTaskId} /> : <WelcomeView />}
+          </div>
+        </>
+      )}
     </main>
   );
 }

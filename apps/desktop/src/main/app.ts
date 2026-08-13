@@ -1,9 +1,10 @@
 import path from "node:path";
-import { app, BrowserWindow, Menu } from "electron";
+import { app, BrowserWindow, Menu, Notification } from "electron";
 import { agentRuntime } from "./agentRuntime";
 import { ensureAppDirs } from "./configStore";
 import { registerIpcHandlers } from "./ipcRouter";
 import { migrateFromLegacyConfig } from "./modelStore";
+import { scheduler } from "./scheduler";
 import { createMainWindow } from "./windowManager";
 
 /**
@@ -30,10 +31,31 @@ app.whenReady().then(async () => {
   const mainWindow = createMainWindow();
 
   // 初始化 AgentRuntime（加载 pi-coding-agent、ModelRuntime）
-  agentRuntime.init().catch((err) => console.error("[app] AgentRuntime 初始化失败:", err));
+  agentRuntime
+    .init()
+    .then(() => {
+      // 注入调度引擎的运行时与平台能力，随后启动定时器（避免首次触发撞上未就绪 runtime）
+      scheduler.wire({
+        runtime: agentRuntime,
+        notify: (title, body) => {
+          if (Notification.isSupported()) {
+            new Notification({ title, body }).show();
+          }
+        },
+        isWindowFocused: () =>
+          BrowserWindow.getAllWindows().some((w) => !w.isDestroyed() && w.isFocused()),
+      });
+      return scheduler.init();
+    })
+    .catch((err) => console.error("[app] AgentRuntime/Scheduler 初始化失败:", err));
 
   // 注册 IPC 处理器
   registerIpcHandlers(mainWindow);
+
+  // 退出前清定时器 + 在途 run 标记取消（同步落盘）
+  app.on("before-quit", () => {
+    scheduler.stop();
+  });
 
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) {

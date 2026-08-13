@@ -385,6 +385,79 @@ export interface LogEntry {
 }
 
 // ────────────────────────────────────────────────
+// Schedule（自动化 / 定时任务）
+// ────────────────────────────────────────────────
+
+/** 调度规则：cron 周期（预设即 cron 字符串，本地时区）或一次性（ISO 时间；「N 分钟后」创建时折算） */
+export type ScheduleSpec = { type: "cron"; cron: string } | { type: "once"; runAt: string };
+
+/** 运行状态：pending 排队 / running 运行中 / success 成功 / failed 失败 / cancelled 取消 / skipped 跳过 */
+export type RunStatus = "pending" | "running" | "success" | "failed" | "cancelled" | "skipped";
+
+export interface ScheduledTask {
+  id: string;
+  title: string;
+  /** 到点自动执行的提示词 */
+  prompt: string;
+  spec: ScheduleSpec;
+  /** 使用哪个 agent 模式配置（daily/coding） */
+  mode: AgentMode;
+  /** 指定模型 provider（缺省用模式默认） */
+  providerId?: string;
+  /** 暂停/恢复 */
+  enabled: boolean;
+  /** 完成后是否系统通知 */
+  notify: boolean;
+  createdAt: string;
+  updatedAt: string;
+  lastRunAt?: string;
+  nextRunAt?: string;
+  /** 最近一次运行状态（卡片便捷徽标） */
+  lastStatus?: RunStatus;
+}
+
+export interface ScheduledRun {
+  id: string;
+  taskId: string;
+  status: RunStatus;
+  startedAt?: string;
+  finishedAt?: string;
+  durationMs?: number;
+  /** 运行产出（assistant 文本，主进程截断后） */
+  result?: string;
+  error?: string;
+  /** 本次运行 token 用量/费用（复用 MessageUsage） */
+  usage?: MessageUsage;
+}
+
+export interface CreateScheduleTaskRequest {
+  title: string;
+  prompt: string;
+  spec: ScheduleSpec;
+  mode?: AgentMode;
+  providerId?: string;
+  notify?: boolean;
+}
+
+export interface UpdateScheduleTaskRequest {
+  id: string;
+  title?: string;
+  prompt?: string;
+  spec?: ScheduleSpec;
+  mode?: AgentMode;
+  providerId?: string;
+  enabled?: boolean;
+  notify?: boolean;
+}
+
+/** 调度事件推送（主进程 → 渲染进程，schedule:event） */
+export type ScheduleEvent =
+  | { type: "task_updated"; payload: { task: ScheduledTask } }
+  | { type: "task_deleted"; payload: { id: string } }
+  | { type: "run_started"; payload: { run: ScheduledRun } }
+  | { type: "run_finished"; payload: { run: ScheduledRun; task: ScheduledTask } };
+
+// ────────────────────────────────────────────────
 // Zod schemas（运行时校验，见 §7.2）
 // ────────────────────────────────────────────────
 
@@ -504,6 +577,40 @@ export const approveToolRequestSchema = z.object({
 });
 export type ApproveToolRequest = z.infer<typeof approveToolRequestSchema>;
 
+/** 调度规则 schema（cron 语法由主进程 cron-parser 校验，此处不引入依赖） */
+export const scheduleSpecSchema = z.discriminatedUnion("type", [
+  z.object({ type: z.literal("cron"), cron: z.string().min(1, "cron 表达式不能为空") }),
+  z.object({ type: z.literal("once"), runAt: z.string().min(1, "运行时间不能为空") }),
+]);
+export type ScheduleSpecZ = z.infer<typeof scheduleSpecSchema>;
+
+/** schedule:create-task 请求 */
+export const createScheduleTaskRequestSchema = z.object({
+  title: z.string().min(1, "标题不能为空"),
+  prompt: z.string().min(1, "提示词不能为空"),
+  spec: scheduleSpecSchema,
+  mode: z.enum(["daily", "coding"]).default("daily"),
+  providerId: z.string().optional(),
+  notify: z.boolean().default(true),
+});
+export type CreateScheduleTaskRequestZ = z.infer<typeof createScheduleTaskRequestSchema>;
+
+/** schedule:update-task 请求（全可选，变更触发重排定时器） */
+export const updateScheduleTaskRequestSchema = z.object({
+  id: z.string().min(1, "参数缺失"),
+  title: z.string().min(1, "标题不能为空").optional(),
+  prompt: z.string().min(1, "提示词不能为空").optional(),
+  spec: scheduleSpecSchema.optional(),
+  mode: z.enum(["daily", "coding"]).optional(),
+  providerId: z.string().optional(),
+  enabled: z.boolean().optional(),
+  notify: z.boolean().optional(),
+});
+export type UpdateScheduleTaskRequestZ = z.infer<typeof updateScheduleTaskRequestSchema>;
+
+/** schedule:run-now / delete-task / list-runs 请求 */
+export const scheduleIdRequestSchema = z.object({ id: z.string().min(1, "参数缺失") });
+
 // ────────────────────────────────────────────────
 // Preload API 形状（见 §6.3）
 // ────────────────────────────────────────────────
@@ -564,6 +671,18 @@ export interface ElectronAPI {
     getPathForFile: (file: File) => string;
     /** 用系统默认浏览器打开外链（markdown 链接用，主进程仅放行 http/https） */
     openExternal: (url: string) => Promise<void>;
+  };
+  schedule: {
+    listTasks: () => Promise<ScheduledTask[]>;
+    createTask: (req: CreateScheduleTaskRequest) => Promise<ScheduledTask>;
+    updateTask: (req: UpdateScheduleTaskRequest) => Promise<ScheduledTask>;
+    deleteTask: (id: string) => Promise<void>;
+    /** 立即执行一次（测试运行；enabled=false 也可） */
+    runNow: (id: string) => Promise<void>;
+    /** 某任务的全部运行历史（新→旧） */
+    listRuns: (taskId: string) => Promise<ScheduledRun[]>;
+    /** 订阅调度事件（任务变更 / 运行开始与结束） */
+    onEvent: (cb: (event: ScheduleEvent) => void) => () => void;
   };
 }
 

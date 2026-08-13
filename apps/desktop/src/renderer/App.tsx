@@ -4,11 +4,13 @@ import { RightPanel } from "./components/RightPanel";
 import { SettingsPanel } from "./components/SettingsPanel";
 import { Sidebar } from "./components/Sidebar";
 import { useAgentStream } from "./hooks/useAgentStream";
+import { useScheduleStream } from "./hooks/useScheduleStream";
 import { useSessionStore } from "./stores/sessionStore";
 import { useUIStore } from "./stores/uiStore";
 
 export function App() {
   useAgentStream();
+  useScheduleStream();
 
   const initFromBackend = useSessionStore((s) => s.initFromBackend);
   const sessionLoaded = useSessionStore((s) => s.loaded);
@@ -22,6 +24,8 @@ export function App() {
   const currentTaskTitle = useSessionStore(
     (s) => s.tasks.find((t) => t.id === s.currentTaskId)?.title ?? null,
   );
+  // 自动化页不需要右侧面板（待办/文件/预览）
+  const activeNav = useUIStore((s) => s.activeNav);
 
   // Windows 已启用自定义标题栏，对话名在应用内标题区展示，系统标题固定为 EveryBuddy
   //（避免任务栏/Alt+Tab 重复显示对话名）；macOS 保留「EveryBuddy · 对话名」供 Mission Control 使用。
@@ -54,7 +58,7 @@ export function App() {
       <div className="flex min-h-0 flex-1 overflow-hidden">
         <Sidebar />
         <MainView />
-        <RightPanel />
+        {activeNav !== "auto" && <RightPanel />}
       </div>
       {isSettingsOpen && <SettingsPanel onClose={() => setSettingsOpen(false)} />}
     </div>

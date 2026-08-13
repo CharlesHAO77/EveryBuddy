@@ -7,6 +7,7 @@ import {
   attachmentRefSchema,
   branchRequestSchema,
   createNamedWorkspaceRequestSchema,
+  createScheduleTaskRequestSchema,
   createTaskRequestSchema,
   createWorkspaceRequestSchema,
   idRequestSchema,
@@ -16,6 +17,8 @@ import {
   readDirRequestSchema,
   renameTaskRequestSchema,
   saveModelRequestSchema,
+  scheduleIdRequestSchema,
+  updateScheduleTaskRequestSchema,
 } from "./index";
 
 describe("renameTaskRequestSchema", () => {
@@ -172,6 +175,89 @@ describe("branchRequestSchema", () => {
   });
   it("rejects missing taskId", () => {
     expect(branchRequestSchema.safeParse({ entryId: "e" }).success).toBe(false);
+  });
+});
+
+describe("createScheduleTaskRequestSchema", () => {
+  const validCron = {
+    title: "日报",
+    prompt: "总结今日工作",
+    spec: { type: "cron", cron: "0 9 * * *" },
+  };
+
+  it("accepts title + prompt + cron spec", () => {
+    expect(createScheduleTaskRequestSchema.safeParse(validCron).success).toBe(true);
+  });
+  it("accepts once spec", () => {
+    expect(
+      createScheduleTaskRequestSchema.safeParse({
+        ...validCron,
+        spec: { type: "once", runAt: "2026-08-13T07:20:00.000Z" },
+      }).success,
+    ).toBe(true);
+  });
+  it("defaults mode to daily and notify to true", () => {
+    const result = createScheduleTaskRequestSchema.safeParse(validCron);
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.mode).toBe("daily");
+      expect(result.data.notify).toBe(true);
+    }
+  });
+  it("rejects empty title", () => {
+    expect(createScheduleTaskRequestSchema.safeParse({ ...validCron, title: "" }).success).toBe(
+      false,
+    );
+  });
+  it("rejects empty prompt", () => {
+    expect(createScheduleTaskRequestSchema.safeParse({ ...validCron, prompt: "" }).success).toBe(
+      false,
+    );
+  });
+  it("rejects invalid spec type (not cron/once)", () => {
+    expect(
+      createScheduleTaskRequestSchema.safeParse({ ...validCron, spec: { type: "bogus" } }).success,
+    ).toBe(false);
+  });
+  it("rejects cron spec with empty cron", () => {
+    expect(
+      createScheduleTaskRequestSchema.safeParse({ ...validCron, spec: { type: "cron", cron: "" } })
+        .success,
+    ).toBe(false);
+  });
+  it("rejects invalid mode", () => {
+    expect(createScheduleTaskRequestSchema.safeParse({ ...validCron, mode: "bogus" }).success).toBe(
+      false,
+    );
+  });
+});
+
+describe("updateScheduleTaskRequestSchema", () => {
+  it("accepts id + partial fields", () => {
+    expect(
+      updateScheduleTaskRequestSchema.safeParse({ id: "a", enabled: false, notify: true }).success,
+    ).toBe(true);
+  });
+  it("accepts id only", () => {
+    expect(updateScheduleTaskRequestSchema.safeParse({ id: "a" }).success).toBe(true);
+  });
+  it("rejects missing id", () => {
+    expect(updateScheduleTaskRequestSchema.safeParse({ title: "x" }).success).toBe(false);
+  });
+  it("rejects empty title when provided", () => {
+    expect(updateScheduleTaskRequestSchema.safeParse({ id: "a", title: "" }).success).toBe(false);
+  });
+});
+
+describe("scheduleIdRequestSchema", () => {
+  it("accepts non-empty id", () => {
+    expect(scheduleIdRequestSchema.safeParse({ id: "a" }).success).toBe(true);
+  });
+  it("rejects empty id", () => {
+    expect(scheduleIdRequestSchema.safeParse({ id: "" }).success).toBe(false);
+  });
+  it("rejects missing id", () => {
+    expect(scheduleIdRequestSchema.safeParse({}).success).toBe(false);
   });
 });
 

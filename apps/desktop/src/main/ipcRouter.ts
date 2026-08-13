@@ -6,7 +6,7 @@
  */
 
 import { randomUUID } from "node:crypto";
-import { readdir, rm, stat } from "node:fs/promises";
+import { readdir, stat } from "node:fs/promises";
 import path from "node:path";
 import type { TaskMeta } from "@everybuddy/ipc-contract";
 import {
@@ -14,6 +14,7 @@ import {
   approveToolRequestSchema,
   branchRequestSchema,
   createNamedWorkspaceRequestSchema,
+  createScheduleTaskRequestSchema,
   createTaskRequestSchema,
   createWorkspaceRequestSchema,
   extensionCommandRequestSchema,
@@ -24,14 +25,18 @@ import {
   readDirRequestSchema,
   renameTaskRequestSchema,
   saveModelRequestSchema,
+  scheduleIdRequestSchema,
   setApiKeyRequestSchema,
   setModeRequestSchema,
   setTaskProviderRequestSchema,
+  updateScheduleTaskRequestSchema,
 } from "@everybuddy/ipc-contract";
 import { type BrowserWindow, ipcMain, shell } from "electron";
 import { agentRuntime } from "./agentRuntime";
 import { configStore, SESSIONS_DIR, WORK_SPACES_DIR } from "./configStore";
+import { rmIfDirectChild } from "./dirCleanup";
 import * as modelStore from "./modelStore";
+import { scheduler } from "./scheduler";
 import {
   createNamedWorkspace,
   createWorkspace,
@@ -46,32 +51,6 @@ import {
 /** 校验入参，失败抛错 */
 function validate<T>(schema: { parse: (v: unknown) => T }, value: unknown): T {
   return schema.parse(value);
-}
-
-/**
- * 仅当 target 是 root 的直接子目录时才递归删除，否则跳过并告警
- * （防 config.json 被篡改后误删任意目录）。
- * @param mustMatchBasename 额外要求 target 的 basename 与它一致（用于校验同 stamp 关联目录）
- */
-async function rmIfDirectChild(
-  target: string | undefined,
-  root: string,
-  label: string,
-  mustMatchBasename?: string,
-): Promise<void> {
-  if (!target) return;
-  const rel = path.relative(root, target);
-  const isSafe =
-    rel !== "" &&
-    !rel.startsWith("..") &&
-    !path.isAbsolute(rel) &&
-    rel.split(path.sep).length === 1 &&
-    (!mustMatchBasename || path.basename(target) === mustMatchBasename);
-  if (isSafe) {
-    await rm(target, { recursive: true, force: true });
-  } else {
-    console.warn(`[ipcRouter] 跳过非常规${label}，未删除: ${target}`);
-  }
 }
 
 /**
@@ -95,12 +74,23 @@ async function deleteTaskCompletely(id: string): Promise<void> {
   }
 }
 
+/** agent 事件广播退订（macOS 重建窗口时避免累积死监听） */
+let agentEventUnsub: (() => void) | null = null;
+
 /** 注册所有 IPC 处理器 */
 export function registerIpcHandlers(mainWindow: BrowserWindow): void {
-  // agent 事件广播：AgentRuntime -> 主窗口渲染进程
-  agentRuntime.setEmitter((event) => {
+  // agent 事件广播：AgentRuntime -> 主窗口渲染进程（多订阅，退订后再订阅避免累积）
+  agentEventUnsub?.();
+  agentEventUnsub = agentRuntime.onEvent((event) => {
     if (!mainWindow.isDestroyed()) {
       mainWindow.webContents.send("agent:event", event);
+    }
+  });
+
+  // 调度事件广播：Scheduler -> 主窗口渲染进程（自动化页实时刷新）
+  scheduler.setEventEmitter((event) => {
+    if (!mainWindow.isDestroyed()) {
+      mainWindow.webContents.send("schedule:event", event);
     }
   });
 
@@ -358,5 +348,33 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
     const { url } = validate(openExternalRequestSchema, raw);
     if (!/^https?:\/\//i.test(url)) throw new Error("仅支持 http/https 链接");
     await shell.openExternal(url);
+  });
+
+  // ── schedule:*（自动化 / 定时任务） ─────────
+  ipcMain.handle("schedule:list-tasks", () => scheduler.listTasks());
+
+  ipcMain.handle("schedule:create-task", async (_evt, raw) => {
+    const req = validate(createScheduleTaskRequestSchema, raw);
+    return scheduler.createTask(req);
+  });
+
+  ipcMain.handle("schedule:update-task", async (_evt, raw) => {
+    const req = validate(updateScheduleTaskRequestSchema, raw);
+    return scheduler.updateTask(req.id, req);
+  });
+
+  ipcMain.handle("schedule:delete-task", async (_evt, raw) => {
+    const { id } = validate(scheduleIdRequestSchema, raw);
+    await scheduler.deleteTask(id);
+  });
+
+  ipcMain.handle("schedule:run-now", async (_evt, raw) => {
+    const { id } = validate(scheduleIdRequestSchema, raw);
+    await scheduler.runNow(id);
+  });
+
+  ipcMain.handle("schedule:list-runs", (_evt, raw) => {
+    const { id } = validate(scheduleIdRequestSchema, raw);
+    return scheduler.listRuns(id);
   });
 }

@@ -50,7 +50,6 @@ export function Sidebar() {
   const [tasksOpen, setTasksOpen] = useState(true);
   const [workspacesOpen, setWorkspacesOpen] = useState(true);
   const [openWorkspaceId, setOpenWorkspaceId] = useState<string | null>(null);
-  const [activeNav, setActiveNav] = useState("");
   const [showSearch, setShowSearch] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [confirm, setConfirm] = useState<ConfirmState | null>(null);
@@ -64,6 +63,9 @@ export function Sidebar() {
   const selectTask = useSessionStore((s) => s.selectTask);
   const deleteTask = useSessionStore((s) => s.deleteTask);
   const removeWorkspace = useSessionStore((s) => s.removeWorkspace);
+  // 侧栏导航：上提至 uiStore（MainView 据此渲染自动化页）
+  const activeNav = useUIStore((s) => s.activeNav);
+  const setActiveNav = useUIStore((s) => s.setActiveNav);
 
   // 临时任务（任务区），按 updatedAt 倒序（最新优先）
   const tempTasks = allTasks
@@ -74,6 +76,12 @@ export function Sidebar() {
   const handleNewTask = () => {
     setActiveNav("");
     selectTask(""); // 回到欢迎页
+  };
+
+  // 选中会话任务：退出自动化视图（回到对话）
+  const handleSelectTask = (id: string) => {
+    setActiveNav("");
+    selectTask(id);
   };
 
   const filteredTasks = searchQuery
@@ -123,7 +131,8 @@ export function Sidebar() {
   };
 
   // 删除任务的确认文案按类型区分：临时任务的工作目录（work-spaces 下）会一并清除，空间任务保留空间目录
-  const confirmTask = confirm?.kind === "task" ? allTasks.find((t) => t.id === confirm.id) : undefined;
+  const confirmTask =
+    confirm?.kind === "task" ? allTasks.find((t) => t.id === confirm.id) : undefined;
   const confirmText =
     confirm?.kind === "task"
       ? {
@@ -210,7 +219,9 @@ export function Sidebar() {
 
       {/* ── 标题栏下方的侧栏工具栏（仅 mac/Linux：win 已并入上方拖动条） ── */}
       {!isWin && (
-        <div className="flex h-[40px] shrink-0 items-center justify-between px-[10px]">{toolbar}</div>
+        <div className="flex h-[40px] shrink-0 items-center justify-between px-[10px]">
+          {toolbar}
+        </div>
       )}
 
       {collapsed ? (
@@ -266,9 +277,7 @@ export function Sidebar() {
                   type="button"
                   onClick={() => setActiveNav(item.id)}
                   className={`flex h-[40px] items-center gap-[10px] rounded-s px-[12px] text-[15px] transition ${
-                    isActive
-                      ? "bg-accent-tint font-semibold text-ink"
-                      : "text-ink-2 hover:bg-hover"
+                    isActive ? "bg-accent-tint font-semibold text-ink" : "text-ink-2 hover:bg-hover"
                   }`}
                 >
                   <Icon className={isActive ? "text-accent" : "text-ink-2"} />
@@ -305,7 +314,7 @@ export function Sidebar() {
                     title={task.title}
                     time={task.time}
                     active={task.id === currentTaskId}
-                    onSelect={selectTask}
+                    onSelect={handleSelectTask}
                     onDeleteRequest={(id, title) => setConfirm({ kind: "task", id, title })}
                   />
                 ))}
@@ -354,7 +363,7 @@ export function Sidebar() {
                         time={session.time}
                         active={session.id === currentTaskId}
                         indent
-                        onSelect={selectTask}
+                        onSelect={handleSelectTask}
                         onDeleteRequest={(id, title) => setConfirm({ kind: "task", id, title })}
                       />
                     ))}

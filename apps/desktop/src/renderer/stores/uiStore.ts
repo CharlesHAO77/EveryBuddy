@@ -23,6 +23,10 @@ interface UIState {
   activeCategory: CategoryId;
   setActiveCategory: (category: CategoryId) => void;
 
+  /** 侧栏导航选中（"expert" | "auto" | ""）；"auto" 时主区渲染自动化页 */
+  activeNav: string;
+  setActiveNav: (nav: string) => void;
+
   sidebarCollapsed: boolean;
   setSidebarCollapsed: (collapsed: boolean) => void;
 
@@ -55,6 +59,9 @@ interface UIState {
 export const useUIStore = create<UIState>((set) => ({
   activeCategory: "daily",
   setActiveCategory: (category) => set({ activeCategory: category }),
+
+  activeNav: "",
+  setActiveNav: (nav) => set({ activeNav: nav }),
 
   sidebarCollapsed: false,
   setSidebarCollapsed: (collapsed) => set({ sidebarCollapsed: collapsed }),
