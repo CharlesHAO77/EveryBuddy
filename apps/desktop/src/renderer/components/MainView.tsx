@@ -12,6 +12,7 @@ import { AttachmentPreview } from "./AttachmentPreview";
 import { AutomationView } from "./automation/AutomationView";
 import { CompactionNoticeCard } from "./CompactionNoticeCard";
 import { ConversationTitle } from "./ConversationTitle";
+import { ExpertView } from "./expert/ExpertView";
 import { FileMentionMenu } from "./FileMentionMenu";
 import {
   IconArrowUp,
@@ -146,6 +147,9 @@ export function MainView() {
       {activeNav === "auto" ? (
         // 自动化页：标题/数量/新建按钮都在自带顶栏（兼作窗口拖动区，win 右侧让位系统按钮）
         <AutomationView />
+      ) : activeNav === "expert" ? (
+        // 专家·技能·连接器页（对齐 demo HTML v3）
+        <ExpertView />
       ) : (
         <>
           {/* ── 标题栏拖动层·对话区部分：与对话区一体（纸色），mac 下 40px 拖动区；对话标题可点击重命名靠左 ── */}

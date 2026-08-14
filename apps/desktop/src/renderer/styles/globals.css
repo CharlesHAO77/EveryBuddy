@@ -32,6 +32,21 @@
   --danger: #b4453a;
   --danger-strong: #9c3a31;
 
+  /* ── 琥珀（技能/预留态，暖） ── */
+  --warn: #b8862f;
+  --warn-tint: #fbf3e2;
+  --warn-line: #ecd9b6;
+
+  /* ── 雾蓝（连接器/信息，暖调蓝） ── */
+  --info: #3a6b8a;
+  --info-tint: #eaf1f6;
+  --info-line: #c6dae6;
+
+  /* ── 紫灰（自定义专家，暖调紫） ── */
+  --purple: #6d5b8a;
+  --purple-tint: #f0edf5;
+  --purple-line: #d8cfe3;
+
   /* ── 终端色块（代码块/输出，暖黑） ── */
   --terminal: #2a2723;
   --terminal-text: #e8e4dc;
@@ -63,6 +78,18 @@
 
   --color-danger: var(--danger);
   --color-danger-strong: var(--danger-strong);
+
+  --color-warn: var(--warn);
+  --color-warn-tint: var(--warn-tint);
+  --color-warn-line: var(--warn-line);
+
+  --color-info: var(--info);
+  --color-info-tint: var(--info-tint);
+  --color-info-line: var(--info-line);
+
+  --color-purple: var(--purple);
+  --color-purple-tint: var(--purple-tint);
+  --color-purple-line: var(--purple-line);
 
   --color-terminal: var(--terminal);
   --color-terminal-text: var(--terminal-text);
