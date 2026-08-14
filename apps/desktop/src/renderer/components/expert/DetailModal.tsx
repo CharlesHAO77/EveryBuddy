@@ -585,11 +585,23 @@ function ConnectorForm({ connector, onClose }: { connector: Connector; onClose: 
   const save = async () => {
     setBusy(true);
     try {
+      // 清理与当前类型/传输无关的 config 字段，避免残留脏配置
+      const clean = { ...config };
+      if (connector.type === "mcp" && clean.transport === "streamable-http") {
+        delete clean.command;
+        delete clean.args;
+        delete clean.package;
+        delete clean.version;
+        delete clean.env;
+      } else if (connector.type === "mcp") {
+        delete clean.url;
+        delete clean.headers;
+      }
       await store.updateConnector({
         id: connector.id,
         name,
         description,
-        config,
+        config: clean,
         boundExpertIds: bound,
         enabled,
         capabilities,
@@ -691,48 +703,7 @@ function ConnectorForm({ connector, onClose }: { connector: Connector; onClose: 
 
         <Field label="配置（config · 按 type 校验）">
           {connector.type === "mcp" ? (
-            <>
-              <div className="mb-[12px] grid grid-cols-[140px_1fr] items-center gap-[14px]">
-                <span className="text-[14px] text-ink-2">Server 命令</span>
-                <TextInput
-                  value={String(config.command ?? "")}
-                  onChange={(v) => setCfg("command", v)}
-                  placeholder="npx -y @modelcontextprotocol/server-xxx"
-                />
-              </div>
-              <div className="mb-[12px] grid grid-cols-[140px_1fr] items-center gap-[14px]">
-                <span className="text-[14px] text-ink-2">参数 args</span>
-                <TextInput
-                  value={
-                    Array.isArray(config.args) ? config.args.join(" ") : String(config.args ?? "")
-                  }
-                  onChange={(v) => setCfg("args", v.trim() ? v.trim().split(/\s+/) : [])}
-                  placeholder="以空格分隔，如 -y 包名"
-                />
-              </div>
-              <div className="grid grid-cols-[140px_1fr] items-center gap-[14px]">
-                <span className="text-[14px] text-ink-2">环境变量</span>
-                <TextInput
-                  value={
-                    typeof config.env === "object" && config.env
-                      ? Object.entries(config.env as Record<string, string>)
-                          .map(([k, v]) => `${k}=${v}`)
-                          .join(" ")
-                          .trim()
-                      : ""
-                  }
-                  onChange={(v) => {
-                    const env: Record<string, string> = {};
-                    for (const pair of v.trim().split(/\s+/)) {
-                      const i = pair.indexOf("=");
-                      if (i > 0) env[pair.slice(0, i)] = pair.slice(i + 1);
-                    }
-                    setCfg("env", env);
-                  }}
-                  placeholder="KEY=VALUE，以空格分隔"
-                />
-              </div>
-            </>
+            <McpConfigForm config={config} setCfg={setCfg} />
           ) : connector.type === "filesystem" ? (
             <div className="grid grid-cols-[140px_1fr] items-center gap-[14px]">
               <span className="text-[14px] text-ink-2">白名单根目录</span>
@@ -850,6 +821,174 @@ function ConnectorForm({ connector, onClose }: { connector: Connector; onClose: 
           关闭
         </button>
       </ModalFoot>
+    </>
+  );
+}
+
+/* ════════════ MCP 配置表单（stdio / streamable-http 双传输） ════════════ */
+
+/** 每行 label + 控件 */
+function KvRow({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="mb-[12px] grid grid-cols-[140px_1fr] items-center gap-[14px]">
+      <span className="text-[14px] text-ink-2">{label}</span>
+      {children}
+    </div>
+  );
+}
+
+/** KEY=VALUE 列表（空格分隔）↔ Record */
+function KvInput({
+  value,
+  onChange,
+  placeholder,
+}: {
+  value: unknown;
+  onChange: (v: Record<string, string>) => void;
+  placeholder?: string;
+}) {
+  const str =
+    value && typeof value === "object"
+      ? Object.entries(value as Record<string, string>)
+          .map(([k, v]) => `${k}=${v}`)
+          .join(" ")
+          .trim()
+      : "";
+  return (
+    <TextInput
+      value={str}
+      onChange={(v) => {
+        const out: Record<string, string> = {};
+        for (const pair of v.trim().split(/\s+/)) {
+          const i = pair.indexOf("=");
+          if (i > 0) out[pair.slice(0, i)] = pair.slice(i + 1);
+        }
+        onChange(out);
+      }}
+      placeholder={placeholder}
+    />
+  );
+}
+
+function McpConfigForm({
+  config,
+  setCfg,
+}: {
+  config: Record<string, unknown>;
+  setCfg: (key: string, value: unknown) => void;
+}) {
+  const transport = String(config.transport ?? "stdio");
+  // 运行方式：托管安装（npm 装到 ~/EveryBuddy/mcp-servers/，绕开 npx 漏装依赖）或自定义命令
+  const [runMode, setRunMode] = useState<"managed" | "custom">(
+    config.package ? "managed" : "custom",
+  );
+  const argsStr = Array.isArray(config.args) ? config.args.join(" ") : String(config.args ?? "");
+
+  const transportBtn = (id: string, label: string) => (
+    <button
+      type="button"
+      onClick={() => setCfg("transport", id)}
+      className={`rounded-[8px] border px-[12px] py-[9px] text-[13.5px] font-semibold transition ${
+        transport === id
+          ? "border-accent bg-accent-tint text-accent-strong"
+          : "border-line bg-card text-ink-2 hover:bg-hover"
+      }`}
+    >
+      {label}
+    </button>
+  );
+
+  return (
+    <>
+      <div className="mb-[14px] grid grid-cols-2 gap-[8px]">
+        {transportBtn("stdio", "STDIO · 本地进程")}
+        {transportBtn("streamable-http", "Streamable HTTP · 远程")}
+      </div>
+
+      {transport === "streamable-http" ? (
+        <>
+          <KvRow label="Server URL">
+            <TextInput
+              value={String(config.url ?? "")}
+              onChange={(v) => setCfg("url", v)}
+              placeholder="https://api.example.com/mcp"
+            />
+          </KvRow>
+          <KvRow label="请求头">
+            <KvInput
+              value={config.headers}
+              onChange={(v) => setCfg("headers", v)}
+              placeholder="Authorization=Bearer xxx"
+            />
+          </KvRow>
+        </>
+      ) : (
+        <>
+          <div className="mb-[12px] flex gap-[6px]">
+            {(
+              [
+                ["managed", "托管安装（推荐）"],
+                ["custom", "自定义命令"],
+              ] as const
+            ).map(([id, label]) => (
+              <button
+                key={id}
+                type="button"
+                onClick={() => setRunMode(id)}
+                className={`rounded-full border px-[12px] py-[4px] text-[12.5px] font-semibold transition ${
+                  runMode === id
+                    ? "border-accent-line bg-accent-tint text-accent-strong"
+                    : "border-line bg-card text-ink-3 hover:bg-hover hover:text-ink-2"
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          {runMode === "managed" ? (
+            <>
+              <KvRow label="npm 包">
+                <TextInput
+                  value={String(config.package ?? "")}
+                  onChange={(v) => setCfg("package", v)}
+                  placeholder="@modelcontextprotocol/server-xxx"
+                />
+              </KvRow>
+              <KvRow label="版本（可选）">
+                <TextInput
+                  value={String(config.version ?? "")}
+                  onChange={(v) => setCfg("version", v)}
+                  placeholder="2025.4.8"
+                />
+              </KvRow>
+            </>
+          ) : (
+            <>
+              <KvRow label="命令">
+                <TextInput
+                  value={String(config.command ?? "")}
+                  onChange={(v) => setCfg("command", v)}
+                  placeholder="npx -y @modelcontextprotocol/server-xxx"
+                />
+              </KvRow>
+              <KvRow label="参数 args">
+                <TextInput
+                  value={argsStr}
+                  onChange={(v) => setCfg("args", v.trim() ? v.trim().split(/\s+/) : [])}
+                  placeholder="以空格分隔"
+                />
+              </KvRow>
+            </>
+          )}
+          <KvRow label="环境变量">
+            <KvInput
+              value={config.env}
+              onChange={(v) => setCfg("env", v)}
+              placeholder="GITHUB_TOKEN=xxx"
+            />
+          </KvRow>
+        </>
+      )}
     </>
   );
 }

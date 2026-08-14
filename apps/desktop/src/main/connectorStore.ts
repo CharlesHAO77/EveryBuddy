@@ -63,7 +63,8 @@ export class ConnectorStore {
     this.loaded = true;
   }
 
-  /** 首次启动种子：GitHub MCP 示例（enabled=false + reserved，需用户激活） */
+  /** 首次启动种子：GitHub MCP 示例（enabled=false + reserved，需用户激活）。
+   *  用托管安装（package + 版本固定），绕开 npx 临时安装漏装依赖的问题。 */
   private seedBuiltinExample(): void {
     const now = new Date().toISOString();
     this.data.connectors.push({
@@ -73,8 +74,9 @@ export class ConnectorStore {
       icon: "hub",
       description: "仓库 / Issue / PR 能力（MCP server，预留示例）",
       config: {
-        command: "npx",
-        args: ["-y", "@modelcontextprotocol/server-github"],
+        transport: "stdio",
+        package: "@modelcontextprotocol/server-github",
+        version: "2025.4.8",
         env: { GITHUB_TOKEN: "" },
       },
       tags: ["source:builtin"],
@@ -160,10 +162,16 @@ export class ConnectorStore {
   }
 
   /** 测试连接：真实探测 mcp/filesystem；reserved 及其余类型返回提示 */
-  async test(req: TestConnectorRequest): Promise<{ status: ConnectorStatus; message: string; tools?: number }> {
+  async test(
+    req: TestConnectorRequest,
+  ): Promise<{ status: ConnectorStatus; message: string; tools?: number }> {
     const connector = this.get(req.id);
     if (!connector) throw new Error("连接器不存在");
-    if (connector.status === "reserved" && connector.type !== "mcp" && connector.type !== "filesystem") {
+    if (
+      connector.status === "reserved" &&
+      connector.type !== "mcp" &&
+      connector.type !== "filesystem"
+    ) {
       return { status: "reserved", message: "已注册·待激活，运行时接入即将推出" };
     }
     if (connector.type === "mcp") {

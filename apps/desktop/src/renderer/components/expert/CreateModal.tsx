@@ -33,6 +33,10 @@ export function CreateModal({ kind, onClose }: { kind: TabId; onClose: () => voi
   const [mode, setMode] = useState<AgentMode>("daily");
   const [type, setType] = useState<ConnectorType>("mcp");
   const [content, setContent] = useState("");
+  // MCP 传输（新建连接器时即可选 STDIO / Streamable HTTP）
+  const [transport, setTransport] = useState<"stdio" | "streamable-http">("stdio");
+  const [mcpPackage, setMcpPackage] = useState("");
+  const [mcpUrl, setMcpUrl] = useState("");
   const [busy, setBusy] = useState(false);
 
   const submit = async () => {
@@ -42,7 +46,15 @@ export function CreateModal({ kind, onClose }: { kind: TabId; onClose: () => voi
       if (kind === "expert") await store.createExpert({ name, description, mode });
       else if (kind === "team") await store.createTeam({ name, description });
       else if (kind === "skill") await store.createSkill({ name, description, content });
-      else if (kind === "connector") await store.createConnector({ name, description, type });
+      else if (kind === "connector") {
+        const config =
+          type === "mcp"
+            ? transport === "streamable-http"
+              ? { transport, url: mcpUrl }
+              : { transport, package: mcpPackage.trim() || undefined }
+            : undefined;
+        await store.createConnector({ name, description, type, config });
+      }
       onClose();
     } finally {
       setBusy(false);
@@ -93,13 +105,62 @@ export function CreateModal({ kind, onClose }: { kind: TabId; onClose: () => voi
           </Field>
         ) : null}
         {kind === "connector" ? (
-          <Field label="类型">
-            <Select
-              value={type}
-              onChange={(v) => setType(v as ConnectorType)}
-              options={TYPE_OPTIONS.map((t) => ({ value: t.id, label: t.label }))}
-            />
-          </Field>
+          <>
+            <Field label="类型">
+              <Select
+                value={type}
+                onChange={(v) => setType(v as ConnectorType)}
+                options={TYPE_OPTIONS.map((t) => ({ value: t.id, label: t.label }))}
+              />
+            </Field>
+            {type === "mcp" ? (
+              <>
+                <Field label="传输方式">
+                  <div className="grid grid-cols-2 gap-[8px]">
+                    {(
+                      [
+                        ["stdio", "STDIO · 本地进程"],
+                        ["streamable-http", "Streamable HTTP · 远程"],
+                      ] as const
+                    ).map(([id, label]) => (
+                      <button
+                        key={id}
+                        type="button"
+                        onClick={() => setTransport(id)}
+                        className={`rounded-[8px] border px-[12px] py-[9px] text-[13.5px] font-semibold transition ${
+                          transport === id
+                            ? "border-accent bg-accent-tint text-accent-strong"
+                            : "border-line bg-card text-ink-2 hover:bg-hover"
+                        }`}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                </Field>
+                {transport === "streamable-http" ? (
+                  <Field label="Server URL">
+                    <TextInput
+                      value={mcpUrl}
+                      onChange={setMcpUrl}
+                      placeholder="https://api.example.com/mcp"
+                    />
+                  </Field>
+                ) : (
+                  <Field
+                    label="npm 包（托管安装到 ~/EveryBuddy/mcp-servers/）"
+                    hint="首次测试连接时自动 npm install，绕开 npx 漏装依赖问题。"
+                  >
+                    <TextInput
+                      value={mcpPackage}
+                      onChange={setMcpPackage}
+                      placeholder="@modelcontextprotocol/server-xxx"
+                    />
+                  </Field>
+                )}
+              </>
+            ) : null}
+          </>
         ) : null}
         {kind === "skill" ? (
           <Field label="SKILL.md 正文" hint="name/description 会写入 frontmatter，正文在下方。">
