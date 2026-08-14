@@ -217,16 +217,45 @@ export class SkillStore {
     const managed = this.data.skills
       .map((e) => this.readEntry(e))
       .filter((e): e is SkillEntry => e !== null);
-    return [...managed, ...this.listGlobalSkills()];
+    return [...managed, ...this.listUnregisteredDirs(), ...this.listGlobalSkills()];
   }
 
   /** 已启用的 EveryBuddy 技能（skillsOverride 注入源；enabled=false 不进 override） */
   listEnabled(): SkillEntry[] {
     this.load();
-    return this.data.skills
+    const managed = this.data.skills
       .filter((e) => e.enabled)
       .map((e) => this.readEntry(e))
       .filter((e): e is SkillEntry => e !== null);
+    // 手动放入 skills/ 的技能目录（未注册）默认启用，一并注入
+    const discovered = this.listUnregisteredDirs().filter((e) => e.enabled);
+    return [...managed, ...discovered];
+  }
+
+  /** 自动发现 skills 目录下未注册的技能文件夹（手动放入即作为「已安装」加载） */
+  private listUnregisteredDirs(): SkillEntry[] {
+    const known = new Set(this.data.skills.map((e) => e.id));
+    const out: SkillEntry[] = [];
+    if (!existsSync(this.skillsDir)) return out;
+    for (const name of readdirSync(this.skillsDir)) {
+      if (known.has(name)) continue;
+      const dir = path.join(this.skillsDir, name);
+      if (!statSync(dir).isDirectory()) continue;
+      const file = path.join(dir, "SKILL.md");
+      if (!existsSync(file)) continue;
+      const fm = parseSkillFrontmatter(readFileSync(file, "utf-8"));
+      out.push({
+        id: name,
+        name: fm.name ?? name,
+        description: fm.description ?? "",
+        filePath: file,
+        baseDir: dir,
+        source: "installed",
+        tags: [],
+        enabled: true,
+      });
+    }
+    return out;
   }
 
   create(req: CreateSkillRequest): SkillEntry {

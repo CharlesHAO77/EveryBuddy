@@ -6,11 +6,17 @@
 import { describe, expect, it } from "vitest";
 import { probeMcpConnector } from "../src/main/mcpTools";
 
-describe("probeMcpConnector 配置校验", () => {
-  it("streamable-http 缺 url 报错", async () => {
+describe("probeMcpConnector 配置校验（传输按 JSON 自动判断：有 url → HTTP，否则 stdio）", () => {
+  it("transport 字段不影响判断：无 url 一律按 stdio，缺命令报错", async () => {
     const r = await probeMcpConnector({ transport: "streamable-http" });
     expect(r.ok).toBe(false);
-    expect(r.message).toContain("URL");
+    expect(r.message).toContain("command");
+  });
+
+  it("空 url 也按 stdio（无 url 即本地进程）", async () => {
+    const r = await probeMcpConnector({ transport: "streamable-http", url: "" });
+    expect(r.ok).toBe(false);
+    expect(r.message).toContain("command");
   });
 
   it("stdio 缺 package/command 报错", async () => {

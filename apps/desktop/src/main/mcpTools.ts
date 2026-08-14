@@ -116,12 +116,12 @@ async function stdioSpawnConfig(cfg: McpConfig): Promise<{
   return { command, args, env };
 }
 
-/** 打开一个 MCP client（按 transport 分支），未连接/参数缺失抛错 */
+/** 打开一个 MCP client（按 JSON 自动判断传输：有 url → Streamable HTTP，否则 stdio），未连接/参数缺失抛错 */
 async function openMcpClient(cfg: McpConfig): Promise<Client> {
   const client = new Client({ name: "everybuddy", version: "1.0.0" }, { capabilities: {} });
-  if (cfg.transport === "streamable-http") {
-    if (!cfg.url) throw new Error("缺少 MCP server URL（config.url）");
-    const transport = new StreamableHTTPClientTransport(new URL(cfg.url), {
+  const url = typeof cfg.url === "string" ? cfg.url.trim() : "";
+  if (url.length > 0) {
+    const transport = new StreamableHTTPClientTransport(new URL(url), {
       requestInit: { headers: asStrMap(cfg.headers) },
     });
     await client.connect(transport);

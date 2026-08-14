@@ -136,6 +136,22 @@ describe("SkillStore", () => {
     expect(store2.list().filter((x) => x.source === "installed")).toHaveLength(0);
   });
 
+  it("自动发现 skills 目录下未注册的技能文件夹（作为已安装加载）", () => {
+    const store = make();
+    const manual = path.join(dir, "skills", "manual-skill");
+    mkdirSync(manual, { recursive: true });
+    writeFileSync(
+      path.join(manual, "SKILL.md"),
+      buildSkillMd("manual-skill", "手动放入", "# body"),
+      "utf-8",
+    );
+    const hit = store.list().find((s) => s.id === "manual-skill");
+    expect(hit?.source).toBe("installed");
+    expect(hit?.enabled).toBe(true);
+    // 也进入 listEnabled（运行时 skillsOverride 注入源）
+    expect(store.listEnabled().some((s) => s.id === "manual-skill")).toBe(true);
+  });
+
   it("parseSkillFrontmatter / buildSkillMd 往返", () => {
     const md = buildSkillMd("demo", "描述", "# 正文\n\n内容");
     const fm = parseSkillFrontmatter(md);

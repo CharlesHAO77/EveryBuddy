@@ -64,7 +64,8 @@ export class ConnectorStore {
   }
 
   /** 首次启动种子：GitHub MCP 示例（enabled=false + reserved，需用户激活）。
-   *  用托管安装（package + 版本固定），绕开 npx 临时安装漏装依赖的问题。 */
+   *  用托管安装（package + 版本固定），绕开 npx 临时安装漏装依赖的问题。
+   *  传输由 JSON 自动判断（无 url → stdio），填好 GITHUB_TOKEN 后「测试连接」即通。 */
   private seedBuiltinExample(): void {
     const now = new Date().toISOString();
     this.data.connectors.push({
@@ -74,7 +75,6 @@ export class ConnectorStore {
       icon: "hub",
       description: "仓库 / Issue / PR 能力（MCP server，预留示例）",
       config: {
-        transport: "stdio",
         package: "@modelcontextprotocol/server-github",
         version: "2025.4.8",
         env: { GITHUB_TOKEN: "" },

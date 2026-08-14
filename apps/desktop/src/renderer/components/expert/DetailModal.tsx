@@ -5,13 +5,7 @@
  * 技能 SKILL.md 编辑 + 启停；连接器 per-type 配置 + 测试连接 + 绑定专家。
  */
 
-import type {
-  Connector,
-  ConnectorType,
-  Expert,
-  ExpertTeam,
-  SkillEntry,
-} from "@everybuddy/ipc-contract";
+import type { Connector, Expert, ExpertTeam, SkillEntry } from "@everybuddy/ipc-contract";
 import { useEffect, useState } from "react";
 import { useExpertCenterStore } from "../../stores/expertCenterStore";
 import {
@@ -553,15 +547,13 @@ function SkillForm({ skill, onClose }: { skill: SkillEntry; onClose: () => void 
 
 /* ════════════ 连接器 ════════════ */
 
-const TYPE_OPTIONS: Array<{ id: ConnectorType; label: string }> = [
-  { id: "mcp", label: "MCP Server" },
-  { id: "filesystem", label: "文件系统" },
-  { id: "http-api", label: "HTTP API" },
-  { id: "datasource", label: "数据源" },
-  { id: "custom", label: "自定义" },
-];
-
-const AVAILABLE_TYPES = new Set<ConnectorType>(["mcp", "filesystem"]);
+const CONN_TYPE_LABEL: Record<string, string> = {
+  mcp: "MCP",
+  filesystem: "文件系统",
+  "http-api": "HTTP API",
+  datasource: "数据源",
+  custom: "自定义",
+};
 
 function ConnectorForm({ connector, onClose }: { connector: Connector; onClose: () => void }) {
   const store = useExpertCenterStore();
@@ -570,7 +562,6 @@ function ConnectorForm({ connector, onClose }: { connector: Connector; onClose: 
   const [config, setConfig] = useState<Record<string, unknown>>(connector.config ?? {});
   const [bound, setBound] = useState<string[]>(connector.boundExpertIds);
   const [enabled, setEnabled] = useState(connector.enabled);
-  const [capabilities, setCapabilities] = useState<string[]>(connector.capabilities);
   const [testMsg, setTestMsg] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -586,17 +577,20 @@ function ConnectorForm({ connector, onClose }: { connector: Connector; onClose: 
   const save = async () => {
     setBusy(true);
     try {
-      // 清理与当前类型/传输无关的 config 字段，避免残留脏配置
+      // 传输按 JSON 自动判断（有 url → Streamable HTTP，否则 stdio），保存时清理无关字段
       const clean = { ...config };
-      if (connector.type === "mcp" && clean.transport === "streamable-http") {
+      const isHttp = typeof clean.url === "string" && clean.url.trim().length > 0;
+      if (connector.type === "mcp" && isHttp) {
         delete clean.command;
         delete clean.args;
         delete clean.package;
         delete clean.version;
         delete clean.env;
+        delete clean.transport;
       } else if (connector.type === "mcp") {
         delete clean.url;
         delete clean.headers;
+        delete clean.transport;
       }
       await store.updateConnector({
         id: connector.id,
@@ -605,7 +599,6 @@ function ConnectorForm({ connector, onClose }: { connector: Connector; onClose: 
         config: clean,
         boundExpertIds: bound,
         enabled,
-        capabilities,
       });
       onClose();
     } finally {
@@ -618,7 +611,7 @@ function ConnectorForm({ connector, onClose }: { connector: Connector; onClose: 
     onClose();
   };
 
-  const typeLabel = TYPE_OPTIONS.find((t) => t.id === connector.type)?.label ?? connector.type;
+  const typeLabel = CONN_TYPE_LABEL[connector.type] ?? connector.type;
 
   return (
     <>
@@ -673,47 +666,6 @@ function ConnectorForm({ connector, onClose }: { connector: Connector; onClose: 
           <TextArea value={description} onChange={setDescription} rows={2} />
         </Field>
 
-        <Field label="类型（开放枚举，未来扩展不改 schema）">
-          <div className="grid grid-cols-5 gap-[8px]">
-            {TYPE_OPTIONS.map((t) => {
-              const active = connector.type === t.id;
-              const available = AVAILABLE_TYPES.has(t.id);
-              return (
-                <div
-                  key={t.id}
-                  className={`flex flex-col items-center gap-[6px] rounded-[10px] border p-[10px] text-center ${
-                    active ? "border-accent bg-accent-tint" : "border-line bg-card"
-                  } ${!available ? "opacity-55" : ""}`}
-                >
-                  <div
-                    className={`flex h-[34px] w-[34px] items-center justify-center rounded-[9px] ${
-                      active ? "bg-card text-accent" : "bg-hover text-ink-2"
-                    }`}
-                  >
-                    {expertIcon(
-                      t.id === "mcp"
-                        ? "hub"
-                        : t.id === "filesystem"
-                          ? "folder"
-                          : t.id === "http-api"
-                            ? "globe"
-                            : t.id === "datasource"
-                              ? "database"
-                              : "puzzle",
-                    )}
-                  </div>
-                  <div className="text-[12px] font-semibold text-ink">{t.label}</div>
-                  <div
-                    className={`text-[11px] font-semibold ${available ? "text-accent" : "text-ink-3"}`}
-                  >
-                    {available ? "可用" : "即将推出"}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </Field>
-
         <Field label="配置（config · 按 type 校验）">
           {connector.type === "mcp" ? (
             <McpConfigForm config={config} replaceConfig={(c) => setConfig(c)} />
@@ -750,34 +702,6 @@ function ConnectorForm({ connector, onClose }: { connector: Connector; onClose: 
               {connector.type} 类型仅注册，运行时注入后续实现；配置为自由 JSON。
             </p>
           )}
-        </Field>
-
-        <Field
-          label="能力声明（capabilities · 预留）"
-          hint="未来按 capability 决定注入方式：tools→customTools，context→system prompt，knowledge→检索增强。"
-        >
-          <div className="flex flex-wrap gap-[7px]">
-            {["tools", "context", "knowledge", "actions"].map((cap) => {
-              const on = capabilities.includes(cap);
-              return on ? (
-                <ChipRemovable
-                  key={cap}
-                  onRemove={() => setCapabilities((p) => p.filter((x) => x !== cap))}
-                >
-                  {cap}
-                </ChipRemovable>
-              ) : (
-                <button
-                  key={cap}
-                  type="button"
-                  onClick={() => setCapabilities((p) => [...p, cap])}
-                  className="rounded-full border border-line bg-hover px-[10px] py-[4px] text-[13px] text-ink-3 transition hover:bg-active hover:text-ink-2"
-                >
-                  + {cap}
-                </button>
-              );
-            })}
-          </div>
         </Field>
 
         <Field
@@ -853,30 +777,33 @@ function McpConfigForm({
   config: Record<string, unknown>;
   replaceConfig: (c: Record<string, unknown>) => void;
 }) {
-  const transport = String(config.transport ?? "stdio");
   const [json, setJson] = useState(() => serializeMcpJson(config));
   const [jsonError, setJsonError] = useState<string | null>(null);
 
-  // config 变化时同步编辑器内容（输入过程中 config 不变，不打断打字；transport 切换会改变 config）
+  // config 变化时同步编辑器内容（输入过程中 config 不变，不打断打字）
   useEffect(() => {
     setJson(serializeMcpJson(config));
     setJsonError(null);
   }, [config]);
 
-  const setTransport = (t: string) => replaceConfig({ ...config, transport: t });
+  /** 传输按 JSON 自动判断：有 url → Streamable HTTP，否则 STDIO（实时从编辑器内容判断） */
+  const isHttp = /"url"\s*:/.test(json);
 
-  /** blur 提交：解析 JSON 并入 config（保留 transport） */
+  /** blur 提交：解析 JSON，按是否含 url 推断传输 */
   const commit = () => {
     const raw = json.trim();
     if (!raw) {
-      replaceConfig({ ...config, transport });
+      replaceConfig({ ...config, transport: "stdio" });
       setJsonError(null);
       return;
     }
     try {
       const parsed = JSON.parse(raw) as unknown;
       if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
-        replaceConfig({ ...(parsed as Record<string, unknown>), transport });
+        const p = parsed as Record<string, unknown>;
+        const transport =
+          typeof p.url === "string" && p.url.trim().length > 0 ? "streamable-http" : "stdio";
+        replaceConfig({ ...p, transport });
         setJsonError(null);
       } else {
         setJsonError("配置需为 JSON 对象");
@@ -887,34 +814,15 @@ function McpConfigForm({
   };
 
   const applyTemplate = () => {
-    const tmpl =
-      transport === "streamable-http"
-        ? { url: "", headers: { Authorization: "Bearer xxx" } }
-        : { package: "@modelcontextprotocol/server-xxx", version: "", env: {} };
+    const tmpl = isHttp
+      ? { url: "", headers: { Authorization: "Bearer xxx" } }
+      : { package: "@modelcontextprotocol/server-xxx", version: "", env: {} };
     setJson(JSON.stringify(tmpl, null, 2));
     setJsonError(null);
   };
 
-  const transportBtn = (id: string, label: string) => (
-    <button
-      type="button"
-      onClick={() => setTransport(id)}
-      className={`rounded-[8px] border px-[12px] py-[9px] text-[13.5px] font-semibold transition ${
-        transport === id
-          ? "border-accent bg-accent-tint text-accent-strong"
-          : "border-line bg-card text-ink-2 hover:bg-hover"
-      }`}
-    >
-      {label}
-    </button>
-  );
-
   return (
     <>
-      <div className="mb-[12px] grid grid-cols-2 gap-[8px]">
-        {transportBtn("stdio", "STDIO · 本地进程")}
-        {transportBtn("streamable-http", "Streamable HTTP · 远程")}
-      </div>
       <div className="mb-[6px] flex items-center justify-between">
         <span className="text-[12.5px] font-semibold text-ink-2">MCP server 配置（JSON）</span>
         <button
@@ -929,20 +837,22 @@ function McpConfigForm({
         value={json}
         onChange={(e) => setJson(e.target.value)}
         onBlur={commit}
-        rows={7}
+        rows={8}
         spellCheck={false}
         placeholder={
-          transport === "streamable-http"
-            ? '{ "url": "https://...", "headers": {} }'
-            : '{ "package": "@modelcontextprotocol/server-xxx", "version": "", "env": {} }'
+          isHttp
+            ? '{ "url": "https://api.example.com/mcp", "headers": { "Authorization": "Bearer xxx" } }'
+            : '{ "package": "@modelcontextprotocol/server-xxx", "version": "", "env": { "KEY": "VALUE" } }'
         }
         className="w-full rounded-[10px] border border-line bg-card px-[14px] py-[10px] font-mono text-[12.5px] leading-[1.6] text-ink shadow-card transition focus:border-accent focus:outline-none focus:ring-[3px] focus:ring-accent-tint"
       />
       {jsonError ? <p className="mt-[6px] text-[12.5px] text-danger">{jsonError}</p> : null}
       <p className="mt-[6px] text-[12.5px] leading-[1.6] text-ink-3">
-        {transport === "streamable-http"
-          ? "Streamable HTTP：url 必填，headers 可选（如 Authorization）。"
-          : "托管安装：package 必填、version 可选；自定义命令：command + args；环境变量用 env（KEY=VALUE）。"}
+        传输按 JSON 自动识别：
+        {isHttp
+          ? "含 url → Streamable HTTP（远程）"
+          : "无 url → STDIO（本地进程，托管安装到 ~/EveryBuddy/mcp-servers/）"}
+        。填好 GITHUB_TOKEN 等环境变量后「测试连接」即通。
       </p>
     </>
   );
