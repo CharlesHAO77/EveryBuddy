@@ -458,6 +458,219 @@ export type ScheduleEvent =
   | { type: "run_finished"; payload: { run: ScheduledRun; task: ScheduledTask } };
 
 // ────────────────────────────────────────────────
+// Expert / Team / Skill / Connector（专家·技能·连接器）
+// ────────────────────────────────────────────────
+
+/** 专家来源：builtin 内置（代码内 const）/ custom 自定义（experts.json）/ installed 第三方安装 */
+export type ExpertSource = "builtin" | "custom" | "installed";
+
+/** 专家：当前 daily/coding 模式的泛化（复用 AgentConfig 字段；builtin 映射 agent-*.json） */
+export interface Expert {
+  id: string;
+  name: string;
+  /** icon key（renderer 专家图标集：briefcase/code/clipboard/palette/monitor/...） */
+  icon: string;
+  description: string;
+  /** 基于哪个 prompt builder（决定默认工具/扩展/提示词骨架） */
+  mode: AgentMode;
+  /** 覆盖模式默认提示词（缺省由 main/prompts/*.ts builder 生成） */
+  systemPrompt?: string;
+  appendSystemPrompt?: string[];
+  tools?: string[];
+  extensions?: string[];
+  defaultModelProviderId?: string;
+  visionModelProviderId?: string;
+  imageGenModelProviderId?: string;
+  /** 预留标签（保留命名空间 domain:*、capability:*、source:*、team:*） */
+  tags: string[];
+  source: ExpertSource;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateExpertRequest {
+  name: string;
+  icon?: string;
+  description?: string;
+  mode?: AgentMode;
+  systemPrompt?: string;
+  appendSystemPrompt?: string[];
+  tools?: string[];
+  extensions?: string[];
+  defaultModelProviderId?: string;
+  visionModelProviderId?: string;
+  imageGenModelProviderId?: string;
+  tags?: string[];
+}
+
+export interface UpdateExpertRequest {
+  id: string;
+  name?: string;
+  icon?: string;
+  description?: string;
+  mode?: AgentMode;
+  systemPrompt?: string;
+  appendSystemPrompt?: string[];
+  tools?: string[];
+  extensions?: string[];
+  /** null 表示清除覆盖、回退模式默认 */
+  defaultModelProviderId?: string | null;
+  visionModelProviderId?: string | null;
+  imageGenModelProviderId?: string | null;
+  tags?: string[];
+}
+
+/** 专家团路由策略：本轮仅 "manual"；"auto" dispatcher / "workflow" 编排为后续（预留） */
+export type TeamRoutingStrategy = "manual" | "auto" | "workflow";
+
+/** 专家团（本轮仅登记成员 + 手动切换；Agent 团队调度 / Workflow 编排后续实现） */
+export interface ExpertTeam {
+  id: string;
+  name: string;
+  icon: string;
+  description: string;
+  expertIds: string[];
+  tags: string[];
+  routingStrategy: TeamRoutingStrategy;
+  sharedTools?: string[];
+  sharedExtensions?: string[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateTeamRequest {
+  name: string;
+  icon?: string;
+  description?: string;
+  expertIds?: string[];
+  tags?: string[];
+  routingStrategy?: TeamRoutingStrategy;
+  sharedTools?: string[];
+  sharedExtensions?: string[];
+}
+
+export interface UpdateTeamRequest {
+  id: string;
+  name?: string;
+  icon?: string;
+  description?: string;
+  expertIds?: string[];
+  tags?: string[];
+  routingStrategy?: TeamRoutingStrategy;
+  sharedTools?: string[] | null;
+  sharedExtensions?: string[] | null;
+}
+
+/** 技能来源（对齐 SDK Skill + EveryBuddy 管理） */
+export type SkillSource = "global" | "project" | "custom" | "builtin" | "installed";
+
+/** 技能条目（对齐 pi SDK Skill；filePath/baseDir 供编辑器与 skillsOverride 读取） */
+export interface SkillEntry {
+  /** id = skill name（SDK 约定，= 目录名） */
+  id: string;
+  name: string;
+  description: string;
+  filePath: string;
+  baseDir: string;
+  source: SkillSource;
+  tags: string[];
+  enabled: boolean;
+  installedAt?: string;
+}
+
+export interface CreateSkillRequest {
+  /** skill 名（kebab-case，= 目录名） */
+  name: string;
+  description: string;
+  /** SKILL.md 正文（frontmatter 之外） */
+  content: string;
+  tags?: string[];
+}
+
+export interface UpdateSkillRequest {
+  id: string;
+  name?: string;
+  description?: string;
+  content?: string;
+  tags?: string[];
+}
+
+export interface InstallSkillRequest {
+  /** 本地技能包目录（含 SKILL.md）或 SKILL.md 文件绝对路径 */
+  sourcePath: string;
+}
+
+export interface EnableSkillRequest {
+  id: string;
+  enabled: boolean;
+}
+
+/** 连接器类型（开放枚举，未来扩展不改 schema） */
+export type ConnectorType = "mcp" | "http-api" | "datasource" | "filesystem" | "custom";
+
+/** 连接器状态：connected 已接入 / disconnected 未连接 / error 错误 / reserved 已注册待激活 */
+export type ConnectorStatus = "connected" | "disconnected" | "error" | "reserved";
+
+/** 连接器（外部能力接入点；capabilities/tags 预留扩展） */
+export interface Connector {
+  id: string;
+  name: string;
+  type: ConnectorType;
+  icon: string;
+  description: string;
+  /** type-specific 透传配置，由 per-type 校验（mcp: command/args/env/transport；http-api: endpoint/auth；filesystem: rootDir） */
+  config: Record<string, unknown>;
+  tags: string[];
+  /** 预留：声明提供什么（tools/context/knowledge/actions），未来按此决定注入方式 */
+  capabilities: string[];
+  boundExpertIds: string[];
+  boundSkillIds: string[];
+  enabled: boolean;
+  status: ConnectorStatus;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateConnectorRequest {
+  name: string;
+  type: ConnectorType;
+  icon?: string;
+  description?: string;
+  config?: Record<string, unknown>;
+  tags?: string[];
+  capabilities?: string[];
+  boundExpertIds?: string[];
+  boundSkillIds?: string[];
+}
+
+export interface UpdateConnectorRequest {
+  id: string;
+  name?: string;
+  type?: ConnectorType;
+  icon?: string;
+  description?: string;
+  config?: Record<string, unknown>;
+  tags?: string[];
+  capabilities?: string[];
+  boundExpertIds?: string[];
+  boundSkillIds?: string[];
+  enabled?: boolean;
+  status?: ConnectorStatus;
+}
+
+export interface TestConnectorRequest {
+  id: string;
+}
+
+/** connector:test 返回 */
+export interface ConnectorTestResult {
+  status: ConnectorStatus;
+  message: string;
+  /** 探测到的工具数量（mcp 为 listTools 数量） */
+  tools?: number;
+}
+
+// ────────────────────────────────────────────────
 // Zod schemas（运行时校验，见 §7.2）
 // ────────────────────────────────────────────────
 
@@ -611,6 +824,141 @@ export type UpdateScheduleTaskRequestZ = z.infer<typeof updateScheduleTaskReques
 /** schedule:run-now / delete-task / list-runs 请求 */
 export const scheduleIdRequestSchema = z.object({ id: z.string().min(1, "参数缺失") });
 
+// ── expert:*（专家） ──
+export const expertCreateRequestSchema = z.object({
+  name: z.string().min(1, "名称不能为空"),
+  icon: z.string().min(1).default("briefcase"),
+  description: z.string().default(""),
+  mode: z.enum(["daily", "coding"]).default("daily"),
+  systemPrompt: z.string().optional(),
+  appendSystemPrompt: z.array(z.string()).optional(),
+  tools: z.array(z.string()).optional(),
+  extensions: z.array(z.string()).optional(),
+  defaultModelProviderId: z.string().optional(),
+  visionModelProviderId: z.string().optional(),
+  imageGenModelProviderId: z.string().optional(),
+  tags: z.array(z.string()).default([]),
+});
+export type ExpertCreateRequestZ = z.infer<typeof expertCreateRequestSchema>;
+
+export const expertUpdateRequestSchema = z.object({
+  id: z.string().min(1, "参数缺失"),
+  name: z.string().min(1, "名称不能为空").optional(),
+  icon: z.string().optional(),
+  description: z.string().optional(),
+  mode: z.enum(["daily", "coding"]).optional(),
+  systemPrompt: z.string().optional(),
+  appendSystemPrompt: z.array(z.string()).optional(),
+  tools: z.array(z.string()).optional(),
+  extensions: z.array(z.string()).optional(),
+  defaultModelProviderId: z.string().nullable().optional(),
+  visionModelProviderId: z.string().nullable().optional(),
+  imageGenModelProviderId: z.string().nullable().optional(),
+  tags: z.array(z.string()).optional(),
+});
+export type ExpertUpdateRequestZ = z.infer<typeof expertUpdateRequestSchema>;
+
+export const expertIdRequestSchema = z.object({ id: z.string().min(1, "参数缺失") });
+
+// ── team:*（专家团） ──
+export const teamRoutingStrategySchema = z.enum(["manual", "auto", "workflow"]);
+
+export const teamCreateRequestSchema = z.object({
+  name: z.string().min(1, "名称不能为空"),
+  icon: z.string().min(1).default("users"),
+  description: z.string().default(""),
+  expertIds: z.array(z.string()).default([]),
+  tags: z.array(z.string()).default([]),
+  routingStrategy: teamRoutingStrategySchema.default("manual"),
+  sharedTools: z.array(z.string()).optional(),
+  sharedExtensions: z.array(z.string()).optional(),
+});
+export type TeamCreateRequestZ = z.infer<typeof teamCreateRequestSchema>;
+
+export const teamUpdateRequestSchema = z.object({
+  id: z.string().min(1, "参数缺失"),
+  name: z.string().min(1, "名称不能为空").optional(),
+  icon: z.string().optional(),
+  description: z.string().optional(),
+  expertIds: z.array(z.string()).optional(),
+  tags: z.array(z.string()).optional(),
+  routingStrategy: teamRoutingStrategySchema.optional(),
+  sharedTools: z.array(z.string()).nullable().optional(),
+  sharedExtensions: z.array(z.string()).nullable().optional(),
+});
+export type TeamUpdateRequestZ = z.infer<typeof teamUpdateRequestSchema>;
+
+export const teamIdRequestSchema = z.object({ id: z.string().min(1, "参数缺失") });
+
+// ── skill:*（技能） ──
+export const skillCreateRequestSchema = z.object({
+  name: z.string().regex(/^[a-z0-9][a-z0-9_-]*$/, "技能名需小写字母开头，仅限小写字母/数字/连字符"),
+  description: z.string().min(1, "描述不能为空"),
+  /** SKILL.md 正文（frontmatter 之外） */
+  content: z.string().min(1, "技能内容不能为空"),
+  tags: z.array(z.string()).default([]),
+});
+export type SkillCreateRequestZ = z.infer<typeof skillCreateRequestSchema>;
+
+export const skillUpdateRequestSchema = z.object({
+  id: z.string().min(1, "参数缺失"),
+  name: z.string().optional(),
+  description: z.string().optional(),
+  content: z.string().optional(),
+  tags: z.array(z.string()).optional(),
+});
+export type SkillUpdateRequestZ = z.infer<typeof skillUpdateRequestSchema>;
+
+export const skillEnableRequestSchema = z.object({
+  id: z.string().min(1, "参数缺失"),
+  enabled: z.boolean(),
+});
+export type SkillEnableRequestZ = z.infer<typeof skillEnableRequestSchema>;
+
+export const skillInstallRequestSchema = z.object({
+  sourcePath: z.string().min(1, "路径不能为空"),
+});
+export type SkillInstallRequestZ = z.infer<typeof skillInstallRequestSchema>;
+
+export const skillIdRequestSchema = z.object({ id: z.string().min(1, "参数缺失") });
+
+// ── connector:*（连接器） ──
+export const connectorTypeSchema = z.enum(["mcp", "http-api", "datasource", "filesystem", "custom"]);
+export const connectorStatusSchema = z.enum(["connected", "disconnected", "error", "reserved"]);
+export const connectorConfigSchema = z.record(z.unknown());
+
+export const connectorCreateRequestSchema = z.object({
+  name: z.string().min(1, "名称不能为空"),
+  type: connectorTypeSchema,
+  icon: z.string().min(1).default("hub"),
+  description: z.string().default(""),
+  config: connectorConfigSchema.default({}),
+  tags: z.array(z.string()).default([]),
+  capabilities: z.array(z.string()).default([]),
+  boundExpertIds: z.array(z.string()).default([]),
+  boundSkillIds: z.array(z.string()).default([]),
+});
+export type ConnectorCreateRequestZ = z.infer<typeof connectorCreateRequestSchema>;
+
+export const connectorUpdateRequestSchema = z.object({
+  id: z.string().min(1, "参数缺失"),
+  name: z.string().min(1, "名称不能为空").optional(),
+  type: connectorTypeSchema.optional(),
+  icon: z.string().optional(),
+  description: z.string().optional(),
+  config: connectorConfigSchema.optional(),
+  tags: z.array(z.string()).optional(),
+  capabilities: z.array(z.string()).optional(),
+  boundExpertIds: z.array(z.string()).optional(),
+  boundSkillIds: z.array(z.string()).optional(),
+  enabled: z.boolean().optional(),
+  status: connectorStatusSchema.optional(),
+});
+export type ConnectorUpdateRequestZ = z.infer<typeof connectorUpdateRequestSchema>;
+
+export const connectorIdRequestSchema = z.object({ id: z.string().min(1, "参数缺失") });
+export const connectorTestRequestSchema = z.object({ id: z.string().min(1, "参数缺失") });
+
 // ────────────────────────────────────────────────
 // Preload API 形状（见 §6.3）
 // ────────────────────────────────────────────────
@@ -683,6 +1031,41 @@ export interface ElectronAPI {
     listRuns: (taskId: string) => Promise<ScheduledRun[]>;
     /** 订阅调度事件（任务变更 / 运行开始与结束） */
     onEvent: (cb: (event: ScheduleEvent) => void) => () => void;
+  };
+  expert: {
+    /** builtin + 自定义合并列表 */
+    list: () => Promise<Expert[]>;
+    create: (req: CreateExpertRequest) => Promise<Expert>;
+    /** builtin 仅可改 enabled 之外的结构（不落盘），此处允许改名/描述等展示字段 */
+    update: (req: UpdateExpertRequest) => Promise<Expert>;
+    /** 仅 custom 可删 */
+    delete: (id: string) => Promise<void>;
+  };
+  team: {
+    list: () => Promise<ExpertTeam[]>;
+    create: (req: CreateTeamRequest) => Promise<ExpertTeam>;
+    update: (req: UpdateTeamRequest) => Promise<ExpertTeam>;
+    delete: (id: string) => Promise<void>;
+  };
+  skill: {
+    /** SDK 发现（global/project）+ EveryBuddy 管理（builtin/custom/installed）合并 */
+    list: () => Promise<SkillEntry[]>;
+    create: (req: CreateSkillRequest) => Promise<SkillEntry>;
+    update: (req: UpdateSkillRequest) => Promise<SkillEntry>;
+    /** 本地技能包（目录含 SKILL.md 或单文件）安装到 ~/EveryBuddy/skills/ */
+    install: (req: InstallSkillRequest) => Promise<SkillEntry>;
+    /** 仅 custom/installed 可卸载；builtin 转停用 */
+    uninstall: (id: string) => Promise<void>;
+    /** 启停：enabled=false 的技能不并入 skillsOverride */
+    enable: (req: EnableSkillRequest) => Promise<void>;
+  };
+  connector: {
+    list: () => Promise<Connector[]>;
+    create: (req: CreateConnectorRequest) => Promise<Connector>;
+    update: (req: UpdateConnectorRequest) => Promise<Connector>;
+    delete: (id: string) => Promise<void>;
+    /** 测试连接（mcp 尝试启动并 listTools；reserved 态返回提示） */
+    test: (req: TestConnectorRequest) => Promise<ConnectorTestResult>;
   };
 }
 

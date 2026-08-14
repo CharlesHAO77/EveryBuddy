@@ -6,10 +6,15 @@ import { describe, expect, it } from "vitest";
 import {
   attachmentRefSchema,
   branchRequestSchema,
+  connectorCreateRequestSchema,
+  connectorTestRequestSchema,
+  connectorUpdateRequestSchema,
   createNamedWorkspaceRequestSchema,
   createScheduleTaskRequestSchema,
   createTaskRequestSchema,
   createWorkspaceRequestSchema,
+  expertCreateRequestSchema,
+  expertUpdateRequestSchema,
   idRequestSchema,
   modelTypeSchema,
   openPathRequestSchema,
@@ -18,6 +23,9 @@ import {
   renameTaskRequestSchema,
   saveModelRequestSchema,
   scheduleIdRequestSchema,
+  skillCreateRequestSchema,
+  skillEnableRequestSchema,
+  teamCreateRequestSchema,
   updateScheduleTaskRequestSchema,
 } from "./index";
 
@@ -289,5 +297,122 @@ describe("attachmentRefSchema", () => {
     expect(attachmentRefSchema.safeParse({ name: "a", path: "/tmp/a", size: -1 }).success).toBe(
       false,
     );
+  });
+});
+
+describe("expertCreateRequestSchema", () => {
+  const valid = { name: "产品经理", description: "需求拆解", mode: "daily", tags: ["domain:product"] };
+  it("accepts minimal name + defaults", () => {
+    const r = expertCreateRequestSchema.safeParse({ name: "产品经理" });
+    expect(r.success).toBe(true);
+    if (r.success) {
+      expect(r.data.mode).toBe("daily");
+      expect(r.data.icon).toBe("briefcase");
+      expect(r.data.tags).toEqual([]);
+    }
+  });
+  it("accepts full fields", () => {
+    expect(expertCreateRequestSchema.safeParse(valid).success).toBe(true);
+  });
+  it("rejects empty name", () => {
+    expect(expertCreateRequestSchema.safeParse({ name: "" }).success).toBe(false);
+  });
+  it("rejects invalid mode", () => {
+    expect(expertCreateRequestSchema.safeParse({ ...valid, mode: "bogus" }).success).toBe(false);
+  });
+});
+
+describe("expertUpdateRequestSchema", () => {
+  it("accepts id only", () => {
+    expect(expertUpdateRequestSchema.safeParse({ id: "a" }).success).toBe(true);
+  });
+  it("accepts null model overrides (clear to fallback)", () => {
+    expect(
+      expertUpdateRequestSchema.safeParse({ id: "a", defaultModelProviderId: null }).success,
+    ).toBe(true);
+  });
+  it("rejects missing id", () => {
+    expect(expertUpdateRequestSchema.safeParse({ name: "x" }).success).toBe(false);
+  });
+});
+
+describe("teamCreateRequestSchema", () => {
+  it("accepts minimal + defaults routing to manual", () => {
+    const r = teamCreateRequestSchema.safeParse({ name: "研发团" });
+    expect(r.success).toBe(true);
+    if (r.success) expect(r.data.routingStrategy).toBe("manual");
+  });
+  it("rejects reserved strategy only via enum (auto accepted now, runtime gated)", () => {
+    expect(
+      teamCreateRequestSchema.safeParse({ name: "t", routingStrategy: "workflow" }).success,
+    ).toBe(true);
+  });
+  it("rejects empty name", () => {
+    expect(teamCreateRequestSchema.safeParse({ name: "" }).success).toBe(false);
+  });
+});
+
+describe("skillCreateRequestSchema", () => {
+  const valid = { name: "prd-writer", description: "写 PRD", content: "# 正文" };
+  it("accepts valid kebab name", () => {
+    expect(skillCreateRequestSchema.safeParse(valid).success).toBe(true);
+  });
+  it("rejects uppercase name", () => {
+    expect(skillCreateRequestSchema.safeParse({ ...valid, name: "PRD" }).success).toBe(false);
+  });
+  it("rejects empty description / content", () => {
+    expect(skillCreateRequestSchema.safeParse({ ...valid, description: "" }).success).toBe(false);
+    expect(skillCreateRequestSchema.safeParse({ ...valid, content: "" }).success).toBe(false);
+  });
+});
+
+describe("skillEnableRequestSchema", () => {
+  it("accepts id + boolean", () => {
+    expect(skillEnableRequestSchema.safeParse({ id: "a", enabled: false }).success).toBe(true);
+  });
+  it("rejects non-boolean enabled", () => {
+    expect(skillEnableRequestSchema.safeParse({ id: "a", enabled: "yes" }).success).toBe(false);
+  });
+});
+
+describe("connectorCreateRequestSchema", () => {
+  it("accepts mcp type + config + defaults", () => {
+    const r = connectorCreateRequestSchema.safeParse({
+      name: "GitHub MCP",
+      type: "mcp",
+      config: { command: "npx", args: ["-y", "@modelcontextprotocol/server-github"] },
+    });
+    expect(r.success).toBe(true);
+    if (r.success) {
+      expect(r.data.icon).toBe("hub");
+      expect(r.data.capabilities).toEqual([]);
+      expect(r.data.status).toBeUndefined();
+    }
+  });
+  it("accepts reserved type (open enum)", () => {
+    expect(connectorCreateRequestSchema.safeParse({ name: "x", type: "custom" }).success).toBe(true);
+  });
+  it("rejects invalid type", () => {
+    expect(connectorCreateRequestSchema.safeParse({ name: "x", type: "bogus" }).success).toBe(false);
+  });
+});
+
+describe("connectorUpdateRequestSchema", () => {
+  it("accepts id + partial status", () => {
+    expect(
+      connectorUpdateRequestSchema.safeParse({ id: "a", status: "reserved", enabled: false }).success,
+    ).toBe(true);
+  });
+  it("rejects invalid status", () => {
+    expect(connectorUpdateRequestSchema.safeParse({ id: "a", status: "bogus" }).success).toBe(false);
+  });
+});
+
+describe("connectorTestRequestSchema", () => {
+  it("accepts id", () => {
+    expect(connectorTestRequestSchema.safeParse({ id: "a" }).success).toBe(true);
+  });
+  it("rejects missing id", () => {
+    expect(connectorTestRequestSchema.safeParse({}).success).toBe(false);
   });
 });
