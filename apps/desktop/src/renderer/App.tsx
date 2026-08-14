@@ -24,7 +24,7 @@ export function App() {
   const currentTaskTitle = useSessionStore(
     (s) => s.tasks.find((t) => t.id === s.currentTaskId)?.title ?? null,
   );
-  // 自动化页不需要右侧面板（待办/文件/预览）
+  // 自动化页 / 专家技能连接器页是完整管理视图，不需要右侧面板（待办/文件/预览）
   const activeNav = useUIStore((s) => s.activeNav);
 
   // Windows 已启用自定义标题栏，对话名在应用内标题区展示，系统标题固定为 EveryBuddy
@@ -58,7 +58,7 @@ export function App() {
       <div className="flex min-h-0 flex-1 overflow-hidden">
         <Sidebar />
         <MainView />
-        {activeNav !== "auto" && <RightPanel />}
+        {activeNav !== "auto" && activeNav !== "expert" && <RightPanel />}
       </div>
       {isSettingsOpen && <SettingsPanel onClose={() => setSettingsOpen(false)} />}
     </div>
