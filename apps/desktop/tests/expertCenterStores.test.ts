@@ -3,7 +3,7 @@
  * 覆盖：expertStore（内置+自定义+映射）、teamStore、skillStore（种子/frontmatter/卸载）、
  * connectorStore（种子/测试连接各态）。
  */
-import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -134,6 +134,28 @@ describe("SkillStore", () => {
     // 重新实例化（同一 registry 文件）不再种子
     const store2 = make();
     expect(store2.list().filter((x) => x.source === "installed")).toHaveLength(0);
+  });
+
+  it("迁移旧注册表 builtin → installed（「已安装」筛选不再为空）", () => {
+    const reg = path.join(dir, "skills.json");
+    const skillsDir = path.join(dir, "skills");
+    mkdirSync(skillsDir, { recursive: true });
+    // 模拟旧注册表：source=builtin + seeded=true
+    writeFileSync(
+      reg,
+      JSON.stringify({
+        skills: [{ id: "old-skill", source: "builtin", enabled: true, installedAt: "x" }],
+        seeded: true,
+      }),
+      "utf-8",
+    );
+    const d = path.join(skillsDir, "old-skill");
+    mkdirSync(d, { recursive: true });
+    writeFileSync(path.join(d, "SKILL.md"), buildSkillMd("old-skill", "旧技能", "# x"), "utf-8");
+    const store = new SkillStore(reg, skillsDir);
+    expect(store.list().find((s) => s.id === "old-skill")?.source).toBe("installed");
+    const saved = JSON.parse(readFileSync(reg, "utf-8")) as { skills: Array<{ source: string }> };
+    expect(saved.skills[0].source).toBe("installed"); // 已持久化
   });
 
   it("自动发现 skills 目录下未注册的技能文件夹（作为已安装加载）", () => {

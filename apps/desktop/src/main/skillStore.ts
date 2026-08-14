@@ -138,8 +138,18 @@ export class SkillStore {
         this.data = emptyShape();
       }
     }
+    this.migrateLegacySources();
     this.loaded = true;
     this.seedBuiltin();
+  }
+
+  /** 迁移旧注册表：早期种子 source=builtin → installed（内置归并到「已安装」，避免筛选为空） */
+  private migrateLegacySources(): void {
+    if (!this.data.skills.some((e) => e.source === "builtin")) return;
+    this.data.skills = this.data.skills.map((e) =>
+      e.source === "builtin" ? { ...e, source: "installed" } : e,
+    );
+    this.save();
   }
 
   private save(): void {
