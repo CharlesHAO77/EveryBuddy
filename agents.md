@@ -1,10 +1,10 @@
-# agents.md — everyBuddy 仓库协作指南
+# agents.md — EveryBuddy 仓库协作指南
 
 > 本文件面向在本仓库中工作的 AI 编程助手与人类开发者。任何改动前请先读本文件与 `docs/architecture.md`。
 
 ## 1. 项目简介
 
-**everyBuddy** 是一款面向开发者的本地桌面 AI 助手（Electron + React），核心 agent 能力由 `@earendil-works/pi-coding-agent` 提供。MVP 仅交付桌面端，架构为未来 IM Bot / WebUI 预留接入点。
+**EveryBuddy** 是一款面向开发者的本地桌面 AI 助手（Electron + React），核心 agent 能力由 `@earendil-works/pi-coding-agent` 提供。MVP 仅交付桌面端，架构为未来 IM Bot / WebUI 预留接入点。
 
 - PRD：`docs/requirements.md`
 - 架构：`docs/architecture.md`
@@ -13,7 +13,7 @@
 ## 2. 仓库结构（npm workspaces monorepo）
 
 ```
-everyBuddy/
+EveryBuddy/
 ├── packages/
 │   ├── ipc-contract/   # 渲染↔主进程 IPC 类型契约 + Zod schema（无运行时逻辑）
 │   └── api-gateway/    # 统一请求路由抽象层（桌面端函数调用 / 未来 IM Bot 接入）
@@ -30,10 +30,10 @@ everyBuddy/
 
 | 包 | 可被导入 | 可导入 | 禁止 |
 | ---- | ---------- | -------- | ------ |
-| `@everybuddy/ipc-contract` | 任意 | `zod` | 任何运行时逻辑、Electron/Node API |
-| `@everybuddy/api-gateway` | 主进程 / 未来 bot-server | `ipc-contract` | Electron、React、渲染进程 |
-| `@everybuddy/desktop`（main） | — | `ipc-contract`、`api-gateway`、`electron`、`pi-coding-agent` | — |
-| `@everybuddy/desktop`（renderer） | — | `ipc-contract`（仅类型）、React、Zustand | `electron`、`api-gateway`、任何 Node API |
+| `@EveryBuddy/ipc-contract` | 任意 | `zod` | 任何运行时逻辑、Electron/Node API |
+| `@EveryBuddy/api-gateway` | 主进程 / 未来 bot-server | `ipc-contract` | Electron、React、渲染进程 |
+| `@EveryBuddy/desktop`（main） | — | `ipc-contract`、`api-gateway`、`electron`、`pi-coding-agent` | — |
+| `@EveryBuddy/desktop`（renderer） | — | `ipc-contract`（仅类型）、React、Zustand | `electron`、`api-gateway`、任何 Node API |
 
 **铁律**：渲染进程不直接 import `electron` 或 `api-gateway`；与主进程的唯一通道是 `window.electronAPI`（由 preload 暴露）。
 
