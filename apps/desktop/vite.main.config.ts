@@ -13,10 +13,7 @@ export default defineConfig({
         __dirname,
         "../../packages/ipc-contract/src/index.ts",
       ),
-      "@everybuddy/api-gateway": path.resolve(
-        __dirname,
-        "../../packages/api-gateway/src/index.ts",
-      ),
+      "@everybuddy/api-gateway": path.resolve(__dirname, "../../packages/api-gateway/src/index.ts"),
     },
   },
   build: {
@@ -35,6 +32,7 @@ export default defineConfig({
         "typebox",
         ...builtinModules,
         /^@earendil-works\//,
+        /^@modelcontextprotocol\//,
       ],
       output: {
         entryFileNames: "main.js",

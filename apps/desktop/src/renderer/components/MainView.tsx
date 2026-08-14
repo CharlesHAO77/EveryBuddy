@@ -6,6 +6,7 @@ import { useAttachments } from "../hooks/useAttachments";
 import { useFileMentions } from "../hooks/useFileMentions";
 import { useSlashCommands } from "../hooks/useSlashCommands";
 import { isBareSteerCommand, parseCommandChannel } from "../slashCommands";
+import { useExpertCenterStore } from "../stores/expertCenterStore";
 import { type ChatMessage, useSessionStore } from "../stores/sessionStore";
 import { type CategoryId, getChatDefaultId, useUIStore } from "../stores/uiStore";
 import { AttachmentPreview } from "./AttachmentPreview";
@@ -13,6 +14,7 @@ import { AutomationView } from "./automation/AutomationView";
 import { CompactionNoticeCard } from "./CompactionNoticeCard";
 import { ConversationTitle } from "./ConversationTitle";
 import { ExpertView } from "./expert/ExpertView";
+import { expertIcon } from "./expert/ui";
 import { FileMentionMenu } from "./FileMentionMenu";
 import {
   IconArrowUp,
@@ -346,6 +348,27 @@ function WorkspaceSelector() {
 function WelcomeView() {
   const { activeCategory, setActiveCategory } = useUIStore();
   const [text, setText] = useState("");
+  // 欢迎页可选专家：缺省跟随模式内置专家；选中自定义专家后 createTask 带 expertId
+  const experts = useExpertCenterStore((s) => s.experts);
+  const [expertId, setExpertId] = useState<string | null>(null);
+  useEffect(() => {
+    if (!useExpertCenterStore.getState().loaded) void useExpertCenterStore.getState().loadAll();
+  }, []);
+  // 模式切换时回退到该模式内置专家
+  const defaultExpert = experts.find((e) => e.source === "builtin" && e.mode === activeCategory);
+  const selectedExpert = experts.find((e) => e.id === expertId) ?? defaultExpert ?? null;
+  const [expertMenuOpen, setExpertMenuOpen] = useState(false);
+  const expertMenuRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!expertMenuOpen) return;
+    const onDown = (e: MouseEvent) => {
+      if (expertMenuRef.current && !expertMenuRef.current.contains(e.target as Node)) {
+        setExpertMenuOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", onDown);
+    return () => document.removeEventListener("mousedown", onDown);
+  }, [expertMenuOpen]);
   const currentTaskId = useSessionStore((s) => s.currentTaskId);
   const createTask = useSessionStore((s) => s.createTask);
   const sendMessage = useSessionStore((s) => s.sendMessage);
@@ -390,6 +413,7 @@ function WelcomeView() {
             ? {
                 type: "workspace",
                 mode: activeCategory,
+                expertId: selectedExpert?.id,
                 workspaceId: pendingWorkspaceId,
                 title: trimmed.slice(0, 30) || "新任务",
                 providerId: effectiveProviderId ?? undefined,
@@ -397,6 +421,7 @@ function WelcomeView() {
             : {
                 type: "temp",
                 mode: activeCategory,
+                expertId: selectedExpert?.id,
                 title: trimmed.slice(0, 30) || "新任务",
                 providerId: effectiveProviderId ?? undefined,
               },
@@ -451,15 +476,18 @@ function WelcomeView() {
           EveryBuddy, 我帮你
         </h1>
 
-        {/* Mode Tabs */}
-        <div className="mt-[24px] flex gap-[8px]">
+        {/* Mode Tabs + 专家选择 */}
+        <div className="mt-[24px] flex items-center gap-[10px]">
           {modes.map((mode) => {
             const isActive = activeCategory === mode.id;
             return (
               <button
                 key={mode.id}
                 type="button"
-                onClick={() => setActiveCategory(mode.id)}
+                onClick={() => {
+                  setActiveCategory(mode.id);
+                  setExpertId(null); // 回退该模式内置专家
+                }}
                 className={`h-[36px] rounded-full px-[20px] text-[15px] font-semibold transition active:scale-[0.97] ${
                   isActive ? "bg-ink text-card" : "bg-hover text-ink-2 hover:bg-active"
                 }`}
@@ -468,6 +496,64 @@ function WelcomeView() {
               </button>
             );
           })}
+          <span className="mx-[2px] h-[20px] w-px bg-line" />
+          <div ref={expertMenuRef} className="relative">
+            <button
+              type="button"
+              onClick={() => setExpertMenuOpen((v) => !v)}
+              className={`flex h-[36px] items-center gap-[7px] rounded-full px-[14px] text-[14px] font-semibold transition active:scale-[0.97] ${
+                selectedExpert && selectedExpert.source === "custom"
+                  ? "bg-accent-tint text-accent-strong"
+                  : "bg-hover text-ink-2 hover:bg-active"
+              }`}
+            >
+              <span className="flex h-[20px] w-[20px] items-center justify-center rounded-[6px] bg-accent-tint text-accent">
+                {expertIcon(selectedExpert?.icon)}
+              </span>
+              {selectedExpert ? selectedExpert.name : "选择专家"}
+              <IconChevronDown size={12} className="opacity-60" />
+            </button>
+            {expertMenuOpen ? (
+              <div className="absolute left-0 top-[42px] z-30 w-[240px] overflow-hidden rounded-[12px] border border-line bg-card py-[6px] shadow-pop">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setExpertId(null);
+                    setExpertMenuOpen(false);
+                  }}
+                  className={`flex w-full items-center gap-[9px] px-[12px] py-[8px] text-left text-[14px] transition hover:bg-hover ${
+                    !expertId ? "font-semibold text-accent-strong" : "text-ink-2"
+                  }`}
+                >
+                  跟随模式默认（{defaultExpert?.name ?? "内置"}）
+                </button>
+                <div className="mx-[12px] my-[4px] border-t border-line" />
+                {experts.map((e) => (
+                  <button
+                    key={e.id}
+                    type="button"
+                    onClick={() => {
+                      setExpertId(e.id);
+                      setExpertMenuOpen(false);
+                    }}
+                    className={`flex w-full items-center gap-[9px] px-[12px] py-[8px] text-left text-[14px] transition hover:bg-hover ${
+                      expertId === e.id
+                        ? "bg-accent-tint font-semibold text-accent-strong"
+                        : "text-ink"
+                    }`}
+                  >
+                    <span className="flex h-[20px] w-[20px] shrink-0 items-center justify-center rounded-[6px] bg-accent-tint text-accent">
+                      {expertIcon(e.icon)}
+                    </span>
+                    <span className="flex-1 truncate">{e.name}</span>
+                    {e.source === "builtin" ? (
+                      <span className="text-[11px] font-medium text-ink-3">内置</span>
+                    ) : null}
+                  </button>
+                ))}
+              </div>
+            ) : null}
+          </div>
         </div>
 
         {/* ── Input Area ── */}

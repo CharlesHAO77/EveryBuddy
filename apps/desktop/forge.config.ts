@@ -1,12 +1,12 @@
-import path from "node:path";
-import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync } from "node:fs";
 import { execFile } from "node:child_process";
+import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync } from "node:fs";
+import path from "node:path";
 import { promisify } from "node:util";
-import type { ForgeConfig, IForgePlugin } from "@electron-forge/shared-types";
-import { VitePlugin } from "@electron-forge/plugin-vite";
 import { MakerDMG } from "@electron-forge/maker-dmg";
 import { MakerSquirrel } from "@electron-forge/maker-squirrel";
 import { MakerZIP } from "@electron-forge/maker-zip";
+import { VitePlugin } from "@electron-forge/plugin-vite";
+import type { ForgeConfig, IForgePlugin } from "@electron-forge/shared-types";
 
 const execFileAsync = promisify(execFile);
 
@@ -25,6 +25,7 @@ const EXTERNAL_RUNTIME_PKGS = [
   "xlsx",
   "jszip",
   "typebox",
+  "@modelcontextprotocol/sdk",
 ];
 
 /** 从 fromDir 向上沿 node_modules 逐级查找包目录（不依赖 require/package.json exports 语义） */
@@ -53,9 +54,9 @@ function collectExternalRuntimeDeps(): string[] {
     if (!pkgDir || seen.has(pkgDir)) return;
     seen.add(pkgDir);
     dirs.push(pkgDir);
-    const manifest = JSON.parse(
-      readFileSync(path.join(pkgDir, "package.json"), "utf-8"),
-    ) as { dependencies?: Record<string, string> };
+    const manifest = JSON.parse(readFileSync(path.join(pkgDir, "package.json"), "utf-8")) as {
+      dependencies?: Record<string, string>;
+    };
     for (const dep of Object.keys(manifest.dependencies ?? {})) visit(dep, pkgDir);
   };
   for (const spec of EXTERNAL_RUNTIME_PKGS) visit(spec, ROOT_DIR);
@@ -120,8 +121,10 @@ const config: ForgeConfig = {
     download: {
       checksums: {
         // 缓存 zip 的 sha256（首次下载时已通过官方校验，此后不再联网）
-        "electron-v43.2.0-darwin-arm64.zip": "ad4a0ae3c37ee05aa06c7e2ed0627608389790f0505a2b0d20319efbe33ffe28",
-        "electron-v43.2.0-win32-x64.zip": "eba5f5088af40ecb364fe258809c79a5234c6ece5a75c64722772eba01b02786",
+        "electron-v43.2.0-darwin-arm64.zip":
+          "ad4a0ae3c37ee05aa06c7e2ed0627608389790f0505a2b0d20319efbe33ffe28",
+        "electron-v43.2.0-win32-x64.zip":
+          "eba5f5088af40ecb364fe258809c79a5234c6ece5a75c64722772eba01b02786",
       },
     },
     // TODO: 正式签名（见 docs/architecture.md §11.3）
