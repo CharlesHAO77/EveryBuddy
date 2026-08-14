@@ -12,15 +12,19 @@
  * enabled=false 的技能不进 override（见 agentRuntime.ts §7）。
  */
 
-import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
+import {
+  cpSync,
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
 import { homedir } from "node:os";
 import path from "node:path";
-import type {
-  CreateSkillRequest,
-  SkillEntry,
-  SkillSource,
-  UpdateSkillRequest,
-} from "@everybuddy/ipc-contract";
+import type { CreateSkillRequest, SkillEntry, UpdateSkillRequest } from "@everybuddy/ipc-contract";
 import { APP_ROOT, ensureAppDirs } from "./configStore";
 
 /** EveryBuddy 管理的技能目录 ~/EveryBuddy/skills/ */
@@ -42,6 +46,8 @@ interface RegistryEntry {
 
 interface SkillShape {
   skills: RegistryEntry[];
+  /** 首次种子已执行标记（持久化：用户卸载全部种子后不再重新种子） */
+  seeded?: boolean;
 }
 
 const BUILTIN_SEEDS: Array<{ name: string; description: string; body: string }> = [
@@ -114,7 +120,6 @@ function skillFilePath(skillsDir: string, id: string): string {
 export class SkillStore {
   private data: SkillShape = emptyShape();
   private loaded = false;
-  private seeded = false;
 
   constructor(
     private registryPath: string = SKILLS_REGISTRY_PATH,
@@ -128,7 +133,7 @@ export class SkillStore {
     if (existsSync(this.registryPath)) {
       try {
         const parsed = JSON.parse(readFileSync(this.registryPath, "utf-8")) as Partial<SkillShape>;
-        this.data = { skills: parsed.skills ?? [] };
+        this.data = { skills: parsed.skills ?? [], seeded: parsed.seeded === true };
       } catch {
         this.data = emptyShape();
       }
@@ -142,10 +147,9 @@ export class SkillStore {
     writeFileSync(this.registryPath, JSON.stringify(this.data, null, 2), "utf-8");
   }
 
-  /** 首次启动种子内置技能（注册表缺项时落盘 + 补登记；不覆盖已有文件） */
+  /** 首次启动种子示例技能（source=installed，同普通已安装技能可卸载；seeded 持久化防重种） */
   private seedBuiltin(): void {
-    if (this.seeded) return;
-    this.seeded = true;
+    if (this.data.seeded) return;
     for (const seed of BUILTIN_SEEDS) {
       if (this.data.skills.some((s) => s.id === seed.name)) continue;
       const dir = path.join(this.skillsDir, seed.name);
@@ -156,11 +160,12 @@ export class SkillStore {
       }
       this.data.skills.push({
         id: seed.name,
-        source: "builtin",
+        source: "installed",
         enabled: true,
         installedAt: new Date().toISOString(),
       });
     }
+    this.data.seeded = true;
     this.save();
   }
 

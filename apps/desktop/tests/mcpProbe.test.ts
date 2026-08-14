@@ -41,6 +41,8 @@ describe("MCP e2e（需网络，MCP_E2E=1 开启）", () => {
       });
       expect(r.ok).toBe(true);
       expect(r.tools ?? 0).toBeGreaterThan(0);
+      expect(r.toolNames?.length).toBe(r.tools);
+      expect(r.toolNames).toContain("search_repositories");
     },
     180_000,
   );

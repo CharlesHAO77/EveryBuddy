@@ -4,7 +4,6 @@
  * 布局：顶部 4 大 tab → 工具栏（搜索 + 筛选 pill + 新建）→ 卡片网格 → 点卡片弹详情 Modal。
  */
 
-import type { ConnectorType } from "@everybuddy/ipc-contract";
 import type { ReactNode } from "react";
 import { useEffect, useMemo, useState } from "react";
 import { useExpertCenterStore } from "../../stores/expertCenterStore";
@@ -29,23 +28,28 @@ const NEW_LABELS: Record<TabId, string> = {
   connector: "新建连接器",
 };
 
-const SOURCE_FILTERS = ["all", "builtin", "custom", "installed", "project", "global"] as const;
-const SOURCE_FILTER_LABEL: Record<string, string> = {
-  all: "全部",
-  builtin: "内置",
-  custom: "自定义",
-  installed: "已安装",
-  project: "项目级",
-  global: "全局",
+/** 各 tab 筛选 pill（按用户要求精简）：
+ *  专家 → 内置/自定义；技能 → 已安装/自定义/全局（内置已并入已安装，无项目级）；
+ *  连接器 → MCP/自定义。 */
+const FILTERS: Record<TabId, Array<{ id: string; label: string }>> = {
+  expert: [
+    { id: "all", label: "全部" },
+    { id: "builtin", label: "内置" },
+    { id: "custom", label: "自定义" },
+  ],
+  team: [{ id: "all", label: "全部" }],
+  skill: [
+    { id: "all", label: "全部" },
+    { id: "installed", label: "已安装" },
+    { id: "custom", label: "自定义" },
+    { id: "global", label: "全局" },
+  ],
+  connector: [
+    { id: "all", label: "全部" },
+    { id: "mcp", label: "MCP" },
+    { id: "custom", label: "自定义" },
+  ],
 };
-
-const TYPE_FILTERS: Array<{ id: ConnectorType; label: string }> = [
-  { id: "mcp", label: "MCP" },
-  { id: "filesystem", label: "文件系统" },
-  { id: "http-api", label: "HTTP API" },
-  { id: "datasource", label: "数据源" },
-  { id: "custom", label: "自定义" },
-];
 
 /** 卡片统一形状（覆盖四实体 + 团队预留占位卡） */
 interface CardItem {
@@ -69,6 +73,8 @@ function matchesSearch(q: string, ...fields: Array<string | undefined>): boolean
 
 export function ExpertView() {
   const store = useExpertCenterStore();
+  // Windows 自定义标题栏：顶栏右侧让位系统按钮区（WCO ~138px）
+  const isWin = document.documentElement.dataset.platform === "win";
   const [tab, setTab] = useState<TabId>("expert");
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState("all");
@@ -80,12 +86,7 @@ export function ExpertView() {
   }, [store.loaded, store.loadAll]);
 
   // ── 筛选配置 + 匹配 ──
-  const filterPills = useMemo(() => {
-    if (tab === "connector") return [{ id: "all", label: "全部" }, ...TYPE_FILTERS];
-    if (tab === "expert" || tab === "skill")
-      return SOURCE_FILTERS.map((id) => ({ id, label: SOURCE_FILTER_LABEL[id] }));
-    return [{ id: "all", label: "全部" }];
-  }, [tab]);
+  const filterPills = useMemo(() => FILTERS[tab], [tab]);
 
   const items = useMemo(() => {
     const source: Array<CardItem> =
@@ -130,8 +131,12 @@ export function ExpertView() {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col bg-paper">
-      {/* 顶部 4 大 tab（无标题，对齐 demo） */}
-      <div className="flex h-[60px] shrink-0 items-center gap-[4px] border-b border-line px-[24px]">
+      {/* 顶部 4 大 tab（无标题，对齐 demo）；兼作窗口拖动区（mac/win），tab 按钮 no-drag 保持可点 */}
+      <div
+        className={`titlebar-drag flex h-[60px] shrink-0 items-center gap-[4px] border-b border-line px-[24px] ${
+          isWin ? "pr-[160px]" : ""
+        }`}
+      >
         {TABS.map((t) => (
           <button
             key={t.id}
@@ -142,7 +147,7 @@ export function ExpertView() {
               setFilter("all");
               setDetail(null);
             }}
-            className={`flex h-[42px] items-center gap-[9px] rounded-[10px] px-[18px] text-[16px] transition ${
+            className={`titlebar-no-drag flex h-[42px] items-center gap-[9px] rounded-[10px] px-[18px] text-[16px] transition ${
               tab === t.id
                 ? "bg-accent-tint font-semibold text-accent-strong"
                 : "text-ink-2 hover:bg-hover hover:text-ink"

@@ -139,15 +139,18 @@ export async function probeMcpConnector(config: Record<string, unknown>): Promis
   ok: boolean;
   message: string;
   tools?: number;
+  toolNames?: string[];
 }> {
   let client: Client | undefined;
   try {
     client = await openMcpClient(readMcpConfig(config));
     const res = await client.listTools();
+    const names = res.tools.map((t) => t.name);
     return {
       ok: true,
       message: `已连接，发现 ${res.tools.length} 个工具`,
       tools: res.tools.length,
+      toolNames: names,
     };
   } catch (e) {
     return { ok: false, message: `连接失败：${e instanceof Error ? e.message : String(e)}` };

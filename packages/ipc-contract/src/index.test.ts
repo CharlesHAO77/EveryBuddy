@@ -301,7 +301,12 @@ describe("attachmentRefSchema", () => {
 });
 
 describe("expertCreateRequestSchema", () => {
-  const valid = { name: "产品经理", description: "需求拆解", mode: "daily", tags: ["domain:product"] };
+  const valid = {
+    name: "产品经理",
+    description: "需求拆解",
+    mode: "daily",
+    tags: ["domain:product"],
+  };
   it("accepts minimal name + defaults", () => {
     const r = expertCreateRequestSchema.safeParse({ name: "产品经理" });
     expect(r.success).toBe(true);
@@ -390,21 +395,28 @@ describe("connectorCreateRequestSchema", () => {
     }
   });
   it("accepts reserved type (open enum)", () => {
-    expect(connectorCreateRequestSchema.safeParse({ name: "x", type: "custom" }).success).toBe(true);
+    expect(connectorCreateRequestSchema.safeParse({ name: "x", type: "custom" }).success).toBe(
+      true,
+    );
   });
   it("rejects invalid type", () => {
-    expect(connectorCreateRequestSchema.safeParse({ name: "x", type: "bogus" }).success).toBe(false);
+    expect(connectorCreateRequestSchema.safeParse({ name: "x", type: "bogus" }).success).toBe(
+      false,
+    );
   });
 });
 
 describe("connectorUpdateRequestSchema", () => {
   it("accepts id + partial status", () => {
     expect(
-      connectorUpdateRequestSchema.safeParse({ id: "a", status: "reserved", enabled: false }).success,
+      connectorUpdateRequestSchema.safeParse({ id: "a", status: "reserved", enabled: false })
+        .success,
     ).toBe(true);
   });
   it("rejects invalid status", () => {
-    expect(connectorUpdateRequestSchema.safeParse({ id: "a", status: "bogus" }).success).toBe(false);
+    expect(connectorUpdateRequestSchema.safeParse({ id: "a", status: "bogus" }).success).toBe(
+      false,
+    );
   });
 });
 

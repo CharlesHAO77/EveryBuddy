@@ -40,6 +40,7 @@ import {
   STATUS_LABEL,
   StatusDot,
   Switch,
+  Tag,
   TextArea,
   TextInput,
   TypeBadge,
@@ -652,6 +653,18 @@ function ConnectorForm({ connector, onClose }: { connector: Connector; onClose: 
             测试：{testMsg}
           </div>
         ) : null}
+        {connector.lastTools && connector.lastTools.length > 0 ? (
+          <div className="mt-[12px]">
+            <div className="mb-[6px] text-[12px] font-semibold tracking-[0.04em] text-ink-2">
+              已探测工具（{connector.lastTools.length}）
+            </div>
+            <div className="flex max-h-[96px] flex-wrap gap-[5px] overflow-y-auto">
+              {connector.lastTools.map((t) => (
+                <Tag key={t}>{t}</Tag>
+              ))}
+            </div>
+          </div>
+        ) : null}
 
         <Field label="名称">
           <TextInput value={name} onChange={setName} />
@@ -703,7 +716,7 @@ function ConnectorForm({ connector, onClose }: { connector: Connector; onClose: 
 
         <Field label="配置（config · 按 type 校验）">
           {connector.type === "mcp" ? (
-            <McpConfigForm config={config} setCfg={setCfg} />
+            <McpConfigForm config={config} replaceConfig={(c) => setConfig(c)} />
           ) : connector.type === "filesystem" ? (
             <div className="grid grid-cols-[140px_1fr] items-center gap-[14px]">
               <span className="text-[14px] text-ink-2">白名单根目录</span>
@@ -825,69 +838,67 @@ function ConnectorForm({ connector, onClose }: { connector: Connector; onClose: 
   );
 }
 
-/* ════════════ MCP 配置表单（stdio / streamable-http 双传输） ════════════ */
+/* ════════════ MCP 配置表单（stdio / streamable-http 双传输，JSON 编辑） ════════════ */
 
-/** 每行 label + 控件 */
-function KvRow({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div className="mb-[12px] grid grid-cols-[140px_1fr] items-center gap-[14px]">
-      <span className="text-[14px] text-ink-2">{label}</span>
-      {children}
-    </div>
-  );
-}
-
-/** KEY=VALUE 列表（空格分隔）↔ Record */
-function KvInput({
-  value,
-  onChange,
-  placeholder,
-}: {
-  value: unknown;
-  onChange: (v: Record<string, string>) => void;
-  placeholder?: string;
-}) {
-  const str =
-    value && typeof value === "object"
-      ? Object.entries(value as Record<string, string>)
-          .map(([k, v]) => `${k}=${v}`)
-          .join(" ")
-          .trim()
-      : "";
-  return (
-    <TextInput
-      value={str}
-      onChange={(v) => {
-        const out: Record<string, string> = {};
-        for (const pair of v.trim().split(/\s+/)) {
-          const i = pair.indexOf("=");
-          if (i > 0) out[pair.slice(0, i)] = pair.slice(i + 1);
-        }
-        onChange(out);
-      }}
-      placeholder={placeholder}
-    />
-  );
+/** 序列化 config（不含 transport），用于 JSON 编辑器初值 */
+function serializeMcpJson(config: Record<string, unknown>): string {
+  const { transport: _t, ...rest } = config;
+  return JSON.stringify(rest, null, 2);
 }
 
 function McpConfigForm({
   config,
-  setCfg,
+  replaceConfig,
 }: {
   config: Record<string, unknown>;
-  setCfg: (key: string, value: unknown) => void;
+  replaceConfig: (c: Record<string, unknown>) => void;
 }) {
   const transport = String(config.transport ?? "stdio");
-  // 运行方式：托管安装（npm 装到 ~/EveryBuddy/mcp-servers/，绕开 npx 漏装依赖）或自定义命令
-  const [runMode, setRunMode] = useState<"managed" | "custom">(
-    config.package ? "managed" : "custom",
-  );
-  const argsStr = Array.isArray(config.args) ? config.args.join(" ") : String(config.args ?? "");
+  const [json, setJson] = useState(() => serializeMcpJson(config));
+  const [jsonError, setJsonError] = useState<string | null>(null);
+
+  // config 变化时同步编辑器内容（输入过程中 config 不变，不打断打字；transport 切换会改变 config）
+  useEffect(() => {
+    setJson(serializeMcpJson(config));
+    setJsonError(null);
+  }, [config]);
+
+  const setTransport = (t: string) => replaceConfig({ ...config, transport: t });
+
+  /** blur 提交：解析 JSON 并入 config（保留 transport） */
+  const commit = () => {
+    const raw = json.trim();
+    if (!raw) {
+      replaceConfig({ ...config, transport });
+      setJsonError(null);
+      return;
+    }
+    try {
+      const parsed = JSON.parse(raw) as unknown;
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+        replaceConfig({ ...(parsed as Record<string, unknown>), transport });
+        setJsonError(null);
+      } else {
+        setJsonError("配置需为 JSON 对象");
+      }
+    } catch {
+      setJsonError("JSON 格式错误，请检查");
+    }
+  };
+
+  const applyTemplate = () => {
+    const tmpl =
+      transport === "streamable-http"
+        ? { url: "", headers: { Authorization: "Bearer xxx" } }
+        : { package: "@modelcontextprotocol/server-xxx", version: "", env: {} };
+    setJson(JSON.stringify(tmpl, null, 2));
+    setJsonError(null);
+  };
 
   const transportBtn = (id: string, label: string) => (
     <button
       type="button"
-      onClick={() => setCfg("transport", id)}
+      onClick={() => setTransport(id)}
       className={`rounded-[8px] border px-[12px] py-[9px] text-[13.5px] font-semibold transition ${
         transport === id
           ? "border-accent bg-accent-tint text-accent-strong"
@@ -900,95 +911,39 @@ function McpConfigForm({
 
   return (
     <>
-      <div className="mb-[14px] grid grid-cols-2 gap-[8px]">
+      <div className="mb-[12px] grid grid-cols-2 gap-[8px]">
         {transportBtn("stdio", "STDIO · 本地进程")}
         {transportBtn("streamable-http", "Streamable HTTP · 远程")}
       </div>
-
-      {transport === "streamable-http" ? (
-        <>
-          <KvRow label="Server URL">
-            <TextInput
-              value={String(config.url ?? "")}
-              onChange={(v) => setCfg("url", v)}
-              placeholder="https://api.example.com/mcp"
-            />
-          </KvRow>
-          <KvRow label="请求头">
-            <KvInput
-              value={config.headers}
-              onChange={(v) => setCfg("headers", v)}
-              placeholder="Authorization=Bearer xxx"
-            />
-          </KvRow>
-        </>
-      ) : (
-        <>
-          <div className="mb-[12px] flex gap-[6px]">
-            {(
-              [
-                ["managed", "托管安装（推荐）"],
-                ["custom", "自定义命令"],
-              ] as const
-            ).map(([id, label]) => (
-              <button
-                key={id}
-                type="button"
-                onClick={() => setRunMode(id)}
-                className={`rounded-full border px-[12px] py-[4px] text-[12.5px] font-semibold transition ${
-                  runMode === id
-                    ? "border-accent-line bg-accent-tint text-accent-strong"
-                    : "border-line bg-card text-ink-3 hover:bg-hover hover:text-ink-2"
-                }`}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-          {runMode === "managed" ? (
-            <>
-              <KvRow label="npm 包">
-                <TextInput
-                  value={String(config.package ?? "")}
-                  onChange={(v) => setCfg("package", v)}
-                  placeholder="@modelcontextprotocol/server-xxx"
-                />
-              </KvRow>
-              <KvRow label="版本（可选）">
-                <TextInput
-                  value={String(config.version ?? "")}
-                  onChange={(v) => setCfg("version", v)}
-                  placeholder="2025.4.8"
-                />
-              </KvRow>
-            </>
-          ) : (
-            <>
-              <KvRow label="命令">
-                <TextInput
-                  value={String(config.command ?? "")}
-                  onChange={(v) => setCfg("command", v)}
-                  placeholder="npx -y @modelcontextprotocol/server-xxx"
-                />
-              </KvRow>
-              <KvRow label="参数 args">
-                <TextInput
-                  value={argsStr}
-                  onChange={(v) => setCfg("args", v.trim() ? v.trim().split(/\s+/) : [])}
-                  placeholder="以空格分隔"
-                />
-              </KvRow>
-            </>
-          )}
-          <KvRow label="环境变量">
-            <KvInput
-              value={config.env}
-              onChange={(v) => setCfg("env", v)}
-              placeholder="GITHUB_TOKEN=xxx"
-            />
-          </KvRow>
-        </>
-      )}
+      <div className="mb-[6px] flex items-center justify-between">
+        <span className="text-[12.5px] font-semibold text-ink-2">MCP server 配置（JSON）</span>
+        <button
+          type="button"
+          onClick={applyTemplate}
+          className="text-[12px] font-semibold text-accent transition hover:underline"
+        >
+          填入模板
+        </button>
+      </div>
+      <textarea
+        value={json}
+        onChange={(e) => setJson(e.target.value)}
+        onBlur={commit}
+        rows={7}
+        spellCheck={false}
+        placeholder={
+          transport === "streamable-http"
+            ? '{ "url": "https://...", "headers": {} }'
+            : '{ "package": "@modelcontextprotocol/server-xxx", "version": "", "env": {} }'
+        }
+        className="w-full rounded-[10px] border border-line bg-card px-[14px] py-[10px] font-mono text-[12.5px] leading-[1.6] text-ink shadow-card transition focus:border-accent focus:outline-none focus:ring-[3px] focus:ring-accent-tint"
+      />
+      {jsonError ? <p className="mt-[6px] text-[12.5px] text-danger">{jsonError}</p> : null}
+      <p className="mt-[6px] text-[12.5px] leading-[1.6] text-ink-3">
+        {transport === "streamable-http"
+          ? "Streamable HTTP：url 必填，headers 可选（如 Authorization）。"
+          : "托管安装：package 必填、version 可选；自定义命令：command + args；环境变量用 env（KEY=VALUE）。"}
+      </p>
     </>
   );
 }

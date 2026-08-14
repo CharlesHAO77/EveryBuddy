@@ -148,10 +148,14 @@ export const useExpertCenterStore = create<ExpertCenterState>((set) => ({
   },
   testConnector: async (id) => {
     const result = await window.electronAPI.connector.test({ id });
-    // 测试会更新主进程 status；本地同步
+    // 测试会更新主进程 status/lastTools；本地同步（capabilities 由主进程自动检测）
     if (result.status !== "reserved") {
       set((s) => ({
-        connectors: s.connectors.map((c) => (c.id === id ? { ...c, status: result.status } : c)),
+        connectors: s.connectors.map((c) =>
+          c.id === id
+            ? { ...c, status: result.status, lastTools: result.toolNames ?? c.lastTools }
+            : c,
+        ),
       }));
     }
     return result;

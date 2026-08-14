@@ -10,7 +10,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { AgentConfig } from "../src/main/agentConfigStore";
 import { ConnectorStore } from "../src/main/connectorStore";
 import { ExpertStore, expertToAgentConfig } from "../src/main/expertStore";
-import { SkillStore, buildSkillMd, parseSkillFrontmatter } from "../src/main/skillStore";
+import { buildSkillMd, parseSkillFrontmatter, SkillStore } from "../src/main/skillStore";
 import { TeamStore } from "../src/main/teamStore";
 
 let dir: string;
@@ -116,13 +116,24 @@ describe("SkillStore", () => {
     return new SkillStore(path.join(dir, "skills.json"), skillsDir);
   }
 
-  it("首次加载种子内置技能（builtin）", () => {
+  it("首次加载种子示例技能（source=installed，同普通已安装技能）", () => {
     const store = make();
-    const builtin = store.list().filter((s) => s.source === "builtin");
-    expect(builtin.map((s) => s.name)).toEqual(
+    const seeded = store.list().filter((s) => s.source === "installed");
+    expect(seeded.map((s) => s.name)).toEqual(
       expect.arrayContaining(["prd-writer", "meeting-notes", "commit-helper"]),
     );
-    expect(builtin.every((s) => s.enabled)).toBe(true);
+    expect(seeded.every((s) => s.enabled)).toBe(true);
+  });
+
+  it("seeded 标记持久化：卸载全部种子后不重新种子", () => {
+    const store = make();
+    for (const s of store.list().filter((x) => x.source === "installed")) {
+      store.uninstall(s.id); // installed 可删除
+    }
+    expect(store.list().filter((x) => x.source === "installed")).toHaveLength(0);
+    // 重新实例化（同一 registry 文件）不再种子
+    const store2 = make();
+    expect(store2.list().filter((x) => x.source === "installed")).toHaveLength(0);
   });
 
   it("parseSkillFrontmatter / buildSkillMd 往返", () => {
@@ -150,11 +161,11 @@ describe("SkillStore", () => {
     expect(store.listEnabled().some((s) => s.id === "prd-writer")).toBe(true);
   });
 
-  it("uninstall builtin 转停用；uninstall custom 删文件 + 注册项", () => {
+  it("uninstall 删除文件 + 注册项（种子已是 installed，可整体卸载）", () => {
     const store = make();
     store.uninstall("prd-writer");
-    const p = store.list().find((s) => s.id === "prd-writer");
-    expect(p?.enabled).toBe(false); // 文件保留
+    expect(store.list().some((s) => s.id === "prd-writer")).toBe(false);
+    expect(existsSync(path.join(dir, "skills", "prd-writer"))).toBe(false);
     const custom = store.create({ name: "tmp-x", description: "d", content: "c" });
     store.uninstall("tmp-x");
     expect(store.list().some((s) => s.id === "tmp-x")).toBe(false);
@@ -165,7 +176,11 @@ describe("SkillStore", () => {
     const store = make();
     const pkgDir = path.join(dir, "pkg");
     mkdirSync(pkgDir, { recursive: true });
-    writeFileSync(path.join(pkgDir, "SKILL.md"), buildSkillMd("installed-skill", "外部包", "# body"), "utf-8");
+    writeFileSync(
+      path.join(pkgDir, "SKILL.md"),
+      buildSkillMd("installed-skill", "外部包", "# body"),
+      "utf-8",
+    );
     const s = store.install(pkgDir);
     expect(s.source).toBe("installed");
     expect(s.name).toBe("installed-skill");
@@ -187,13 +202,19 @@ describe("ConnectorStore", () => {
     expect(seeded?.enabled).toBe(false);
   });
 
-  it("create 默认 reserved + 能力提示；update 可改 status", () => {
+  it("create 默认 reserved + 能力提示；update 可改 status/lastTools", () => {
     const store = make();
     const c = store.create({ name: "文件", type: "filesystem" });
     expect(c.status).toBe("reserved");
     expect(c.capabilities).toContain("context");
-    const updated = store.update({ id: c.id, status: "connected", enabled: true });
+    const updated = store.update({
+      id: c.id,
+      status: "connected",
+      enabled: true,
+      lastTools: ["read_file", "write_file"],
+    });
     expect(updated?.status).toBe("connected");
+    expect(updated?.lastTools).toEqual(["read_file", "write_file"]);
   });
 
   it("test reserved 类型返回待激活提示", async () => {
@@ -218,7 +239,11 @@ describe("ConnectorStore", () => {
     const r1 = await store.test({ id: missing.id });
     expect(r1.status).toBe("disconnected");
 
-    const bad = store.create({ name: "fs2", type: "filesystem", config: { rootDir: path.join(dir, "nope") } });
+    const bad = store.create({
+      name: "fs2",
+      type: "filesystem",
+      config: { rootDir: path.join(dir, "nope") },
+    });
     const r2 = await store.test({ id: bad.id });
     expect(r2.status).toBe("error");
 

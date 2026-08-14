@@ -631,6 +631,8 @@ export interface Connector {
   boundSkillIds: string[];
   enabled: boolean;
   status: ConnectorStatus;
+  /** 最近一次连接成功探测到的工具名列表（mcp，供 UI 展示；空/未连接则无） */
+  lastTools?: string[];
   createdAt: string;
   updatedAt: string;
 }
@@ -660,6 +662,8 @@ export interface UpdateConnectorRequest {
   boundSkillIds?: string[];
   enabled?: boolean;
   status?: ConnectorStatus;
+  /** 最近一次连接成功探测到的工具名列表（mcp） */
+  lastTools?: string[];
 }
 
 export interface TestConnectorRequest {
@@ -672,6 +676,8 @@ export interface ConnectorTestResult {
   message: string;
   /** 探测到的工具数量（mcp 为 listTools 数量） */
   tools?: number;
+  /** 探测到的工具名列表（mcp 连接成功后填充，供 UI 展示） */
+  toolNames?: string[];
 }
 
 // ────────────────────────────────────────────────

@@ -148,6 +148,7 @@ export class ConnectorStore {
       boundSkillIds: req.boundSkillIds ?? existing.boundSkillIds,
       enabled: req.enabled ?? existing.enabled,
       status: req.status ?? existing.status,
+      lastTools: req.lastTools !== undefined ? req.lastTools : existing.lastTools,
       updatedAt: new Date().toISOString(),
     };
     this.data.connectors[idx] = merged;
@@ -164,7 +165,7 @@ export class ConnectorStore {
   /** 测试连接：真实探测 mcp/filesystem；reserved 及其余类型返回提示 */
   async test(
     req: TestConnectorRequest,
-  ): Promise<{ status: ConnectorStatus; message: string; tools?: number }> {
+  ): Promise<{ status: ConnectorStatus; message: string; tools?: number; toolNames?: string[] }> {
     const connector = this.get(req.id);
     if (!connector) throw new Error("连接器不存在");
     if (
@@ -177,8 +178,14 @@ export class ConnectorStore {
     if (connector.type === "mcp") {
       const result = await probeMcpConnector(connector.config);
       const status: ConnectorStatus = result.ok ? "connected" : "error";
-      this.update({ id: connector.id, status });
-      return { status, message: result.message, tools: result.tools };
+      // 连接成功：自动检测能力声明（MCP 提供 tools → tools + actions）+ 记录工具列表
+      this.update({
+        id: connector.id,
+        status,
+        lastTools: result.toolNames,
+        capabilities: result.ok && result.tools ? ["tools", "actions"] : connector.capabilities,
+      });
+      return { status, message: result.message, tools: result.tools, toolNames: result.toolNames };
     }
     if (connector.type === "filesystem") {
       const rootDir = typeof connector.config.rootDir === "string" ? connector.config.rootDir : "";
