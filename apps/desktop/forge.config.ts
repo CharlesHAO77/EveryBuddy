@@ -1,5 +1,5 @@
 import path from "node:path";
-import { cpSync, existsSync, mkdirSync, readFileSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync } from "node:fs";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import type { ForgeConfig, IForgePlugin } from "@electron-forge/shared-types";
