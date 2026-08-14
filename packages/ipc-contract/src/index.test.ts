@@ -386,7 +386,7 @@ describe("connectorCreateRequestSchema", () => {
     if (r.success) {
       expect(r.data.icon).toBe("hub");
       expect(r.data.capabilities).toEqual([]);
-      expect(r.data.status).toBeUndefined();
+      expect(r.data.type).toBe("mcp");
     }
   });
   it("accepts reserved type (open enum)", () => {

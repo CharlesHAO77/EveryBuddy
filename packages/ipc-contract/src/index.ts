@@ -239,6 +239,8 @@ export interface TaskMeta {
   type: TaskType;
   /** 任务所属 agent 模式（缺省 "daily"；决定 createTaskSession 使用 office/coding 配置） */
   mode?: AgentMode;
+  /** 任务选用的专家（缺省按 mode 回退到内置专家；custom 专家叠加覆盖字段） */
+  expertId?: string;
   workspaceId?: string;
   workspacePath?: string;
   /** 临时任务的工作目录（app 托管，位于 work-spaces/ 下；空间任务无此字段） */
@@ -256,6 +258,8 @@ export interface CreateTaskRequest {
   type: TaskType;
   /** 创建任务时指定的 agent 模式 */
   mode?: AgentMode;
+  /** 创建任务时选用的专家（缺省按 mode 回退到内置专家） */
+  expertId?: string;
   workspaceId?: string;
   /** 创建任务时指定的模型 provider ID */
   providerId?: string;
@@ -700,6 +704,7 @@ export const createTaskRequestSchema = z.object({
   title: z.string().optional(),
   type: z.enum(["temp", "workspace"]),
   mode: z.enum(["daily", "coding"]).optional(),
+  expertId: z.string().optional(),
   workspaceId: z.string().optional(),
   providerId: z.string().optional(),
 });

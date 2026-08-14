@@ -3,6 +3,7 @@ import { app, BrowserWindow, Menu, Notification } from "electron";
 import { agentRuntime } from "./agentRuntime";
 import { ensureAppDirs } from "./configStore";
 import { registerIpcHandlers } from "./ipcRouter";
+import { closeAllMcpClients } from "./mcpTools";
 import { migrateFromLegacyConfig } from "./modelStore";
 import { scheduler } from "./scheduler";
 import { createMainWindow } from "./windowManager";
@@ -60,9 +61,10 @@ app.whenReady().then(async () => {
   // 注册 IPC 处理器
   registerIpcHandlers(mainWindow);
 
-  // 退出前清定时器 + 在途 run 标记取消（同步落盘）
+  // 退出前清定时器 + 在途 run 标记取消（同步落盘）+ 关闭 MCP server 进程
   app.on("before-quit", () => {
     scheduler.stop();
+    closeAllMcpClients();
   });
 
   app.on("activate", () => {

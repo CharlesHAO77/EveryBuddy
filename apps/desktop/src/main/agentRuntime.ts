@@ -14,7 +14,11 @@ import { randomUUID } from "node:crypto";
 import { existsSync, mkdirSync, readdirSync, renameSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import type { ToolDefinition } from "@earendil-works/pi-coding-agent";
+import type {
+  ResourceDiagnostic,
+  Skill,
+  ToolDefinition,
+} from "@earendil-works/pi-coding-agent";
 import type {
   AgentEvent,
   AttachmentRef,
@@ -24,7 +28,11 @@ import type {
 } from "@everybuddy/ipc-contract";
 import { getAgentConfig } from "./agentConfigStore";
 import { configStore } from "./configStore";
+import { connectorStore } from "./connectorStore";
+import { expertStore, expertToAgentConfig, findExpert } from "./expertStore";
 import { buildExtensionFactories, DEFAULT_EXTENSIONS } from "./extensions";
+import { buildMcpTools } from "./mcpTools";
+import { skillStore } from "./skillStore";
 import {
   buildImageDescriptionBlock,
   buildManifestText,
@@ -177,9 +185,14 @@ class AgentRuntime {
     const sessionDir = task.sessionDir;
     if (!existsSync(sessionDir)) mkdirSync(sessionDir, { recursive: true });
 
-    // 按任务模式读取办公/编码 agent 配置（旧任务缺省 daily，行为不回归）
+    // 按任务模式读取办公/编码 agent 配置（旧任务缺省 daily，行为不回归）；
+    // 任务选用了专家时，在其基础上叠加 Expert 覆盖字段（builtin 专家无覆盖 → 等价于基础配置，零行为变更）
     const mode = task.mode ?? "daily";
-    const cfg = getAgentConfig(mode);
+    let cfg = getAgentConfig(mode);
+    if (task.expertId) {
+      const expert = findExpert(task.expertId);
+      if (expert) cfg = expertToAgentConfig(expert, cfg);
+    }
 
     // 恢复已有会话或新建（SDK 声明了 findMostRecentSession 但运行时未导出，自行按 mtime 取最近 .jsonl）
     const recentFile = findMostRecentSessionFile(sessionDir);
@@ -209,12 +222,11 @@ class AgentRuntime {
       throw new Error("未配置可用模型，请先在设置中添加模型并配置 API Key");
     }
 
-    // 视觉/生图 provider 实时解析：agent 配置优先，其次能力标签；
+    // 视觉/生图 provider 实时解析：专家覆盖后的 agent 配置优先，其次能力标签；
     // 每次调用重新解析，新打标签的模型无需重建会话即可生效
-    const resolveVisionProviderId = (): string | undefined =>
-      getAgentConfig(task.mode ?? "daily").visionModelProviderId ?? getVisionModel();
+    const resolveVisionProviderId = (): string | undefined => cfg.visionModelProviderId ?? getVisionModel();
     const resolveImageGenProviderId = (): string | undefined =>
-      getAgentConfig(task.mode ?? "daily").imageGenModelProviderId ?? getImageGenModel();
+      cfg.imageGenModelProviderId ?? getImageGenModel();
 
     // 平台化工具配置：bash 在 Windows 上覆盖为真实 Git Bash（SDK 会误选 WSL stub），
     // grep/find 在缺 rg/fd 时降级为纯 Node 实现（见 tools/toolAvailability.ts）
@@ -273,6 +285,15 @@ class AgentRuntime {
       }),
     );
 
+    // 连接器注入：status=connected + enabled 的 MCP 连接器 → 其工具并入 customTools
+    // （reserved/disconnected 不进 loader；连接失败静默返回空数组，不影响会话建立）
+    const mcpConnectors = connectorStore
+      .list()
+      .filter((c) => c.type === "mcp" && c.enabled && c.status === "connected");
+    for (const mcp of mcpConnectors) {
+      customTools.push(...(await buildMcpTools(mcp)));
+    }
+
     // 扩展：构建工厂 + 控制器 + 贡献的工具名（并入 allowlist）。emit 闭包绑定本 task，
     // 扩展内 emit(extension_status/notify) 会经 this.emit 推送到对应渲染进程
     const extensions = cfg.extensions ?? DEFAULT_EXTENSIONS[mode];
@@ -294,12 +315,33 @@ class AgentRuntime {
     const systemPrompt =
       cfg.systemPrompt ?? getModeSystemPrompt(mode, { activeTools: toolAllowlist });
 
+    // 技能注入：把启用的 EveryBuddy 技能并入 SDK 自动发现的技能（skillsOverride 单一注入点，
+    // 见 §7；enabled=false 的技能已由 skillStore.listEnabled() 过滤，不进 override）
+    const managedSkills = skillStore.listEnabled();
     const resourceLoader = new sdk.DefaultResourceLoader({
       cwd,
       agentDir: sdk.getAgentDir(),
       systemPrompt,
       appendSystemPrompt: cfg.appendSystemPrompt ?? undefined,
       extensionFactories: factories,
+      ...(managedSkills.length > 0
+        ? {
+            skillsOverride: (base: {
+              skills: Skill[];
+              diagnostics: ResourceDiagnostic[];
+            }) => {
+              const mine: Skill[] = managedSkills.map((s) => ({
+                name: s.id,
+                description: s.description,
+                filePath: s.filePath,
+                baseDir: s.baseDir,
+                sourceInfo: sdk.createSyntheticSourceInfo(s.filePath, { source: "everybuddy" }),
+                disableModelInvocation: false,
+              }));
+              return { skills: [...base.skills, ...mine], diagnostics: base.diagnostics };
+            },
+          }
+        : {}),
     });
     await resourceLoader.reload();
 
