@@ -9,7 +9,7 @@
  */
 
 import type { InlineExtension } from "@earendil-works/pi-coding-agent";
-import type { AgentMode } from "@everybuddy/ipc-contract";
+import type { AgentMode, ExpertCatalogExtension } from "@everybuddy/ipc-contract";
 import { createPermissionExtension } from "./permission";
 import { createPlanModeExtension } from "./plan-mode/index";
 import { createTodoExtension } from "./todo";
@@ -23,6 +23,13 @@ export const EXTENSION_REGISTRY: Record<
   todo: (emit) => createTodoExtension(emit),
   permission: (emit, deps) => createPermissionExtension(emit, deps.getMode ?? (() => "auto")),
 };
+
+/** 扩展目录（专家表单列表选择用）；permission 由 buildExtensionFactories 恒注入，标 alwaysOn */
+export const EXTENSION_CATALOG: ExpertCatalogExtension[] = [
+  { name: "plan-mode", description: "计划模式：只读探索 + 计划执行" },
+  { name: "todo", description: "待办列表管理（list/add/toggle/clear）" },
+  { name: "permission", description: "工具权限门禁（副作用工具确认）", alwaysOn: true },
+];
 
 /** 各模式默认加载的扩展（agent-*.json 未配 extensions 时使用；permission 恒在 buildExtensionFactories 强制加入） */
 export const DEFAULT_EXTENSIONS: Record<AgentMode, string[]> = {

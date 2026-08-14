@@ -23,6 +23,7 @@ import {
   createWorkspaceRequestSchema,
   expertCreateRequestSchema,
   expertIdRequestSchema,
+  expertResetRequestSchema,
   expertUpdateRequestSchema,
   extensionCommandRequestSchema,
   idRequestSchema,
@@ -51,6 +52,7 @@ import { agentRuntime } from "./agentRuntime";
 import { configStore, SESSIONS_DIR, WORK_SPACES_DIR } from "./configStore";
 import { connectorStore } from "./connectorStore";
 import { rmIfDirectChild } from "./dirCleanup";
+import { buildExpertCatalog } from "./expertCatalog";
 import { expertStore } from "./expertStore";
 import * as modelStore from "./modelStore";
 import { scheduler } from "./scheduler";
@@ -411,6 +413,13 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
     if (!updated) throw new Error("专家不存在");
     return updated;
   });
+
+  ipcMain.handle("expert:reset", (_evt, raw) => {
+    const { id } = validate(expertResetRequestSchema, raw);
+    return expertStore.reset(id);
+  });
+
+  ipcMain.handle("expert:catalog", () => buildExpertCatalog());
 
   ipcMain.handle("expert:delete", (_evt, raw) => {
     const { id } = validate(expertIdRequestSchema, raw);

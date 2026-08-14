@@ -79,6 +79,8 @@ const api: ElectronAPI = {
     list: () => ipcRenderer.invoke("expert:list"),
     create: (req) => ipcRenderer.invoke("expert:create", req),
     update: (req) => ipcRenderer.invoke("expert:update", req),
+    reset: (id) => ipcRenderer.invoke("expert:reset", { id }),
+    catalog: () => ipcRenderer.invoke("expert:catalog"),
     delete: (id) => ipcRenderer.invoke("expert:delete", { id }),
   },
   team: {

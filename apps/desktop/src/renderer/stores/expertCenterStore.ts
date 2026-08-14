@@ -11,6 +11,7 @@ import type {
   CreateSkillRequest,
   CreateTeamRequest,
   Expert,
+  ExpertCatalog,
   ExpertTeam,
   SkillEntry,
   UpdateConnectorRequest,
@@ -33,6 +34,8 @@ interface ExpertCenterState {
   teams: ExpertTeam[];
   skills: SkillEntry[];
   connectors: Connector[];
+  /** 工具/扩展列表选择目录（专家表单用；null = 未加载，UI 降级自由文本） */
+  catalog: ExpertCatalog | null;
   loaded: boolean;
 
   loadAll: () => Promise<void>;
@@ -40,6 +43,7 @@ interface ExpertCenterState {
   // 专家
   createExpert: (req: CreateExpertRequest) => Promise<Expert>;
   updateExpert: (req: UpdateExpertRequest) => Promise<Expert>;
+  resetExpert: (id: string) => Promise<Expert>;
   deleteExpert: (id: string) => Promise<void>;
 
   // 专家团
@@ -66,16 +70,18 @@ export const useExpertCenterStore = create<ExpertCenterState>((set) => ({
   teams: [],
   skills: [],
   connectors: [],
+  catalog: null,
   loaded: false,
 
   loadAll: async () => {
-    const [experts, teams, skills, connectors] = await Promise.all([
+    const [experts, teams, skills, connectors, catalog] = await Promise.all([
       window.electronAPI.expert.list(),
       window.electronAPI.team.list(),
       window.electronAPI.skill.list(),
       window.electronAPI.connector.list(),
+      window.electronAPI.expert.catalog().catch(() => null), // 目录失败不阻塞其余加载
     ]);
-    set({ experts, teams, skills, connectors, loaded: true });
+    set({ experts, teams, skills, connectors, catalog, loaded: true });
   },
 
   createExpert: async (req) => {
@@ -85,6 +91,11 @@ export const useExpertCenterStore = create<ExpertCenterState>((set) => ({
   },
   updateExpert: async (req) => {
     const expert = await window.electronAPI.expert.update(req);
+    set((s) => ({ experts: upsert(s.experts, expert) }));
+    return expert;
+  },
+  resetExpert: async (id) => {
+    const expert = await window.electronAPI.expert.reset(id);
     set((s) => ({ experts: upsert(s.experts, expert) }));
     return expert;
   },

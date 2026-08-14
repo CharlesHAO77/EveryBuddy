@@ -290,16 +290,21 @@ export function Select({
   value,
   onChange,
   options,
+  disabled = false,
 }: {
   value: string;
   onChange: (v: string) => void;
   options: Array<{ value: string; label: string }>;
+  disabled?: boolean;
 }) {
   return (
     <select
       value={value}
       onChange={(e) => onChange(e.target.value)}
-      className="w-full rounded-[10px] border border-line bg-card px-[12px] py-[10px] text-[15px] text-ink shadow-card transition focus:border-accent focus:outline-none focus:ring-[3px] focus:ring-accent-tint"
+      disabled={disabled}
+      className={`w-full rounded-[10px] border border-line bg-card px-[12px] py-[10px] text-[15px] text-ink shadow-card transition focus:border-accent focus:outline-none focus:ring-[3px] focus:ring-accent-tint ${
+        disabled ? "cursor-not-allowed opacity-50" : ""
+      }`}
     >
       {options.map((o) => (
         <option key={o.value} value={o.value}>

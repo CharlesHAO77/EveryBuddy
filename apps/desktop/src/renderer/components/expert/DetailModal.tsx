@@ -6,7 +6,7 @@
  */
 
 import type { Connector, Expert, ExpertTeam, SkillEntry } from "@everybuddy/ipc-contract";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useExpertCenterStore } from "../../stores/expertCenterStore";
 import {
   IconBot,
@@ -19,6 +19,7 @@ import {
   IconPlus,
   IconWarn,
 } from "./icons";
+import { ExtensionMultiSelect, ToolMultiSelect } from "./PickList";
 import {
   btnDanger,
   btnGhost,
@@ -29,7 +30,6 @@ import {
   IconTile,
   type IconTone,
   Note,
-  Select,
   SourceBadge,
   STATUS_LABEL,
   StatusDot,
@@ -173,17 +173,51 @@ function ExpertForm({
 }) {
   const store = useExpertCenterStore();
   const builtin = expert.source === "builtin";
+  const catalog = useExpertCenterStore((s) => s.catalog);
+  // 已连接 MCP 工具（工具选择列表的「已连接 MCP 工具」分组）
+  const mcpToolNames = useMemo(() => {
+    const s = new Set<string>();
+    for (const c of store.connectors) {
+      if (c.type === "mcp" && c.enabled && c.status === "connected") {
+        for (const t of c.lastTools ?? []) s.add(t);
+      }
+    }
+    return [...s];
+  }, [store.connectors]);
+  // 模式默认工具/扩展（内置专家自动勾选，与运行时一致）
+  const defaultTools = catalog?.defaultTools[expert.mode] ?? [];
+  const defaultExts = catalog?.defaultExtensions[expert.mode] ?? [];
   const [name, setName] = useState(expert.name);
   const [description, setDescription] = useState(expert.description);
-  const [mode, setMode] = useState(expert.mode);
   const [systemPrompt, setSystemPrompt] = useState(expert.systemPrompt ?? "");
-  const [tools, setTools] = useState<string[]>(expert.tools ?? []);
-  const [extensions, setExtensions] = useState<string[]>(expert.extensions ?? []);
+  const [appendPrompt, setAppendPrompt] = useState(expert.appendSystemPrompt?.join("\n") ?? "");
+  // 内置专家：初始为模式默认 ∪ 覆盖，保证列表「自动勾选」当前生效工具/扩展
+  const [tools, setTools] = useState<string[]>(
+    builtin ? Array.from(new Set([...defaultTools, ...(expert.tools ?? [])])) : (expert.tools ?? []),
+  );
+  const [extensions, setExtensions] = useState<string[]>(
+    builtin
+      ? Array.from(new Set([...defaultExts, ...(expert.extensions ?? [])]))
+      : (expert.extensions ?? []),
+  );
   const [tags, setTags] = useState<string[]>(expert.tags ?? []);
-  const [defaultModel, setDefaultModel] = useState(expert.defaultModelProviderId ?? "");
-  const [visionModel, setVisionModel] = useState(expert.visionModelProviderId ?? "");
-  const [imageModel, setImageModel] = useState(expert.imageGenModelProviderId ?? "");
   const [busy, setBusy] = useState(false);
+
+  /** 模式默认系统提示词（main/prompts/*.ts builder），内置专家未覆盖时同步展示 */
+  const defaultPrompt = catalog?.modePrompts[expert.mode] ?? "";
+  /** 当前生效提示词：内置专家未自定义时 = 模式默认，保证与运行时一致 */
+  const effectivePrompt = builtin ? systemPrompt || defaultPrompt : systemPrompt;
+
+  /** 多行追加提示词 → string[]（空 → 清除） */
+  const parseAppendLines = (raw: string): string[] => {
+    return raw
+      .split("\n")
+      .map((l) => l.trim())
+      .filter(Boolean);
+  };
+
+  const arraysEqual = (a: string[], b: string[]) =>
+    a.length === b.length && a.every((x, i) => x === b[i]);
 
   const save = async () => {
     setBusy(true);
@@ -192,16 +226,35 @@ function ExpertForm({
         id: expert.id,
         name,
         description,
-        mode,
-        systemPrompt: systemPrompt || undefined,
-        tools,
-        extensions,
+        mode: expert.mode,
+        // 内置专家：等于模式默认（未自定义）→ 空串/空数组清除覆盖，保持跟随模式默认
+        systemPrompt:
+          builtin && systemPrompt.trim() === defaultPrompt.trim()
+            ? ""
+            : systemPrompt || undefined,
+        appendSystemPrompt: parseAppendLines(appendPrompt),
+        tools: builtin && arraysEqual(tools, defaultTools) ? [] : tools,
+        extensions: builtin && arraysEqual(extensions, defaultExts) ? [] : extensions,
         tags,
-        defaultModelProviderId: defaultModel || null,
-        visionModelProviderId: visionModel || null,
-        imageGenModelProviderId: imageModel || null,
       });
       onClose();
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  /** 内置专家重置为默认：删除 override，回退 main/prompts 模式默认 */
+  const resetToDefault = async () => {
+    setBusy(true);
+    try {
+      const fresh = await store.resetExpert(expert.id);
+      setName(fresh.name);
+      setDescription(fresh.description);
+      setSystemPrompt(fresh.systemPrompt ?? "");
+      setAppendPrompt(fresh.appendSystemPrompt?.join("\n") ?? "");
+      setTools(Array.from(new Set([...defaultTools, ...(fresh.tools ?? [])])));
+      setExtensions(Array.from(new Set([...defaultExts, ...(fresh.extensions ?? [])])));
+      setTags(fresh.tags ?? []);
     } finally {
       setBusy(false);
     }
@@ -243,8 +296,9 @@ function ExpertForm({
       <div className="min-h-0 flex-1 overflow-y-auto px-[24px] py-[22px]">
         {builtin ? (
           <div className="mb-[4px]">
-            <Note tone="info" icon={<IconInfo size={18} />} title="内置专家：仅展示">
-              编辑会基于当前模式配置，请「复制为自定义」后修改，避免与 agent 配置漂移。
+            <Note tone="info" icon={<IconInfo size={18} />} title="内置专家：可自定义">
+              提示词 / 工具 / 扩展 / 标签可编辑，保存即覆盖并即时生效；「重置为默认」恢复出厂（回到
+              main/prompts 默认）。
             </Note>
           </div>
         ) : null}
@@ -254,43 +308,41 @@ function ExpertForm({
         <Field label="描述">
           <TextArea value={description} onChange={setDescription} rows={2} />
         </Field>
-        <Field label="基准模式">
-          <Select
-            value={mode}
-            onChange={(v) => setMode(v as Expert["mode"])}
-            options={[
-              { value: "daily", label: "daily 日常办公" },
-              { value: "coding", label: "coding 代码开发" },
-            ]}
-          />
-        </Field>
         <Field
           label="系统提示词（systemPrompt）"
-          hint="缺省由 main/prompts/*.ts builder 生成；自定义专家可覆盖。"
+          hint={
+            builtin
+              ? "内置专家默认显示当前生效提示词（main/prompts builder）；修改并保存即自定义，『重置为默认』恢复。"
+              : "缺省由 main/prompts/*.ts builder 生成；留空 = 跟随模式默认。"
+          }
         >
-          <TextArea value={systemPrompt} onChange={setSystemPrompt} rows={4} mono />
+          <TextArea value={effectivePrompt} onChange={setSystemPrompt} rows={6} mono />
+        </Field>
+        <Field label="追加提示词（appendSystemPrompt）" hint="每行一条，追加在系统提示词末尾。">
+          <TextArea value={appendPrompt} onChange={setAppendPrompt} rows={2} />
         </Field>
         <Field label="工具 allowlist 追加（tools）">
-          <EditableTags value={tools} onChange={setTools} placeholder="如 understand_image" />
+          {catalog ? (
+            <ToolMultiSelect
+              value={tools}
+              onChange={setTools}
+              catalog={catalog}
+              mcpTools={mcpToolNames}
+            />
+          ) : (
+            <EditableTags value={tools} onChange={setTools} placeholder="如 understand_image" />
+          )}
         </Field>
         <Field label="启用的扩展（extensions）">
-          <EditableTags value={extensions} onChange={setExtensions} placeholder="如 plan-mode" />
-        </Field>
-        <Field label="模型 provider（可留空跟随模式默认）">
-          <div className="grid grid-cols-3 gap-[12px]">
-            <div>
-              <div className="mb-[6px] text-[12px] font-semibold text-ink-3">默认</div>
-              <TextInput value={defaultModel} onChange={setDefaultModel} placeholder="缺省" />
-            </div>
-            <div>
-              <div className="mb-[6px] text-[12px] font-semibold text-ink-3">视觉</div>
-              <TextInput value={visionModel} onChange={setVisionModel} placeholder="缺省" />
-            </div>
-            <div>
-              <div className="mb-[6px] text-[12px] font-semibold text-ink-3">生图</div>
-              <TextInput value={imageModel} onChange={setImageModel} placeholder="缺省" />
-            </div>
-          </div>
+          {catalog ? (
+            <ExtensionMultiSelect
+              value={extensions}
+              onChange={setExtensions}
+              options={catalog.extensions}
+            />
+          ) : (
+            <EditableTags value={extensions} onChange={setExtensions} placeholder="如 plan-mode" />
+          )}
         </Field>
         <Field label="标签" hint="预留命名空间：domain:* / capability:* / source:* / team:*">
           <EditableTags value={tags} onChange={setTags} placeholder="domain:office" />
@@ -298,10 +350,28 @@ function ExpertForm({
       </div>
       <ModalFoot>
         {builtin ? (
-          <button type="button" onClick={() => void copyAsCustom()} className={btnPrimary}>
-            <IconPlus size={16} />
-            复制为自定义
-          </button>
+          <>
+            <button
+              type="button"
+              onClick={() => void copyAsCustom()}
+              disabled={busy}
+              className={btnGhost}
+            >
+              <IconPlus size={16} />
+              复制为自定义
+            </button>
+            <button
+              type="button"
+              onClick={() => void resetToDefault()}
+              disabled={busy}
+              className={btnGhost}
+            >
+              重置为默认
+            </button>
+            <button type="button" onClick={() => void save()} disabled={busy} className={btnPrimary}>
+              保存
+            </button>
+          </>
         ) : (
           <>
             <button

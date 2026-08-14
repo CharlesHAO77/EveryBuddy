@@ -52,10 +52,10 @@ export function getBuiltinExpert(id: string): Expert | undefined {
   return BUILTIN_EXPERTS.find((e) => e.id === id);
 }
 
-/** 找专家（含内置）：task 选用时先查自定义，再查内置 */
+/** 找专家（含内置）：task 选用时先查自定义，再查内置（合并 override） */
 export function findExpert(id: string): Expert | undefined {
   const custom = expertStore.getCustom(id);
-  return custom ?? getBuiltinExpert(id);
+  return custom ?? expertStore.getBuiltinMerged(id);
 }
 
 /**
@@ -77,10 +77,12 @@ export function expertToAgentConfig(expert: Expert, base: AgentConfig): AgentCon
 
 interface ExpertShape {
   experts: Expert[];
+  /** 内置专家字段级覆盖：key = 内置专家 id（daily/coding），落盘于 experts.json */
+  overrides: Record<string, Partial<Expert>>;
 }
 
 function emptyShape(): ExpertShape {
-  return { experts: [] };
+  return { experts: [], overrides: {} };
 }
 
 export class ExpertStore {
@@ -95,7 +97,7 @@ export class ExpertStore {
     if (existsSync(this.filePath)) {
       try {
         const parsed = JSON.parse(readFileSync(this.filePath, "utf-8")) as Partial<ExpertShape>;
-        this.data = { experts: parsed.experts ?? [] };
+        this.data = { experts: parsed.experts ?? [], overrides: parsed.overrides ?? {} };
       } catch {
         this.data = emptyShape();
       }
@@ -113,9 +115,35 @@ export class ExpertStore {
     return this.data.experts.find((e) => e.id === id);
   }
 
-  /** builtin + 自定义合并列表（builtin 在前） */
+  /** 字段级合并内置专家 + override；名称/图标/mode 恒取 base（锁定），undefined 不覆盖 */
+  private mergeBuiltin(base: Expert, override?: Partial<Expert>): Expert {
+    return {
+      ...base,
+      description: override?.description ?? base.description,
+      systemPrompt: override?.systemPrompt,
+      appendSystemPrompt: override?.appendSystemPrompt,
+      tools: override?.tools,
+      extensions: override?.extensions,
+      tags: override?.tags ?? base.tags,
+      updatedAt: override?.updatedAt ?? base.updatedAt,
+    };
+  }
+
+  /** 内置专家合并本地 override 后的视图（无 override 即 base 本身） */
+  getBuiltinMerged(id: string): Expert | undefined {
+    const base = getBuiltinExpert(id);
+    if (!base) return undefined;
+    this.load();
+    return this.mergeBuiltin(base, this.data.overrides[id]);
+  }
+
+  /** builtin（合并 override）+ 自定义合并列表（builtin 在前） */
   list(): Expert[] {
-    return [...BUILTIN_EXPERTS, ...this.listCustom()];
+    this.load();
+    return [
+      ...BUILTIN_EXPERTS.map((e) => this.mergeBuiltin(e, this.data.overrides[e.id])),
+      ...this.data.experts,
+    ];
   }
 
   listCustom(): Expert[] {
@@ -150,10 +178,9 @@ export class ExpertStore {
   }
 
   update(req: UpdateExpertRequest): Expert | undefined {
-    // 内置专家结构不可改（仅展示/复制为自定义），避免与 agent-*.json 双写漂移
-    if (getBuiltinExpert(req.id)) {
-      throw new Error("内置专家不可直接编辑，请「复制为自定义」后修改");
-    }
+    // 内置专家写 override（名称/图标/mode 锁定）；custom 正常合并
+    const base = getBuiltinExpert(req.id);
+    if (base) return this.updateBuiltin(base, req);
     this.load();
     const idx = this.data.experts.findIndex((e) => e.id === req.id);
     const existing = this.data.experts[idx];
@@ -187,6 +214,40 @@ export class ExpertStore {
     this.data.experts[idx] = merged;
     this.save();
     return merged;
+  }
+
+  /** 内置专家更新：字段级写 override；空串 systemPrompt=清除覆盖；空记录删除 override 条目 */
+  private updateBuiltin(base: Expert, req: UpdateExpertRequest): Expert {
+    this.load();
+    const prev = this.data.overrides[base.id] ?? {};
+    const next: Partial<Expert> = { ...prev, updatedAt: new Date().toISOString() };
+    if (req.description !== undefined) next.description = req.description;
+    if (req.systemPrompt !== undefined) next.systemPrompt = req.systemPrompt === "" ? undefined : req.systemPrompt;
+    if (req.appendSystemPrompt !== undefined) next.appendSystemPrompt = req.appendSystemPrompt;
+    if (req.tools !== undefined) next.tools = req.tools;
+    if (req.extensions !== undefined) next.extensions = req.extensions;
+    if (req.tags !== undefined) next.tags = req.tags;
+    // 剔除 undefined 使记录最小；空记录删除整条 override（等价重置该字段）
+    const clean: Partial<Expert> = {};
+    for (const [k, v] of Object.entries(next)) {
+      if (v !== undefined) clean[k as keyof Expert] = v as never;
+    }
+    if (Object.keys(clean).length > 0) this.data.overrides[base.id] = clean;
+    else delete this.data.overrides[base.id];
+    this.save();
+    return this.mergeBuiltin(base, this.data.overrides[base.id]);
+  }
+
+  /** 重置内置专家：删除 override，回退模式默认（main/prompts/*.ts builder） */
+  reset(id: string): Expert {
+    if (!getBuiltinExpert(id)) {
+      throw new Error("仅内置专家可重置");
+    }
+    this.load();
+    delete this.data.overrides[id];
+    this.save();
+    const base = getBuiltinExpert(id) as Expert;
+    return { ...base };
   }
 
   /** 仅自定义可删；内置删除抛错 */

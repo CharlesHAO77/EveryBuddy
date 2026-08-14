@@ -10,21 +10,36 @@
  *
  * 生命周期：连接建立后 client 常驻（MCP server 进程保持运行），
  * 应用退出时 closeAllMcpClients() 统一关闭（main/app.ts before-quit 钩子）。
+ *
+ * Windows 注意：npm install 走 cross-spawn（解析 npm → npm.cmd，Node 原生
+ * execFile/spawn 对 .cmd 批处理会 ENOENT/EINVAL）。
  */
 
-import { execFile } from "node:child_process";
+import type { SpawnOptions } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync } from "node:fs";
 import path from "node:path";
-import { promisify } from "node:util";
 import type { ToolDefinition } from "@earendil-works/pi-coding-agent";
 import type { Connector } from "@everybuddy/ipc-contract";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
+import spawn from "cross-spawn";
 import type { TSchema } from "typebox";
 import { APP_ROOT, ensureAppDirs } from "./configStore";
 
-const execFileAsync = promisify(execFile);
+/** 异步执行子进程（用 cross-spawn：Windows 下解析 npm → npm.cmd 并走 cmd.exe，绕开原生 execFile 对 .cmd 的 ENOENT/EINVAL） */
+function spawnAsync(command: string, args: string[], options: SpawnOptions): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const child = spawn(command, args, options);
+    let stderr = "";
+    child.stderr?.on("data", (d: Buffer) => (stderr += d.toString()));
+    child.on("error", (err) => reject(new Error(`spawn ${command} 失败：${err.message}`)));
+    child.on("close", (code) => {
+      if (code === 0) resolve();
+      else reject(new Error(`npm install 退出码 ${code}：${stderr.trim() || "未知错误"}`));
+    });
+  });
+}
 
 /** MCP server 托管安装目录 ~/EveryBuddy/mcp-servers/ */
 export const MCP_SERVERS_DIR = path.join(APP_ROOT, "mcp-servers");
@@ -87,11 +102,12 @@ async function ensureServerInstalled(pkg: string, version?: string): Promise<str
   }
   mkdirSync(installDir, { recursive: true });
   const spec = `${pkg}@${version ?? "latest"}`;
-  // npm 在 PATH（dev 环境）；GUI 启动若缺 PATH 会在错误信息中体现，可后续加 node_modules 内 npm
-  await execFileAsync("npm", ["install", "--prefix", installDir, "--no-audit", "--no-fund", spec], {
-    cwd: installDir,
-    timeout: 120_000,
-  });
+  // npm 经 cross-spawn 解析 npm.cmd（Windows）；GUI 启动若缺 PATH，spawnAsync 的 error 分支会透传 ENOENT
+  await spawnAsync(
+    "npm",
+    ["install", "--prefix", installDir, "--no-audit", "--no-fund", spec],
+    { cwd: installDir, timeout: 120_000 },
+  );
   if (!existsSync(marker)) throw new Error(`MCP server 安装失败：${spec}`);
   return resolvePackageBin(pkgDir, JSON.parse(readFileSync(marker, "utf-8")));
 }

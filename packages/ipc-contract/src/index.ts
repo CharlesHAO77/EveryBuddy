@@ -513,6 +513,7 @@ export interface UpdateExpertRequest {
   icon?: string;
   description?: string;
   mode?: AgentMode;
+  /** 内置专家：空串（""）= 清除覆盖、回退 main/prompts/*.ts 模式默认 */
   systemPrompt?: string;
   appendSystemPrompt?: string[];
   tools?: string[];
@@ -521,7 +522,33 @@ export interface UpdateExpertRequest {
   defaultModelProviderId?: string | null;
   visionModelProviderId?: string | null;
   imageGenModelProviderId?: string | null;
+
   tags?: string[];
+}
+
+/** 专家表单「工具/扩展」列表选择目录条目 */
+export interface ExpertCatalogTool {
+  name: string;
+  description: string;
+}
+
+export interface ExpertCatalogExtension {
+  name: string;
+  description: string;
+  /** 恒启用（如 permission 权限门禁），UI 灰态不可勾选 */
+  alwaysOn?: boolean;
+}
+
+/** 专家中心可选项目录（平台工具 + 扩展清单 + 模式默认提示词/工具/扩展），经 expert:catalog 只读下发 */
+export interface ExpertCatalog {
+  tools: ExpertCatalogTool[];
+  extensions: ExpertCatalogExtension[];
+  /** 各模式默认系统提示词（main/prompts/*.ts builder 生成），内置专家详情展示用 */
+  modePrompts: Record<AgentMode, string>;
+  /** 各模式默认工具（内置专家详情自动勾选用） */
+  defaultTools: Record<AgentMode, string[]>;
+  /** 各模式默认扩展（内置专家详情自动勾选用） */
+  defaultExtensions: Record<AgentMode, string[]>;
 }
 
 /** 专家团路由策略：本轮仅 "manual"；"auto" dispatcher / "workflow" 编排为后续（预留） */
@@ -871,6 +898,9 @@ export type ExpertUpdateRequestZ = z.infer<typeof expertUpdateRequestSchema>;
 
 export const expertIdRequestSchema = z.object({ id: z.string().min(1, "参数缺失") });
 
+/** expert:reset 请求 = 仅内置专家可重置，删除 override 回退模式默认 */
+export const expertResetRequestSchema = expertIdRequestSchema;
+
 // ── team:*（专家团） ──
 export const teamRoutingStrategySchema = z.enum(["manual", "auto", "workflow"]);
 
@@ -1044,11 +1074,15 @@ export interface ElectronAPI {
     onEvent: (cb: (event: ScheduleEvent) => void) => () => void;
   };
   expert: {
-    /** builtin + 自定义合并列表 */
+    /** builtin + 自定义合并列表（builtin 合并了本地 override） */
     list: () => Promise<Expert[]>;
     create: (req: CreateExpertRequest) => Promise<Expert>;
-    /** builtin 仅可改 enabled 之外的结构（不落盘），此处允许改名/描述等展示字段 */
+    /** builtin 写 override（名称/图标/mode 锁定，systemPrompt 空串=清除覆盖）；custom 正常更新 */
     update: (req: UpdateExpertRequest) => Promise<Expert>;
+    /** 仅 builtin 可重置：删除 override，回退模式默认 */
+    reset: (id: string) => Promise<Expert>;
+    /** 专家表单工具/扩展列表选择目录（平台工具 + 扩展清单） */
+    catalog: () => Promise<ExpertCatalog>;
     /** 仅 custom 可删 */
     delete: (id: string) => Promise<void>;
   };

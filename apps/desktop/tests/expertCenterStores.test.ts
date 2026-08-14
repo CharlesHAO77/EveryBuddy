@@ -54,9 +54,43 @@ describe("ExpertStore", () => {
     expect(updated ? updated.updatedAt >= e.updatedAt : false).toBe(true);
   });
 
-  it("update/delete 内置专家抛错", () => {
+  it("内置专家 update 写 override（名称/图标/mode 锁定），list/getBuiltinMerged 返回合并结果", () => {
     const store = new ExpertStore(path.join(dir, "experts.json"));
-    expect(() => store.update({ id: "daily", name: "改名" })).toThrow(/内置专家/);
+    const updated = store.update({
+      id: "daily",
+      systemPrompt: "自定义提示词",
+      tools: ["understand_image"],
+      name: "改名无效",
+    });
+    expect(updated?.systemPrompt).toBe("自定义提示词");
+    expect(updated?.name).toBe("办公助理"); // 名称锁定
+    expect(updated?.mode).toBe("daily"); // mode 锁定
+    expect(store.getBuiltinMerged("daily")?.systemPrompt).toBe("自定义提示词");
+    expect(store.list().find((e) => e.id === "daily")?.tools).toEqual(["understand_image"]);
+  });
+
+  it("内置专家 systemPrompt 空串 = 清除覆盖", () => {
+    const store = new ExpertStore(path.join(dir, "experts.json"));
+    store.update({ id: "daily", systemPrompt: "x" });
+    expect(store.getBuiltinMerged("daily")?.systemPrompt).toBe("x");
+    const after = store.update({ id: "daily", systemPrompt: "" });
+    expect(after?.systemPrompt).toBeUndefined();
+    expect(store.getBuiltinMerged("daily")?.systemPrompt).toBeUndefined();
+  });
+
+  it("reset 删除内置 override 回退默认；非内置抛错", () => {
+    const store = new ExpertStore(path.join(dir, "experts.json"));
+    store.update({ id: "coding", description: "改描述" });
+    expect(store.getBuiltinMerged("coding")?.description).toBe("改描述");
+    const fresh = store.reset("coding");
+    expect(fresh.description).toBe("读取与修改代码、执行命令、完成开发任务");
+    expect(store.getBuiltinMerged("coding")?.description).toBe("读取与修改代码、执行命令、完成开发任务");
+    const custom = store.create({ name: "自定义" });
+    expect(() => store.reset(custom.id)).toThrow(/内置专家/);
+  });
+
+  it("内置专家 delete 仍抛错", () => {
+    const store = new ExpertStore(path.join(dir, "experts.json"));
     expect(() => store.delete("coding")).toThrow(/内置专家/);
   });
 
