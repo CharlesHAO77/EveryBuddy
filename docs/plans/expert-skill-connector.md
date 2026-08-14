@@ -326,3 +326,14 @@ ExpertView（bg-paper，纵向 flex，min-h-0 flex-1）
 | 连接器 `reserved` 态让用户困惑 | UI 明确标注「已注册，运行时接入即将推出」+ status 状态点，不假装已生效 |
 | tags 命名空间被滥用 | 文档约定保留前缀（`domain:*` 等），UI 输入时给出建议补全；不强制校验（保留灵活性） |
 | TaskMeta 增字段破坏旧会话 | `expertId?` 可选，缺省回退 mode 对应 builtin expert，旧数据零迁移 |
+
+## 12. 实施状态（2026-08-14 已落地）
+
+已按 §10 完成并分 6 个 commit 交付：ipc-contract 四组类型/schema/ElectronAPI → main stores + 18 条 IPC 通道 + preload → agentRuntime 集成（expert 配置 / skillsOverride / MCP 工具）→ renderer ExpertView（4 tab + 搜索筛选 + 卡片网格 + 详情/新建 Modal）→ MainView 路由 + 欢迎页专家选择器 → 打包外部化验证。**全量 324 测试绿 + typecheck 绿 + 打包启动验证通过**（打包产物 MCP SDK 已就位）。
+
+实施中发现两处与方案不同的**架构事实**，均按代码库实际模式落地（单一真源优先）：
+
+1. **api-gateway 目前是空壳 stub**（`Gateway.handle` 未实现，所有 handler 抛 not implemented）。本轮业务逻辑按现有 scheduler/config/agentConfig store 同款模式下沉到 **main 进程 stores**（`expertStore/teamStore/skillStore/connectorStore`），`ipcRouter` 薄封装 + zod 校验。api-gateway 作为未来 IM Bot 复用层保留，后续可平移。
+2. **SDK @0.83 无内置 MCP**（文档明确 intentionally no built-in MCP）。MCP 接入自建桥接：`mcpTools.ts` 经 `@modelcontextprotocol/sdk`（新增依赖）把 connected MCP 连接器展开为 `ToolDefinition[]` 注入 customTools；该包已注册到 forge `EXTERNAL_RUNTIME_PKGS` + vite.main external，打包验证通过。
+
+其余与方案一致：技能对齐 SDK `skillsOverride` 单点注入、连接器 reserved 态诚实标注、专家团预留（成员登记 + 手动切换 + 流程图）、内置专家/技能/连接器示例种子。
