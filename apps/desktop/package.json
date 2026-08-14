@@ -16,6 +16,7 @@
     "@earendil-works/pi-coding-agent": "^0.83.0",
     "@everybuddy/api-gateway": "*",
     "@everybuddy/ipc-contract": "*",
+    "@modelcontextprotocol/sdk": "^1.30.0",
     "cron-parser": "^5.8.1",
     "electron-store": "^10.0.0",
     "jszip": "^3.10.1",

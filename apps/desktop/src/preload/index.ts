@@ -75,6 +75,33 @@ const api: ElectronAPI = {
       return () => ipcRenderer.off("schedule:event", handler);
     },
   },
+  expert: {
+    list: () => ipcRenderer.invoke("expert:list"),
+    create: (req) => ipcRenderer.invoke("expert:create", req),
+    update: (req) => ipcRenderer.invoke("expert:update", req),
+    delete: (id) => ipcRenderer.invoke("expert:delete", { id }),
+  },
+  team: {
+    list: () => ipcRenderer.invoke("team:list"),
+    create: (req) => ipcRenderer.invoke("team:create", req),
+    update: (req) => ipcRenderer.invoke("team:update", req),
+    delete: (id) => ipcRenderer.invoke("team:delete", { id }),
+  },
+  skill: {
+    list: () => ipcRenderer.invoke("skill:list"),
+    create: (req) => ipcRenderer.invoke("skill:create", req),
+    update: (req) => ipcRenderer.invoke("skill:update", req),
+    install: (req) => ipcRenderer.invoke("skill:install", req),
+    uninstall: (id) => ipcRenderer.invoke("skill:uninstall", { id }),
+    enable: (req) => ipcRenderer.invoke("skill:enable", req),
+  },
+  connector: {
+    list: () => ipcRenderer.invoke("connector:list"),
+    create: (req) => ipcRenderer.invoke("connector:create", req),
+    update: (req) => ipcRenderer.invoke("connector:update", req),
+    delete: (id) => ipcRenderer.invoke("connector:delete", { id }),
+    test: (req) => ipcRenderer.invoke("connector:test", req),
+  },
 };
 
 contextBridge.exposeInMainWorld("electronAPI", api);

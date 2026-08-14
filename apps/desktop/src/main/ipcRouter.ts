@@ -13,10 +13,17 @@ import {
   abortRequestSchema,
   approveToolRequestSchema,
   branchRequestSchema,
+  connectorCreateRequestSchema,
+  connectorIdRequestSchema,
+  connectorTestRequestSchema,
+  connectorUpdateRequestSchema,
   createNamedWorkspaceRequestSchema,
   createScheduleTaskRequestSchema,
   createTaskRequestSchema,
   createWorkspaceRequestSchema,
+  expertCreateRequestSchema,
+  expertIdRequestSchema,
+  expertUpdateRequestSchema,
   extensionCommandRequestSchema,
   idRequestSchema,
   openExternalRequestSchema,
@@ -29,14 +36,26 @@ import {
   setApiKeyRequestSchema,
   setModeRequestSchema,
   setTaskProviderRequestSchema,
+  skillCreateRequestSchema,
+  skillEnableRequestSchema,
+  skillIdRequestSchema,
+  skillInstallRequestSchema,
+  skillUpdateRequestSchema,
+  teamCreateRequestSchema,
+  teamIdRequestSchema,
+  teamUpdateRequestSchema,
   updateScheduleTaskRequestSchema,
 } from "@everybuddy/ipc-contract";
 import { type BrowserWindow, ipcMain, shell } from "electron";
 import { agentRuntime } from "./agentRuntime";
 import { configStore, SESSIONS_DIR, WORK_SPACES_DIR } from "./configStore";
+import { connectorStore } from "./connectorStore";
 import { rmIfDirectChild } from "./dirCleanup";
+import { expertStore } from "./expertStore";
 import * as modelStore from "./modelStore";
 import { scheduler } from "./scheduler";
+import { skillStore } from "./skillStore";
+import { teamStore } from "./teamStore";
 import {
   createNamedWorkspace,
   createWorkspace,
@@ -376,5 +395,100 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
   ipcMain.handle("schedule:list-runs", (_evt, raw) => {
     const { id } = validate(scheduleIdRequestSchema, raw);
     return scheduler.listRuns(id);
+  });
+
+  // ── expert:*（专家） ─────────────────────────
+  ipcMain.handle("expert:list", () => expertStore.list());
+
+  ipcMain.handle("expert:create", (_evt, raw) => {
+    const req = validate(expertCreateRequestSchema, raw);
+    return expertStore.create(req);
+  });
+
+  ipcMain.handle("expert:update", (_evt, raw) => {
+    const req = validate(expertUpdateRequestSchema, raw);
+    const updated = expertStore.update(req);
+    if (!updated) throw new Error("专家不存在");
+    return updated;
+  });
+
+  ipcMain.handle("expert:delete", (_evt, raw) => {
+    const { id } = validate(expertIdRequestSchema, raw);
+    expertStore.delete(id);
+  });
+
+  // ── team:*（专家团） ─────────────────────────
+  ipcMain.handle("team:list", () => teamStore.list());
+
+  ipcMain.handle("team:create", (_evt, raw) => {
+    const req = validate(teamCreateRequestSchema, raw);
+    return teamStore.create(req);
+  });
+
+  ipcMain.handle("team:update", (_evt, raw) => {
+    const req = validate(teamUpdateRequestSchema, raw);
+    const updated = teamStore.update(req);
+    if (!updated) throw new Error("专家团不存在");
+    return updated;
+  });
+
+  ipcMain.handle("team:delete", (_evt, raw) => {
+    const { id } = validate(teamIdRequestSchema, raw);
+    teamStore.delete(id);
+  });
+
+  // ── skill:*（技能） ─────────────────────────
+  ipcMain.handle("skill:list", () => skillStore.list());
+
+  ipcMain.handle("skill:create", (_evt, raw) => {
+    const req = validate(skillCreateRequestSchema, raw);
+    return skillStore.create(req);
+  });
+
+  ipcMain.handle("skill:update", (_evt, raw) => {
+    const req = validate(skillUpdateRequestSchema, raw);
+    const updated = skillStore.update(req);
+    if (!updated) throw new Error("技能不存在");
+    return updated;
+  });
+
+  ipcMain.handle("skill:install", (_evt, raw) => {
+    const { sourcePath } = validate(skillInstallRequestSchema, raw);
+    return skillStore.install(sourcePath);
+  });
+
+  ipcMain.handle("skill:uninstall", (_evt, raw) => {
+    const { id } = validate(skillIdRequestSchema, raw);
+    skillStore.uninstall(id);
+  });
+
+  ipcMain.handle("skill:enable", (_evt, raw) => {
+    const req = validate(skillEnableRequestSchema, raw);
+    skillStore.enable(req.id, req.enabled);
+  });
+
+  // ── connector:*（连接器） ────────────────────
+  ipcMain.handle("connector:list", () => connectorStore.list());
+
+  ipcMain.handle("connector:create", (_evt, raw) => {
+    const req = validate(connectorCreateRequestSchema, raw);
+    return connectorStore.create(req);
+  });
+
+  ipcMain.handle("connector:update", (_evt, raw) => {
+    const req = validate(connectorUpdateRequestSchema, raw);
+    const updated = connectorStore.update(req);
+    if (!updated) throw new Error("连接器不存在");
+    return updated;
+  });
+
+  ipcMain.handle("connector:delete", (_evt, raw) => {
+    const { id } = validate(connectorIdRequestSchema, raw);
+    connectorStore.delete(id);
+  });
+
+  ipcMain.handle("connector:test", (_evt, raw) => {
+    const req = validate(connectorTestRequestSchema, raw);
+    return connectorStore.test(req);
   });
 }
