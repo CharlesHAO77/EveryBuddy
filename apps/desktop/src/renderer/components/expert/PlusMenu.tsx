@@ -47,12 +47,20 @@ export function PlusMenu({
   const [search, setSearch] = useState("");
   /** 容器高度 = 根菜单高度：一级菜单位置不因子菜单变高而移动 */
   const [menuH, setMenuH] = useState(220);
+  /** 二级菜单最大高度：按屏幕可见空间计算（不限于一级菜单高度） */
+  const [subMax, setSubMax] = useState(340);
   const ref = useRef<HTMLDivElement>(null);
   const rootRef = useRef<HTMLDivElement>(null);
 
-  // 打开后测量根菜单高度，子菜单按此高度滚动（顶部对齐、一级菜单不动）
+  // 打开后：根菜单高度固定容器（一级菜单不动）；二级菜单用「根菜单顶部 → 屏幕底部」的可用空间
   useLayoutEffect(() => {
-    if (open && rootRef.current) setMenuH(rootRef.current.offsetHeight);
+    if (!open || !ref.current || !rootRef.current) return;
+    const rootH = rootRef.current.offsetHeight;
+    setMenuH(rootH);
+    const refTop = ref.current.getBoundingClientRect().top;
+    // 子菜单顶部 = 根菜单顶部（refTop - 6 - rootH），向下可用到视口底部
+    const available = Math.floor(window.innerHeight - refTop + 6 + rootH) - 8;
+    setSubMax(Math.max(160, Math.min(460, available)));
   }, [open]);
 
   useEffect(() => {
@@ -235,7 +243,7 @@ export function PlusMenu({
           {submenu ? (
             <div
               className="ml-[4px] flex min-h-0 w-[236px] flex-col overflow-hidden rounded-[12px] border border-line bg-card shadow-pop"
-              style={{ maxHeight: menuH }}
+              style={{ maxHeight: subMax }}
             >
               <div className="flex shrink-0 items-center justify-between border-b border-line px-[12px] py-[7px]">
                 <span className="text-[11px] font-semibold tracking-[0.05em] text-ink-3">
