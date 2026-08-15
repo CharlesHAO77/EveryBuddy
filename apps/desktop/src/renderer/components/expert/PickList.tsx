@@ -88,6 +88,9 @@ const popoverCls =
 const footerInputCls =
   "min-w-0 flex-1 rounded-full border border-dashed border-line-strong px-[12px] py-[5px] text-[13px] text-ink-3 outline-none transition placeholder:text-ink-3 focus:border-accent-line focus:text-ink-2";
 
+const searchInputCls =
+  "w-full rounded-[7px] border border-line bg-paper px-[9px] py-[5px] text-[13px] text-ink outline-none transition placeholder:text-ink-3 focus:border-accent-line focus:bg-card";
+
 /** 工具多选：平台工具 / 已连接 MCP 工具 / 自定义残留 + 手动添加 */
 export function ToolMultiSelect({
   value,
@@ -102,6 +105,7 @@ export function ToolMultiSelect({
 }) {
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState("");
+  const [filter, setFilter] = useState("");
   const ref = useDismiss(() => setOpen(false), open);
 
   const toggle = (name: string) =>
@@ -115,6 +119,12 @@ export function ToolMultiSelect({
   const platformSet = new Set(catalog.tools.map((t) => t.name));
   const mcpSet = new Set(mcpTools);
   const custom = value.filter((v) => !platformSet.has(v) && !mcpSet.has(v));
+  // 内容多时搜索过滤
+  const fq = filter.trim().toLowerCase();
+  const platformTools = catalog.tools.filter(
+    (t) => !fq || t.name.toLowerCase().includes(fq) || t.description.toLowerCase().includes(fq),
+  );
+  const mcpList = mcpTools.filter((n) => !fq || n.toLowerCase().includes(fq));
 
   return (
     <div ref={ref} className="relative">
@@ -134,11 +144,19 @@ export function ToolMultiSelect({
       </div>
       {open ? (
         <div className={popoverCls}>
-          <div className="max-h-[300px] overflow-y-auto p-[4px]">
-            {catalog.tools.length > 0 ? (
+          <div className="border-b border-line px-[10px] py-[6px]">
+            <input
+              value={filter}
+              onChange={(e) => setFilter(e.target.value)}
+              placeholder="搜索工具…"
+              className={searchInputCls}
+            />
+          </div>
+          <div className="max-h-[280px] overflow-y-auto p-[4px]">
+            {platformTools.length > 0 ? (
               <>
                 <GroupLabel>平台工具</GroupLabel>
-                {catalog.tools.map((t) => (
+                {platformTools.map((t) => (
                   <PickItem
                     key={t.name}
                     name={t.name}
@@ -149,10 +167,10 @@ export function ToolMultiSelect({
                 ))}
               </>
             ) : null}
-            {mcpTools.length > 0 ? (
+            {mcpList.length > 0 ? (
               <>
                 <GroupLabel>已连接 MCP 工具</GroupLabel>
-                {mcpTools.map((n) => (
+                {mcpList.map((n) => (
                   <PickItem
                     key={n}
                     name={n}
@@ -170,6 +188,9 @@ export function ToolMultiSelect({
                   <PickItem key={n} name={n} desc="自定义" on onClick={() => toggle(n)} />
                 ))}
               </>
+            ) : null}
+            {platformTools.length === 0 && mcpList.length === 0 ? (
+              <div className="px-[12px] py-[10px] text-[13px] text-ink-3">无匹配</div>
             ) : null}
           </div>
           <div className="flex items-center gap-[8px] border-t border-line bg-paper px-[12px] py-[8px]">
@@ -211,6 +232,7 @@ export function ExtensionMultiSelect({
 }) {
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState("");
+  const [filter, setFilter] = useState("");
   const ref = useDismiss(() => setOpen(false), open);
 
   const toggle = (name: string) =>
@@ -223,6 +245,10 @@ export function ExtensionMultiSelect({
 
   const known = new Set(options.map((o) => o.name));
   const custom = value.filter((v) => !known.has(v));
+  const fq = filter.trim().toLowerCase();
+  const filteredOptions = options.filter(
+    (o) => !fq || o.name.toLowerCase().includes(fq) || o.description.toLowerCase().includes(fq),
+  );
 
   return (
     <div ref={ref} className="relative">
@@ -242,9 +268,17 @@ export function ExtensionMultiSelect({
       </div>
       {open ? (
         <div className={popoverCls}>
+          <div className="border-b border-line px-[10px] py-[6px]">
+            <input
+              value={filter}
+              onChange={(e) => setFilter(e.target.value)}
+              placeholder="搜索扩展…"
+              className={searchInputCls}
+            />
+          </div>
           <div className="max-h-[280px] overflow-y-auto p-[4px]">
             <GroupLabel>扩展目录</GroupLabel>
-            {options.map((o) =>
+            {filteredOptions.map((o) =>
               o.alwaysOn ? (
                 <PickItem
                   key={o.name}
@@ -272,6 +306,9 @@ export function ExtensionMultiSelect({
                   <PickItem key={n} name={n} desc="自定义" on onClick={() => toggle(n)} />
                 ))}
               </>
+            ) : null}
+            {filteredOptions.length === 0 ? (
+              <div className="px-[12px] py-[10px] text-[13px] text-ink-3">无匹配</div>
             ) : null}
           </div>
           <div className="flex items-center gap-[8px] border-t border-line bg-paper px-[12px] py-[8px]">
