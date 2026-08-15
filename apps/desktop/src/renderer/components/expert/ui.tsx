@@ -2,6 +2,7 @@
  * expert/ui - 专家中心共享展示组件（对齐 demo HTML 的 ic-* tint 色板）。
  */
 import type { ReactNode } from "react";
+import { useTranslation } from "react-i18next";
 import {
   IconBot,
   IconBriefcase,
@@ -80,13 +81,13 @@ export function IconTile({
   );
 }
 
-/** 来源徽章（内置/自定义/已安装/项目级/全局） */
+/** 来源徽章（内置/自定义/已安装/项目级/全局）——值为 i18n key */
 const SRC_LABEL: Record<string, string> = {
-  builtin: "内置",
-  custom: "自定义",
-  installed: "已安装",
-  project: "项目级",
-  global: "全局",
+  builtin: "expert.source.builtin",
+  custom: "expert.source.custom",
+  installed: "expert.source.installed",
+  project: "expert.source.project",
+  global: "expert.source.global",
 };
 
 const SRC_CLASS: Record<string, string> = {
@@ -98,11 +99,12 @@ const SRC_CLASS: Record<string, string> = {
 };
 
 export function SourceBadge({ source }: { source: string }) {
+  const { t } = useTranslation();
   return (
     <span
       className={`rounded-[6px] px-[8px] py-[2px] text-[11px] font-semibold ${SRC_CLASS[source] ?? "bg-active text-ink-2"}`}
     >
-      {SRC_LABEL[source] ?? source}
+      {t(SRC_LABEL[source] ?? source)}
     </span>
   );
 }
@@ -125,19 +127,20 @@ const ST_CLASS: Record<string, string> = {
 };
 
 export const STATUS_LABEL: Record<string, string> = {
-  connected: "已连接",
-  reserved: "已注册·待激活",
-  disconnected: "未连接",
-  error: "连接异常",
+  connected: "expert.status.connected",
+  reserved: "expert.status.reserved",
+  disconnected: "expert.status.disconnected",
+  error: "expert.status.error",
 };
 
 export function StatusDot({ status, label }: { status: string; label: string }) {
+  const { t } = useTranslation();
   return (
     <span
       className={`inline-flex items-center gap-[6px] text-[12px] font-semibold ${ST_CLASS[status] ?? "text-ink-3"}`}
     >
       <span className="h-[7px] w-[7px] rounded-full bg-current" />
-      {label}
+      {t(label)}
     </span>
   );
 }

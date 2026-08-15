@@ -14,11 +14,7 @@ import { randomUUID } from "node:crypto";
 import { existsSync, mkdirSync, readdirSync, renameSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import type {
-  ResourceDiagnostic,
-  Skill,
-  ToolDefinition,
-} from "@earendil-works/pi-coding-agent";
+import type { ResourceDiagnostic, Skill, ToolDefinition } from "@earendil-works/pi-coding-agent";
 import type {
   AgentEvent,
   AttachmentRef,
@@ -29,10 +25,9 @@ import type {
 import { getAgentConfig } from "./agentConfigStore";
 import { configStore } from "./configStore";
 import { connectorStore } from "./connectorStore";
+import { uiError } from "./errors";
 import { expertStore, expertToAgentConfig, findExpert } from "./expertStore";
 import { buildExtensionFactories, DEFAULT_EXTENSIONS } from "./extensions";
-import { buildMcpTools } from "./mcpTools";
-import { skillStore } from "./skillStore";
 import {
   buildImageDescriptionBlock,
   buildManifestText,
@@ -41,6 +36,7 @@ import {
   stageAttachments,
 } from "./fileParser";
 import { buildFullPath, entriesToHistory } from "./historyMapper";
+import { buildMcpTools } from "./mcpTools";
 import {
   AUTH_PATH,
   getApiKey,
@@ -51,6 +47,7 @@ import {
   MODELS_JSON_PATH,
 } from "./modelStore";
 import { getModeSystemPrompt } from "./prompts";
+import { skillStore } from "./skillStore";
 import { createFindOperations } from "./tools/findTool";
 import { createGenerateImageToolDefinition } from "./tools/generateImageTool";
 import { createGrepToolDefinition } from "./tools/grepTool";
@@ -219,12 +216,13 @@ class AgentRuntime {
       model = available?.find((m) => isChatModelProviderId(m.provider)) as PiModel | undefined;
     }
     if (!model) {
-      throw new Error("未配置可用模型，请先在设置中添加模型并配置 API Key");
+      throw uiError("errors.noModelConfigured");
     }
 
     // 视觉/生图 provider 实时解析：专家覆盖后的 agent 配置优先，其次能力标签；
     // 每次调用重新解析，新打标签的模型无需重建会话即可生效
-    const resolveVisionProviderId = (): string | undefined => cfg.visionModelProviderId ?? getVisionModel();
+    const resolveVisionProviderId = (): string | undefined =>
+      cfg.visionModelProviderId ?? getVisionModel();
     const resolveImageGenProviderId = (): string | undefined =>
       cfg.imageGenModelProviderId ?? getImageGenModel();
 
@@ -326,10 +324,7 @@ class AgentRuntime {
       extensionFactories: factories,
       ...(managedSkills.length > 0
         ? {
-            skillsOverride: (base: {
-              skills: Skill[];
-              diagnostics: ResourceDiagnostic[];
-            }) => {
+            skillsOverride: (base: { skills: Skill[]; diagnostics: ResourceDiagnostic[] }) => {
               const mine: Skill[] = managedSkills.map((s) => ({
                 name: s.id,
                 description: s.description,
@@ -439,14 +434,17 @@ class AgentRuntime {
     const task = configStore.getTask(taskId);
     const cwd = task ? getTaskCwd(task) : undefined;
     if (!task || !cwd) {
-      this.emitError(taskId, "无法定位任务工作目录");
+      this.emitError(taskId, "errors.noWorkDir");
       return null;
     }
     try {
       const staged = await stageAttachments(attachments, cwd);
       const copied = staged.filter((s) => !s.skipped);
       if (copied.length === 0) {
-        this.emitError(taskId, `附件暂存失败：${staged[0]?.error ?? "未知错误"}`);
+        this.emitError(
+          taskId,
+          uiError("errors.stageFailed", { detail: staged[0]?.error ?? "" }).message,
+        );
         return null;
       }
 
@@ -498,7 +496,12 @@ class AgentRuntime {
         ? `${text}\n\n${manifest}${descBlock ? `\n\n${descBlock}` : ""}`
         : `${manifest}${descBlock ? `\n\n${descBlock}` : ""}`;
     } catch (err) {
-      this.emitError(taskId, `附件处理失败: ${err instanceof Error ? err.message : String(err)}`);
+      this.emitError(
+        taskId,
+        uiError("errors.attachmentFailed", {
+          message: err instanceof Error ? err.message : String(err),
+        }).message,
+      );
       return null;
     }
   }
@@ -513,7 +516,7 @@ class AgentRuntime {
     const state = this.sessions.get(taskId);
     if (!state) {
       // 会话未就绪（竞态或初始化失败）：经事件流报错，避免 IPC reject 变成未处理异常
-      this.emitError(taskId, "任务会话未就绪，请稍后重试或重新选择任务");
+      this.emitError(taskId, "errors.sessionNotReady");
       return;
     }
 
@@ -524,7 +527,11 @@ class AgentRuntime {
     try {
       await state.session.prompt(fullText);
     } catch (err) {
-      this.emitError(taskId, `发送消息失败: ${err instanceof Error ? err.message : String(err)}`);
+      this.emitError(
+        taskId,
+        uiError("errors.sendFailed", { message: err instanceof Error ? err.message : String(err) })
+          .message,
+      );
     }
   }
 
@@ -545,7 +552,7 @@ class AgentRuntime {
   ): Promise<void> {
     const state = this.sessions.get(taskId);
     if (!state) {
-      this.emitError(taskId, "任务会话未就绪，请稍后重试或重新选择任务");
+      this.emitError(taskId, "errors.sessionNotReady");
       return;
     }
 
@@ -565,7 +572,11 @@ class AgentRuntime {
         await state.session.followUp(fullText);
       }
     } catch (err) {
-      this.emitError(taskId, `发送消息失败: ${err instanceof Error ? err.message : String(err)}`);
+      this.emitError(
+        taskId,
+        uiError("errors.sendFailed", { message: err instanceof Error ? err.message : String(err) })
+          .message,
+      );
     }
   }
 
@@ -612,10 +623,10 @@ class AgentRuntime {
   async branchTask(taskId: string, entryId: string): Promise<TaskMeta> {
     const sdk = await this.load();
     const task = configStore.getTask(taskId);
-    if (!task) throw new Error("任务不存在");
+    if (!task) throw uiError("errors.taskNotFound");
     const recentFile = findMostRecentSessionFile(task.sessionDir);
     if (!recentFile || !existsSync(recentFile)) {
-      throw new Error("找不到会话记录，无法创建分支");
+      throw uiError("errors.noSessionForBranch");
     }
 
     const sm = sdk.SessionManager.open(
@@ -631,7 +642,7 @@ class AgentRuntime {
         `创建分支失败（条目可能不存在）: ${err instanceof Error ? err.message : String(err)}`,
       );
     }
-    if (!newSessionFile) throw new Error("创建分支失败：会话未持久化");
+    if (!newSessionFile) throw uiError("errors.branchNotPersisted");
 
     // 新任务：复制类型/模式/模型/空间，解析新 sessionDir（临时任务取新 workDir）
     const workspace = task.workspaceId ? configStore.getWorkspace(task.workspaceId) : undefined;

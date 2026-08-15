@@ -1,4 +1,6 @@
 import type { ScheduledTask } from "@everybuddy/ipc-contract";
+import type { TFunction } from "i18next";
+import { useTranslation } from "react-i18next";
 import { humanizeSchedule } from "../../scheduleUtils";
 import { ActionMenu, type MenuItem } from "../ActionMenu";
 import { IconClock, IconZap } from "../icons";
@@ -13,51 +15,59 @@ interface AutomationTaskCardProps {
   onDelete: () => void;
 }
 
-function relativeTime(iso?: string): string {
-  if (!iso) return "未运行";
+function relativeTime(iso: string | undefined, t: TFunction): string {
+  if (!iso) return t("automation.neverRun");
   const diff = Date.now() - new Date(iso).getTime();
   const min = Math.floor(diff / 60000);
-  if (min < 1) return "刚刚";
-  if (min < 60) return `${min}分钟前`;
+  if (min < 1) return t("time.justNow");
+  if (min < 60) return t("time.minutes", { count: min });
   const hr = Math.floor(min / 60);
-  if (hr < 24) return `${hr}小时前`;
+  if (hr < 24) return t("time.hours", { count: hr });
   const day = Math.floor(hr / 24);
-  if (day < 30) return `${day}天前`;
+  if (day < 30) return t("time.days", { count: day });
   const d = new Date(iso);
-  return `${d.getMonth() + 1}月${d.getDate()}日`;
+  return t("time.monthDay", { month: d.getMonth() + 1, day: d.getDate() });
 }
 
-/** lastStatus → 徽标配色 */
+/** lastStatus → 徽标配色（label 为 i18n key） */
 function statusChip(status?: ScheduledTask["lastStatus"]) {
   switch (status) {
     case "success":
       return {
         cls: "bg-accent-tint text-accent-strong border-accent-line",
         dot: "bg-accent",
-        label: "成功",
+        labelKey: "automation.status.success",
       };
     case "failed":
       return {
         cls: "bg-danger/10 text-danger-strong border-danger/30",
         dot: "bg-danger",
-        label: "失败",
+        labelKey: "automation.status.failed",
       };
     case "running":
       return {
         cls: "bg-accent-tint text-accent-strong border-accent-line",
         dot: "bg-accent animate-pulse",
-        label: "运行中",
+        labelKey: "automation.status.running",
       };
     case "cancelled":
       return {
         cls: "bg-danger/10 text-danger-strong border-danger/30",
         dot: "bg-danger",
-        label: "已取消",
+        labelKey: "automation.status.cancelled",
       };
     case "skipped":
-      return { cls: "bg-hover text-ink-3 border-line", dot: "bg-ink-3", label: "已跳过" };
+      return {
+        cls: "bg-hover text-ink-3 border-line",
+        dot: "bg-ink-3",
+        labelKey: "automation.status.skipped",
+      };
     default:
-      return { cls: "bg-hover text-ink-3 border-line", dot: "bg-ink-3", label: "待运行" };
+      return {
+        cls: "bg-hover text-ink-3 border-line",
+        dot: "bg-ink-3",
+        labelKey: "automation.status.pending",
+      };
   }
 }
 
@@ -70,19 +80,20 @@ export function AutomationTaskCard({
   onToggleEnabled,
   onDelete,
 }: AutomationTaskCardProps) {
+  const { t } = useTranslation();
   const chip = statusChip(task.lastStatus);
   const enabledChip = task.enabled
     ? "bg-accent-tint text-accent-strong border-accent-line"
     : "bg-hover text-ink-3 border-line";
 
   const menuItems: MenuItem[] = [
-    { label: "立即执行", onSelect: onRunNow },
-    { label: "编辑", onSelect: onEdit },
+    { label: "automation.runNow", onSelect: onRunNow },
+    { label: "common.edit", onSelect: onEdit },
     {
-      label: task.enabled ? "暂停" : "恢复",
+      label: task.enabled ? "automation.pause" : "automation.resume",
       onSelect: onToggleEnabled,
     },
-    { label: "删除", danger: true, onSelect: onDelete },
+    { label: "common.delete", danger: true, onSelect: onDelete },
   ];
 
   return (
@@ -102,19 +113,19 @@ export function AutomationTaskCard({
     >
       <div className="flex items-center gap-[6px]">
         <span className="min-w-0 flex-1 truncate text-[14px] font-semibold text-ink">
-          {task.title || "未命名任务"}
+          {task.title || t("automation.unnamedTask")}
         </span>
         <span
           className={`flex shrink-0 items-center gap-[4px] rounded-full border px-[7px] text-[11px] font-semibold ${enabledChip}`}
         >
           <span className="h-[6px] w-[6px] rounded-full bg-current" />
-          {task.enabled ? "启用" : "已暂停"}
+          {task.enabled ? t("automation.enabled") : t("automation.paused")}
         </span>
         <span
           className={`flex shrink-0 items-center gap-[4px] rounded-full border px-[7px] text-[11px] font-semibold ${chip.cls}`}
         >
           <span className={`h-[6px] w-[6px] rounded-full ${chip.dot}`} />
-          {chip.label}
+          {t(chip.labelKey)}
         </span>
         <ActionMenu items={menuItems} />
       </div>
@@ -125,17 +136,17 @@ export function AutomationTaskCard({
 
       <div className="mt-[7px] flex items-center gap-[5px] text-[12px] text-ink-3">
         <IconClock size={13} />
-        {humanizeSchedule(task.spec)}
+        {humanizeSchedule(task.spec, t)}
       </div>
 
       <div className="mt-[7px] flex items-center gap-[6px] border-t border-dashed border-line pt-[7px] text-[11.5px] text-ink-3">
         <span className="inline-flex items-center gap-[4px]">
           <IconZap size={12} />
-          上次 {relativeTime(task.lastRunAt)}
+          {t("automation.lastRunLabel")} {relativeTime(task.lastRunAt, t)}
         </span>
         <span className="inline-flex items-center gap-[4px]">
           <IconZap size={12} />
-          下次 {relativeTime(task.nextRunAt)}
+          {t("automation.nextRunLabel")} {relativeTime(task.nextRunAt, t)}
         </span>
       </div>
     </div>

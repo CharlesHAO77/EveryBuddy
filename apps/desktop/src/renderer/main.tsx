@@ -2,6 +2,7 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { App } from "./App";
 import { ErrorBoundary } from "./components/ErrorBoundary";
+import "./i18n";
 import "./styles/globals.css";
 
 // 沉浸式/自定义标题栏：在 <html> 标记平台，

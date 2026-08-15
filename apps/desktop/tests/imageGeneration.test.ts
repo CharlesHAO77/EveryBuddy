@@ -99,7 +99,9 @@ describe("httpGenerateImage", () => {
 
   it("空 data → 抛错", async () => {
     const fetchImpl = makeFetch(() => resp({ json: { data: [] } }));
-    await expect(httpGenerateImage(OPTS, { prompt: "x" }, fetchImpl)).rejects.toThrow(/未返回图片/);
+    await expect(httpGenerateImage(OPTS, { prompt: "x" }, fetchImpl)).rejects.toThrow(
+      /errors\.imageNoData/,
+    );
   });
 
   it("支持自定义 apiPath 覆盖", async () => {

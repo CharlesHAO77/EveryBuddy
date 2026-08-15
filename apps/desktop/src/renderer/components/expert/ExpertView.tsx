@@ -6,6 +6,7 @@
 
 import type { ReactNode } from "react";
 import { useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { useExpertCenterStore } from "../../stores/expertCenterStore";
 import { CreateModal } from "./CreateModal";
 import { DetailModal } from "./DetailModal";
@@ -14,40 +15,40 @@ import { expertIcon, SourceBadge, STATUS_LABEL, StatusDot, Tag, TypeBadge } from
 
 type TabId = "expert" | "team" | "skill" | "connector";
 
-const TABS: Array<{ id: TabId; label: string; icon: ReactNode }> = [
-  { id: "expert", label: "专家", icon: <IconUser /> },
-  { id: "team", label: "专家团", icon: <IconUsers /> },
-  { id: "skill", label: "技能", icon: <IconSparkles /> },
-  { id: "connector", label: "连接器", icon: <IconPlug /> },
+const TABS: Array<{ id: TabId; labelKey: string; icon: ReactNode }> = [
+  { id: "expert", labelKey: "expert.tab.expert", icon: <IconUser /> },
+  { id: "team", labelKey: "expert.tab.team", icon: <IconUsers /> },
+  { id: "skill", labelKey: "expert.tab.skill", icon: <IconSparkles /> },
+  { id: "connector", labelKey: "expert.tab.connector", icon: <IconPlug /> },
 ];
 
 const NEW_LABELS: Record<TabId, string> = {
-  expert: "新建专家",
-  team: "新建专家团",
-  skill: "新建技能",
-  connector: "新建连接器",
+  expert: "expert.new.expert",
+  team: "expert.new.team",
+  skill: "expert.new.skill",
+  connector: "expert.new.connector",
 };
 
 /** 各 tab 筛选 pill（按用户要求精简）：
  *  专家 → 内置/自定义；技能 → 已安装/自定义/全局（内置已并入已安装，无项目级）；
  *  连接器 → MCP/自定义。 */
-const FILTERS: Record<TabId, Array<{ id: string; label: string }>> = {
+const FILTERS: Record<TabId, Array<{ id: string; labelKey: string }>> = {
   expert: [
-    { id: "all", label: "全部" },
-    { id: "builtin", label: "内置" },
-    { id: "custom", label: "自定义" },
+    { id: "all", labelKey: "expert.filter.all" },
+    { id: "builtin", labelKey: "expert.filter.builtin" },
+    { id: "custom", labelKey: "expert.filter.custom" },
   ],
-  team: [{ id: "all", label: "全部" }],
+  team: [{ id: "all", labelKey: "expert.filter.all" }],
   skill: [
-    { id: "all", label: "全部" },
-    { id: "installed", label: "已安装" },
-    { id: "custom", label: "自定义" },
-    { id: "global", label: "全局" },
+    { id: "all", labelKey: "expert.filter.all" },
+    { id: "installed", labelKey: "expert.filter.installed" },
+    { id: "custom", labelKey: "expert.filter.custom" },
+    { id: "global", labelKey: "expert.filter.global" },
   ],
   connector: [
-    { id: "all", label: "全部" },
-    { id: "mcp", label: "MCP" },
-    { id: "custom", label: "自定义" },
+    { id: "all", labelKey: "expert.filter.all" },
+    { id: "mcp", labelKey: "expert.filter.mcp" },
+    { id: "custom", labelKey: "expert.filter.custom" },
   ],
 };
 
@@ -72,6 +73,7 @@ function matchesSearch(q: string, ...fields: Array<string | undefined>): boolean
 }
 
 export function ExpertView() {
+  const { t } = useTranslation();
   const store = useExpertCenterStore();
   // Windows 自定义标题栏：顶栏右侧让位系统按钮区（WCO ~138px）
   const isWin = document.documentElement.dataset.platform === "win";
@@ -110,17 +112,17 @@ export function ExpertView() {
     if (tab === "team" && filter === "all") {
       filtered.push({
         __reserved: "bot",
-        name: "子 Agent 调度",
-        description: "主 Agent 调动子 Agent 协作（预留）",
+        name: t("expert.reservedSubAgent"),
+        description: t("expert.reservedSubAgentDesc"),
       });
       filtered.push({
         __reserved: "workflow",
-        name: "Workflow 编排",
-        description: "可视化节点编排多 Agent 流程（预留）",
+        name: t("expert.reservedWorkflow"),
+        description: t("expert.reservedWorkflowDesc"),
       });
     }
     return filtered;
-  }, [store, tab, search, filter]);
+  }, [store, tab, search, filter, t]);
 
   const counts: Record<TabId, number> = {
     expert: store.experts.length,
@@ -137,28 +139,30 @@ export function ExpertView() {
           isWin ? "pr-[160px]" : ""
         }`}
       >
-        {TABS.map((t) => (
+        {TABS.map((tabItem) => (
           <button
-            key={t.id}
+            key={tabItem.id}
             type="button"
             onClick={() => {
-              setTab(t.id);
+              setTab(tabItem.id);
               setSearch("");
               setFilter("all");
               setDetail(null);
             }}
             className={`titlebar-no-drag flex h-[42px] items-center gap-[9px] rounded-[10px] px-[18px] text-[16px] transition ${
-              tab === t.id
+              tab === tabItem.id
                 ? "bg-accent-tint font-semibold text-accent-strong"
                 : "text-ink-2 hover:bg-hover hover:text-ink"
             }`}
           >
-            {t.icon}
-            {t.label}
+            {tabItem.icon}
+            {t(tabItem.labelKey)}
             <span
-              className={`text-[12px] font-semibold ${tab === t.id ? "text-accent" : "text-ink-3"}`}
+              className={`text-[12px] font-semibold ${
+                tab === tabItem.id ? "text-accent" : "text-ink-3"
+              }`}
             >
-              {counts[t.id]}
+              {counts[tabItem.id]}
             </span>
           </button>
         ))}
@@ -171,7 +175,7 @@ export function ExpertView() {
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="搜索名称、描述或标签…"
+            placeholder={t("expert.searchPlaceholder")}
             className="w-full bg-transparent text-[15px] text-ink outline-none placeholder:text-ink-3"
           />
         </div>
@@ -187,7 +191,7 @@ export function ExpertView() {
                   : "border-line bg-card text-ink-2 hover:bg-hover hover:text-ink"
               }`}
             >
-              {p.label}
+              {t(p.labelKey)}
             </button>
           ))}
         </div>
@@ -198,7 +202,7 @@ export function ExpertView() {
           className="inline-flex h-[38px] items-center gap-[7px] rounded-[8px] bg-accent px-[16px] text-[15px] font-semibold text-white transition hover:bg-accent-strong active:scale-[0.98]"
         >
           <IconPlus size={16} />
-          {NEW_LABELS[tab]}
+          {t(NEW_LABELS[tab])}
         </button>
       </div>
 
@@ -209,8 +213,8 @@ export function ExpertView() {
             <div className="flex h-[56px] w-[56px] items-center justify-center rounded-[14px] bg-accent-tint text-accent">
               <IconSearch size={24} />
             </div>
-            <div className="text-[16px] font-semibold text-ink">没有匹配的结果</div>
-            <div className="text-[14px] text-ink-3">试试调整搜索关键词或筛选条件</div>
+            <div className="text-[16px] font-semibold text-ink">{t("expert.noMatchTitle")}</div>
+            <div className="text-[14px] text-ink-3">{t("expert.noMatchHint")}</div>
           </div>
         ) : (
           <div className="grid grid-cols-[repeat(auto-fill,minmax(258px,1fr))] gap-[16px] p-[20px_24px_32px]">
@@ -237,6 +241,7 @@ export function ExpertView() {
 
 /** 单张卡片（按实体分发徽章/状态/色调） */
 function Card({ item, tab, onOpen }: { item: CardItem; tab: TabId; onOpen: (id: string) => void }) {
+  const { t } = useTranslation();
   const reserved = item.__reserved;
   const id = reserved ? `res-${reserved}` : (item.id ?? "");
   const tags = (item.tags ?? []).slice(0, 4);
@@ -261,11 +266,11 @@ function Card({ item, tab, onOpen }: { item: CardItem; tab: TabId; onOpen: (id: 
   } else {
     topRight = reserved ? (
       <span className="rounded-[6px] bg-active px-[8px] py-[2px] text-[11px] font-semibold text-ink-2">
-        预留
+        {t("expert.reserved")}
       </span>
     ) : (
       <span className="rounded-full border border-accent-line bg-accent-tint px-[7px] py-[1px] text-[11px] font-semibold text-accent-strong">
-        {item.expertIds?.length ?? 0} 人
+        {t("expert.memberCount", { num: item.expertIds?.length ?? 0 })}
       </span>
     );
   }

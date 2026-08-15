@@ -10,6 +10,7 @@
 
 import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { useSessionStore } from "../stores/sessionStore";
 import { type RightPanelViewId, useUIStore } from "../stores/uiStore";
 import { Empty } from "./Empty";
@@ -25,14 +26,15 @@ import { PreviewView } from "./PreviewView";
 
 type ViewId = RightPanelViewId;
 
-const VIEWS: Array<{ id: ViewId; label: string; icon: ReactNode }> = [
-  { id: "todo-plan", label: "待办", icon: <IconClipboardCheck size={12} /> },
-  { id: "files", label: "文件", icon: <IconFile size={12} /> },
-  { id: "preview", label: "预览", icon: <IconEye size={12} /> },
+const VIEWS: Array<{ id: ViewId; labelKey: string; icon: ReactNode }> = [
+  { id: "todo-plan", labelKey: "rightPanel.todo", icon: <IconClipboardCheck size={12} /> },
+  { id: "files", labelKey: "rightPanel.files", icon: <IconFile size={12} /> },
+  { id: "preview", labelKey: "rightPanel.preview", icon: <IconEye size={12} /> },
 ];
 
 /** 计划步骤三态：已完成（删除线）/ 当前执行项（强调条 + 浅绿底）/ 待执行 */
 function TodoPlanView() {
+  const { t } = useTranslation();
   const taskId = useSessionStore((s) => s.currentTaskId);
   const plan = useSessionStore((s) =>
     taskId ? s.extensionStates[taskId]?.["plan-mode"] : undefined,
@@ -43,7 +45,7 @@ function TodoPlanView() {
   const showTodo = Boolean(todo?.value || (todo?.lines?.length ?? 0) > 0);
   const todoLines = todo?.lines ?? [];
 
-  if (!taskId) return <Empty text="选择或新建对话查看计划 / 待办" />;
+  if (!taskId) return <Empty text={t("rightPanel.emptyPlan")} />;
 
   // 解析步骤三态：首个未完成项视为 current
   const lines = plan?.lines ?? [];
@@ -77,24 +79,26 @@ function TodoPlanView() {
         <section className="flex flex-col gap-2">
           <div className="flex items-center gap-1.5 text-[11px] font-semibold tracking-wide text-accent-strong">
             <IconClipboardCheck size={12} className="shrink-0" />
-            计划
+            {t("rightPanel.plan")}
           </div>
           <div className="flex items-center justify-between rounded-m border border-line bg-card px-3 py-2 shadow-card">
             <span className="flex min-w-0 items-center gap-2 text-[12px] font-semibold text-ink">
               <span className="truncate">
-                {executing ? "计划执行中" : planReady ? "计划已就绪" : "等待生成计划"}
+                {executing
+                  ? t("rightPanel.planExecuting")
+                  : planReady
+                    ? t("rightPanel.planReady")
+                    : t("rightPanel.planWaiting")}
               </span>
             </span>
             {steps.length > 0 && (
               <span className="shrink-0 rounded-full bg-accent-tint px-2 py-0.5 text-[10.5px] font-semibold text-accent-strong">
-                {executing ? `${doneCount}/${steps.length}` : "等待执行"}
+                {executing ? `${doneCount}/${steps.length}` : t("rightPanel.planWaitingExecute")}
               </span>
             )}
           </div>
           {steps.length === 0 && !executing && (
-            <p className="px-1 text-[11.5px] leading-snug text-ink-3">
-              发送消息，模型会在回复中给出「Plan:」编号计划
-            </p>
+            <p className="px-1 text-[11.5px] leading-snug text-ink-3">{t("rightPanel.planHint")}</p>
           )}
           <div className="flex flex-col gap-0.5">
             {steps.map((s) => (
@@ -137,7 +141,7 @@ function TodoPlanView() {
               onClick={executePlan}
               className="w-full rounded-s bg-accent py-1.5 text-[12.5px] font-semibold text-white transition hover:bg-accent-strong active:scale-[0.98]"
             >
-              执行计划
+              {t("rightPanel.executePlan")}
             </button>
           )}
         </section>
@@ -148,7 +152,7 @@ function TodoPlanView() {
           <div className="flex items-center justify-between">
             <span className="flex items-center gap-1.5 text-[11px] font-semibold tracking-wide text-ink-2">
               <span>📝</span>
-              待办
+              {t("rightPanel.todo")}
             </span>
             {todo?.value && (
               <span className="shrink-0 rounded-full border border-line bg-card px-2 py-0.5 text-[10.5px] font-semibold text-ink-2">
@@ -183,12 +187,13 @@ function TodoPlanView() {
         </section>
       )}
 
-      {!planOn && !showTodo && <Empty text="开启计划模式后这里显示计划步骤" />}
+      {!planOn && !showTodo && <Empty text={t("rightPanel.planEmptyHint")} />}
     </div>
   );
 }
 
 export function RightPanel() {
+  const { t } = useTranslation();
   const open = useUIStore((s) => s.rightPanelOpen);
   const setOpen = useUIStore((s) => s.setRightPanelOpen);
   const view = useUIStore((s) => s.rightPanelView);
@@ -219,7 +224,7 @@ export function RightPanel() {
       <button
         type="button"
         onClick={() => setOpen(true)}
-        title="打开右侧面板"
+        title={t("rightPanel.open")}
         className="titlebar-no-drag fixed z-10 flex h-[30px] w-[30px] items-center justify-center rounded-s text-ink-2 transition hover:bg-hover hover:text-ink"
         style={{ top: 5, right: wcoRight }}
       >
@@ -235,7 +240,7 @@ export function RightPanel() {
         <button
           type="button"
           onClick={() => setOpen(false)}
-          title="收起"
+          title={t("common.collapse")}
           className="titlebar-no-drag flex h-[30px] w-[30px] items-center justify-center rounded-s text-ink-2 transition hover:bg-hover hover:text-ink"
         >
           <IconPanelRightClose />
@@ -247,7 +252,7 @@ export function RightPanel() {
             key={v.id}
             type="button"
             onClick={() => setView(v.id)}
-            title={v.label}
+            title={t(v.labelKey)}
             className={`flex flex-1 items-center justify-center gap-1 rounded-s px-1 py-1.5 text-[11.5px] transition ${
               view === v.id
                 ? "bg-card font-semibold text-ink shadow-card"
@@ -255,7 +260,7 @@ export function RightPanel() {
             }`}
           >
             {v.icon}
-            {v.label}
+            {t(v.labelKey)}
           </button>
         ))}
       </div>

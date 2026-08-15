@@ -29,6 +29,7 @@ import { CronExpressionParser } from "cron-parser";
 import type { agentRuntime } from "./agentRuntime";
 import { configStore, SESSIONS_DIR, WORK_SPACES_DIR } from "./configStore";
 import { rmIfDirectChild } from "./dirCleanup";
+import { uiError } from "./errors";
 import { type SchedulerStore, schedulerStore } from "./schedulerStore";
 import { resolveSessionLocation } from "./sessionDirs";
 
@@ -217,7 +218,7 @@ export class Scheduler {
   }
 
   async updateTask(id: string, patch: UpdateScheduleTaskRequest): Promise<ScheduledTask> {
-    if (!this.store.getTask(id)) throw new Error("任务不存在");
+    if (!this.store.getTask(id)) throw uiError("errors.taskNotFound");
     if (patch.spec) this.validateSpec(patch.spec);
     // 仅覆盖显式提供的字段（undefined 视为不修改），避免误清空 spec 等
     const updatePatch: Partial<ScheduledTask> = {};
@@ -229,7 +230,7 @@ export class Scheduler {
     if (patch.enabled !== undefined) updatePatch.enabled = patch.enabled;
     if (patch.notify !== undefined) updatePatch.notify = patch.notify;
     const updated = this.store.updateTask(id, updatePatch);
-    if (!updated) throw new Error("任务不存在");
+    if (!updated) throw uiError("errors.taskNotFound");
     if (patch.spec !== undefined || patch.enabled !== undefined) {
       // 重新 arm：enabled 时算 nextRunAt + 起定时器；停用时清 nextRunAt + 拆定时器
       this.arm(updated);
@@ -255,7 +256,7 @@ export class Scheduler {
   /** 立即执行一次（测试运行；enabled=false 也可；有在途运行则排队） */
   async runNow(id: string): Promise<void> {
     const task = this.store.getTask(id);
-    if (!task) throw new Error("任务不存在");
+    if (!task) throw uiError("errors.taskNotFound");
     this.enqueue({
       taskId: id,
       prompt: task.prompt,

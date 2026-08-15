@@ -4,6 +4,7 @@
  * 展开后直接展示内容（无标题头、无复制按钮），带边框卡片 + 左缘 accent 色条。
  */
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import type { ThinkingBlock } from "../stores/sessionStore";
 import { IconChevronDown, IconChevronRight, IconLightbulb } from "./icons";
 
@@ -14,6 +15,7 @@ interface ThinkingCardProps {
 }
 
 export function ThinkingCard({ block, streaming }: ThinkingCardProps) {
+  const { t } = useTranslation();
   const [expanded, setExpanded] = useState(false);
   // 流式结束后视为完成，兜底 block.done 丢失（SDK 未发 thinking_end）的情况
   const done = block.done || !streaming;
@@ -28,7 +30,7 @@ export function ThinkingCard({ block, streaming }: ThinkingCardProps) {
         <IconLightbulb size={11} strokeWidth={2} />
         {!done ? (
           <span className="flex items-center gap-1">
-            思考中
+            {t("tool.thinking")}
             <span className="flex gap-0.5">
               <span className="h-1 w-1 animate-bounce rounded-full bg-current [animation-delay:0ms]" />
               <span className="h-1 w-1 animate-bounce rounded-full bg-current [animation-delay:150ms]" />
@@ -37,7 +39,7 @@ export function ThinkingCard({ block, streaming }: ThinkingCardProps) {
           </span>
         ) : (
           <span className="flex items-center gap-0.5">
-            已思考
+            {t("tool.thought")}
             {expanded ? (
               <IconChevronDown size={10} strokeWidth={2} />
             ) : (
@@ -49,7 +51,7 @@ export function ThinkingCard({ block, streaming }: ThinkingCardProps) {
       {expanded && (
         <div className="mt-1 ml-5 rounded-m border border-line bg-card shadow-card">
           <div className="max-h-96 overflow-y-auto whitespace-pre-wrap border-l-2 border-l-accent/40 px-3 py-2 text-[13px] text-ink-2">
-            {done ? block.content || "（无内容）" : block.content}
+            {done ? block.content || t("tool.noContent") : block.content}
           </div>
         </div>
       )}

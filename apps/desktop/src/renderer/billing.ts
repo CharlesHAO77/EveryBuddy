@@ -126,9 +126,9 @@ export function formatCost(c: number): string {
   return c >= 0.001 ? `¥${c.toFixed(3)}` : `¥${c.toFixed(4)}`;
 }
 
-/** 类型标签展示名（llm/vlm/image → 中文） */
+/** 类型标签展示名（llm/vlm/image → i18n key，渲染处经 t() 翻译） */
 export const TYPE_LABELS: Record<ModelType, string> = {
-  llm: "对话 LLM",
-  vlm: "视觉 VLM",
-  image: "生图 Image",
+  llm: "billing.type.llm",
+  vlm: "billing.type.vlm",
+  image: "billing.type.image",
 };

@@ -19,6 +19,7 @@ import type {
   UpdateConnectorRequest,
 } from "@everybuddy/ipc-contract";
 import { APP_ROOT, ensureAppDirs } from "./configStore";
+import { uiError } from "./errors";
 import { probeMcpConnector } from "./mcpTools";
 
 export const CONNECTORS_PATH = path.join(APP_ROOT, "connectors.json");
@@ -167,7 +168,7 @@ export class ConnectorStore {
     req: TestConnectorRequest,
   ): Promise<{ status: ConnectorStatus; message: string; tools?: number; toolNames?: string[] }> {
     const connector = this.get(req.id);
-    if (!connector) throw new Error("连接器不存在");
+    if (!connector) throw uiError("errors.connectorNotFound");
     if (
       connector.status === "reserved" &&
       connector.type !== "mcp" &&

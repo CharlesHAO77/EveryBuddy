@@ -3,13 +3,27 @@
  * 用 react-dom/server 的 renderToStaticMarkup 在 node 环境渲染，无需 jsdom。
  * 覆盖 GFM 表格/删除线/链接/有序列表/代码块/图片安全来源。
  */
+
+import i18n from "i18next";
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it } from "vitest";
+import { initReactI18next } from "react-i18next";
+import { beforeAll, describe, expect, it } from "vitest";
 import { MarkdownText } from "../src/renderer/components/MarkdownText";
+import zhCN from "../src/renderer/i18n/locales/zh-CN.json";
 
 function render(content: string): string {
   return renderToStaticMarkup(<MarkdownText content={content} />);
 }
+
+beforeAll(async () => {
+  // CodeBlock 的复制按钮文案经 i18n：初始化默认实例，使 t() 命中真实资源
+  await i18n.use(initReactI18next).init({
+    resources: { "zh-CN": { translation: zhCN } },
+    lng: "zh-CN",
+    fallbackLng: "zh-CN",
+    interpolation: { escapeValue: false },
+  });
+});
 
 describe("MarkdownText", () => {
   it("渲染 GFM 表格", () => {

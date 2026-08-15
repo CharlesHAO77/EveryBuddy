@@ -10,13 +10,10 @@
 import { randomUUID } from "node:crypto";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
-import type {
-  CreateExpertRequest,
-  Expert,
-  UpdateExpertRequest,
-} from "@everybuddy/ipc-contract";
+import type { CreateExpertRequest, Expert, UpdateExpertRequest } from "@everybuddy/ipc-contract";
 import type { AgentConfig } from "./agentConfigStore";
 import { APP_ROOT, ensureAppDirs } from "./configStore";
+import { uiError } from "./errors";
 
 export const EXPERTS_PATH = path.join(APP_ROOT, "experts.json");
 
@@ -198,15 +195,15 @@ export class ExpertStore {
       extensions: req.extensions !== undefined ? req.extensions : existing.extensions,
       defaultModelProviderId:
         req.defaultModelProviderId !== undefined
-          ? req.defaultModelProviderId ?? undefined
+          ? (req.defaultModelProviderId ?? undefined)
           : existing.defaultModelProviderId,
       visionModelProviderId:
         req.visionModelProviderId !== undefined
-          ? req.visionModelProviderId ?? undefined
+          ? (req.visionModelProviderId ?? undefined)
           : existing.visionModelProviderId,
       imageGenModelProviderId:
         req.imageGenModelProviderId !== undefined
-          ? req.imageGenModelProviderId ?? undefined
+          ? (req.imageGenModelProviderId ?? undefined)
           : existing.imageGenModelProviderId,
       tags: req.tags ?? existing.tags,
       updatedAt: new Date().toISOString(),
@@ -222,7 +219,8 @@ export class ExpertStore {
     const prev = this.data.overrides[base.id] ?? {};
     const next: Partial<Expert> = { ...prev, updatedAt: new Date().toISOString() };
     if (req.description !== undefined) next.description = req.description;
-    if (req.systemPrompt !== undefined) next.systemPrompt = req.systemPrompt === "" ? undefined : req.systemPrompt;
+    if (req.systemPrompt !== undefined)
+      next.systemPrompt = req.systemPrompt === "" ? undefined : req.systemPrompt;
     if (req.appendSystemPrompt !== undefined) next.appendSystemPrompt = req.appendSystemPrompt;
     if (req.tools !== undefined) next.tools = req.tools;
     if (req.extensions !== undefined) next.extensions = req.extensions;
@@ -241,7 +239,7 @@ export class ExpertStore {
   /** 重置内置专家：删除 override，回退模式默认（main/prompts/*.ts builder） */
   reset(id: string): Expert {
     if (!getBuiltinExpert(id)) {
-      throw new Error("仅内置专家可重置");
+      throw uiError("errors.expertResetBuiltinOnly");
     }
     this.load();
     delete this.data.overrides[id];
@@ -253,7 +251,7 @@ export class ExpertStore {
   /** 仅自定义可删；内置删除抛错 */
   delete(id: string): void {
     if (getBuiltinExpert(id)) {
-      throw new Error("内置专家不可删除");
+      throw uiError("errors.expertDeleteBuiltinOnly");
     }
     this.load();
     this.data.experts = this.data.experts.filter((e) => e.id !== id);

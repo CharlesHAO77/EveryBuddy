@@ -27,6 +27,7 @@
     "tests/permission.test.ts",
     "tests/ipcContract.test.ts",
     "tests/historyMapper.test.ts",
-    "tests/markdownText.test.tsx"
+    "tests/markdownText.test.tsx",
+    "tests/i18n.test.ts"
   ]
 }

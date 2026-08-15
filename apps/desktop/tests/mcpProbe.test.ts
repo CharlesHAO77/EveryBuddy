@@ -10,19 +10,19 @@ describe("probeMcpConnector 配置校验（传输按 JSON 自动判断：有 url
   it("transport 字段不影响判断：无 url 一律按 stdio，缺命令报错", async () => {
     const r = await probeMcpConnector({ transport: "streamable-http" });
     expect(r.ok).toBe(false);
-    expect(r.message).toContain("command");
+    expect(r.message).toContain("errors.mcpCommandMissing");
   });
 
   it("空 url 也按 stdio（无 url 即本地进程）", async () => {
     const r = await probeMcpConnector({ transport: "streamable-http", url: "" });
     expect(r.ok).toBe(false);
-    expect(r.message).toContain("command");
+    expect(r.message).toContain("errors.mcpCommandMissing");
   });
 
   it("stdio 缺 package/command 报错", async () => {
     const r = await probeMcpConnector({ transport: "stdio" });
     expect(r.ok).toBe(false);
-    expect(r.message).toContain("command");
+    expect(r.message).toContain("errors.mcpCommandMissing");
   });
 
   it("stdio 用用户自定义命令（不存在 → 连接失败不抛未捕获）", async () => {

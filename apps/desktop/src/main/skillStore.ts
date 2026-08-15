@@ -26,6 +26,7 @@ import { homedir } from "node:os";
 import path from "node:path";
 import type { CreateSkillRequest, SkillEntry, UpdateSkillRequest } from "@everybuddy/ipc-contract";
 import { APP_ROOT, ensureAppDirs } from "./configStore";
+import { uiError } from "./errors";
 
 /** EveryBuddy 管理的技能目录 ~/EveryBuddy/skills/ */
 export const SKILLS_DIR = path.join(APP_ROOT, "skills");
@@ -288,7 +289,7 @@ export class SkillStore {
     this.data.skills.push(entry);
     this.save();
     const loaded = this.readEntry(entry);
-    if (!loaded) throw new Error(`技能写入失败：${id}`);
+    if (!loaded) throw uiError("errors.skillWriteFailed", { id });
     return loaded;
   }
 
@@ -298,7 +299,7 @@ export class SkillStore {
     const existing = this.data.skills[idx];
     if (!existing) return undefined;
     if (req.name && req.name !== req.id) {
-      throw new Error("技能不支持重命名，请删除后重新创建");
+      throw uiError("errors.skillNoRename");
     }
     const file = skillFilePath(this.skillsDir, req.id);
     if (!existsSync(file)) return undefined;
@@ -326,14 +327,14 @@ export class SkillStore {
     let content: string;
     if (srcStat.isDirectory()) {
       const mdPath = path.join(src, "SKILL.md");
-      if (!existsSync(mdPath)) throw new Error("技能包目录需包含 SKILL.md");
+      if (!existsSync(mdPath)) throw uiError("errors.skillDirNeedsMd");
       name = path.basename(src);
       content = readFileSync(mdPath, "utf-8");
     } else if (src.endsWith("SKILL.md") || src.endsWith("skill.md")) {
       name = path.basename(path.dirname(src));
       content = readFileSync(src, "utf-8");
     } else {
-      throw new Error("仅支持技能包目录（含 SKILL.md）或 SKILL.md 文件");
+      throw uiError("errors.skillPackageOnly");
     }
     const fm = parseSkillFrontmatter(content);
     if (fm.name && /^[a-z0-9][a-z0-9_-]*$/.test(fm.name)) name = fm.name;
@@ -357,7 +358,7 @@ export class SkillStore {
     else this.data.skills.push(entry);
     this.save();
     const loaded = this.readEntry(entry);
-    if (!loaded) throw new Error(`技能安装失败：${name}`);
+    if (!loaded) throw uiError("errors.skillInstallFailed", { name });
     return loaded;
   }
 

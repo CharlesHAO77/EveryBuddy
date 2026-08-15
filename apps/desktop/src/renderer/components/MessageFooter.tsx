@@ -7,6 +7,7 @@
  */
 
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import {
   aggregateBilling,
   type BillingRow,
@@ -15,6 +16,8 @@ import {
   sumBillingRows,
   TYPE_LABELS,
 } from "../billing";
+import i18n from "../i18n";
+import { translateError } from "../i18n/translateError";
 import type { ChatMessage } from "../stores/sessionStore";
 import { useSessionStore } from "../stores/sessionStore";
 import { useUIStore } from "../stores/uiStore";
@@ -54,8 +57,9 @@ const TYPE_TAG_CLASS: Record<string, string> = {
 
 /** 计费弹层内的单区块行（按模型类型分账；空 → 「暂无计费数据」） */
 function BillingRows({ rows }: { rows: BillingRow[] }) {
+  const { t } = useTranslation();
   if (rows.length === 0) {
-    return <div className="py-1 text-center text-[12px] text-ink-3">暂无计费数据</div>;
+    return <div className="py-1 text-center text-[12px] text-ink-3">{t("billing.noData")}</div>;
   }
   return (
     <>
@@ -67,7 +71,7 @@ function BillingRows({ rows }: { rows: BillingRow[] }) {
             >
               {r.type === "llm" ? "LLM" : r.type === "vlm" ? "VLM" : "IMG"}
             </span>
-            <span>{TYPE_LABELS[r.type]}</span>
+            <span>{t(TYPE_LABELS[r.type])}</span>
           </div>
           {r.model && <div className="mt-0.5 break-all text-[11px] text-ink-3">{r.model}</div>}
           <div className="mt-0.5 flex flex-wrap items-baseline gap-1.5 text-[11.5px] text-ink-2 tabular-nums">
@@ -88,6 +92,7 @@ function BillingRows({ rows }: { rows: BillingRow[] }) {
 }
 
 export function MessageFooter({ taskId, messages }: MessageFooterProps) {
+  const { t } = useTranslation();
   const [copied, setCopied] = useState(false);
   const [billOpen, setBillOpen] = useState(false);
 
@@ -101,7 +106,7 @@ export function MessageFooter({ taskId, messages }: MessageFooterProps) {
 
   const feedback = lastMsg.feedback;
   const canBranch = Boolean(lastMsg.entryId);
-  const time = new Date(lastMsg.timestamp).toLocaleTimeString("zh-CN", {
+  const time = new Date(lastMsg.timestamp).toLocaleTimeString(i18n.language, {
     hour: "2-digit",
     minute: "2-digit",
   });
@@ -134,11 +139,8 @@ export function MessageFooter({ taskId, messages }: MessageFooterProps) {
     try {
       await branchTask(taskId, lastMsg.entryId);
     } catch (err) {
-      pushChatNotice(
-        taskId,
-        `分支创建失败: ${err instanceof Error ? err.message : String(err)}`,
-        "error",
-      );
+      const raw = err instanceof Error ? err.message : String(err);
+      pushChatNotice(taskId, t("chat.branchFailed", { message: translateError(raw, t) }), "error");
     }
   };
 
@@ -149,13 +151,13 @@ export function MessageFooter({ taskId, messages }: MessageFooterProps) {
     <div className="relative mt-1 flex items-center gap-2 border-t border-dashed border-line pt-1.5">
       {/* 操作图标：复制 / 赞 / 踩 / 转发（置灰「即将推出」）/ 分支 */}
       <div className="flex min-w-0 items-center gap-0.5">
-        <button type="button" onClick={handleCopy} title="复制" className={iconBtn}>
+        <button type="button" onClick={handleCopy} title={t("chat.copy")} className={iconBtn}>
           {copied ? <IconCheck size={13} strokeWidth={2.5} /> : <IconCopy size={13} />}
         </button>
         <button
           type="button"
           onClick={() => toggleFeedback("up")}
-          title={feedback === "up" ? "取消赞" : "赞"}
+          title={feedback === "up" ? t("chat.unlike") : t("chat.like")}
           className={`${iconBtn} ${feedback === "up" ? "bg-accent-tint text-accent-strong" : ""}`}
         >
           <IconThumbsUp size={13} />
@@ -163,19 +165,19 @@ export function MessageFooter({ taskId, messages }: MessageFooterProps) {
         <button
           type="button"
           onClick={() => toggleFeedback("down")}
-          title={feedback === "down" ? "取消踩" : "踩"}
+          title={feedback === "down" ? t("chat.undislike") : t("chat.dislike")}
           className={`${iconBtn} ${feedback === "down" ? "bg-accent-tint text-accent-strong" : ""}`}
         >
           <IconThumbsDown size={13} />
         </button>
-        <button type="button" disabled title="转发即将推出" className={iconBtn}>
+        <button type="button" disabled title={t("chat.shareComingSoon")} className={iconBtn}>
           <IconShare size={13} />
         </button>
         <button
           type="button"
           disabled={!canBranch}
           onClick={handleBranch}
-          title={canBranch ? "从该消息新建分支会话" : "无法分支（无会话锚点）"}
+          title={canBranch ? t("chat.branchFromMessage") : t("chat.branchUnavailable")}
           className={iconBtn}
         >
           <IconGitBranch size={13} />
@@ -187,7 +189,7 @@ export function MessageFooter({ taskId, messages }: MessageFooterProps) {
         <button
           type="button"
           onClick={() => setBillOpen((v) => !v)}
-          title="查看按模型类型（LLM/VLM/IMG）的计费明细"
+          title={t("billing.viewDetails")}
           className="shrink-0 rounded-full border border-accent-line bg-accent-tint px-2 py-[1px] font-semibold text-accent-strong transition hover:bg-[#d7ebe4]"
         >
           ◈ {formatTokens(totalTokens)} tok{totalCost > 0 ? ` · ${formatCost(totalCost)}` : ""}
@@ -202,13 +204,13 @@ export function MessageFooter({ taskId, messages }: MessageFooterProps) {
         <>
           <button
             type="button"
-            aria-label="关闭计费明细"
+            aria-label={t("billing.closeDetails")}
             className="fixed inset-0 z-40 cursor-default"
             onClick={() => setBillOpen(false)}
           />
           <div className="absolute bottom-full right-0 z-50 mb-1 w-[300px] rounded-m border border-line-strong bg-card p-2.5 shadow-pop">
             <div className="mb-1 flex items-center justify-between">
-              <span className="text-[12px] font-bold text-ink">计费明细 · 按模型类型</span>
+              <span className="text-[12px] font-bold text-ink">{t("billing.detailsTitle")}</span>
               <button
                 type="button"
                 onClick={() => setBillOpen(false)}
@@ -218,11 +220,15 @@ export function MessageFooter({ taskId, messages }: MessageFooterProps) {
               </button>
             </div>
             <div className="text-[11px] font-bold text-ink-3">
-              本条运行 · <span className="text-accent-strong">{messages.length} 次模型调用</span>
+              {t("billing.thisRun")}
+              {" · "}
+              <span className="text-accent-strong">
+                {t("billing.modelCalls", { num: messages.length })}
+              </span>
             </div>
             <BillingRows rows={runRows} />
             <div className="mt-1 border-t border-line" />
-            <div className="pt-1 text-[11px] font-bold text-ink-3">会话累计</div>
+            <div className="pt-1 text-[11px] font-bold text-ink-3">{t("billing.sessionTotal")}</div>
             <BillingRows rows={sessionRows} />
           </div>
         </>

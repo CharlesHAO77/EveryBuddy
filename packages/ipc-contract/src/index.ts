@@ -726,7 +726,7 @@ export const promptRequestSchema = z
     attachments: z.array(attachmentRefSchema).optional().default([]),
   })
   .refine((v) => v.text.trim().length > 0 || (v.attachments?.length ?? 0) > 0, {
-    message: "文本或附件至少需要一项",
+    message: "errors.textOrAttachmentRequired",
   });
 
 export const abortRequestSchema = z.object({
@@ -767,45 +767,45 @@ export const idRequestSchema = z.object({ id: z.string().min(1) });
 
 /** task:branch 请求：从指定 assistant 条目分叉出新会话（entryId 为会话 JSONL 条目 id） */
 export const branchRequestSchema = z.object({
-  taskId: z.string().min(1, "参数缺失"),
-  entryId: z.string().min(1, "参数缺失"),
+  taskId: z.string().min(1, "errors.paramMissing"),
+  entryId: z.string().min(1, "errors.paramMissing"),
 });
 export type BranchRequest = z.infer<typeof branchRequestSchema>;
 
 export const renameTaskRequestSchema = z.object({
-  id: z.string().min(1, "参数缺失"),
-  title: z.string().min(1, "参数缺失"),
+  id: z.string().min(1, "errors.paramMissing"),
+  title: z.string().min(1, "errors.paramMissing"),
 });
 
 export const createWorkspaceRequestSchema = z.object({
-  name: z.string().min(1, "参数缺失"),
-  dirPath: z.string().min(1, "参数缺失"),
+  name: z.string().min(1, "errors.paramMissing"),
+  dirPath: z.string().min(1, "errors.paramMissing"),
 });
 
 export const createNamedWorkspaceRequestSchema = z.object({
-  name: z.string().min(1, "参数缺失"),
+  name: z.string().min(1, "errors.paramMissing"),
 });
 
 export const openPathRequestSchema = z.object({
-  path: z.string().min(1, "参数缺失"),
+  path: z.string().min(1, "errors.paramMissing"),
 });
 
 /** system:openExternal 请求：用系统默认浏览器打开外链（仅 http/https） */
 export const openExternalRequestSchema = z.object({
-  url: z.string().min(1, "参数缺失"),
+  url: z.string().min(1, "errors.paramMissing"),
 });
 export type OpenExternalRequest = z.infer<typeof openExternalRequestSchema>;
 
 /** 读取目录单层条目（懒加载目录树用） */
 export const readDirRequestSchema = z.object({
-  path: z.string().min(1, "参数缺失"),
+  path: z.string().min(1, "errors.paramMissing"),
 });
 
 /** 扩展命令请求（如 plan-mode toggle） */
 export const extensionCommandRequestSchema = z.object({
-  taskId: z.string().min(1, "参数缺失"),
-  extension: z.string().min(1, "参数缺失"),
-  command: z.string().min(1, "参数缺失"),
+  taskId: z.string().min(1, "errors.paramMissing"),
+  extension: z.string().min(1, "errors.paramMissing"),
+  command: z.string().min(1, "errors.paramMissing"),
 });
 export type ExtensionCommandRequest = z.infer<typeof extensionCommandRequestSchema>;
 
@@ -815,30 +815,30 @@ export type ExecutionMode = z.infer<typeof executionModeSchema>;
 
 /** agent:set-mode 请求：切换某任务的执行模式 */
 export const setModeRequestSchema = z.object({
-  taskId: z.string().min(1, "参数缺失"),
+  taskId: z.string().min(1, "errors.paramMissing"),
   mode: executionModeSchema,
 });
 export type SetModeRequest = z.infer<typeof setModeRequestSchema>;
 
 /** agent:approveTool 请求：应答工具权限确认（requestId 来自 tool_approval_required 事件） */
 export const approveToolRequestSchema = z.object({
-  taskId: z.string().min(1, "参数缺失"),
-  requestId: z.string().min(1, "参数缺失"),
+  taskId: z.string().min(1, "errors.paramMissing"),
+  requestId: z.string().min(1, "errors.paramMissing"),
   approved: z.boolean(),
 });
 export type ApproveToolRequest = z.infer<typeof approveToolRequestSchema>;
 
 /** 调度规则 schema（cron 语法由主进程 cron-parser 校验，此处不引入依赖） */
 export const scheduleSpecSchema = z.discriminatedUnion("type", [
-  z.object({ type: z.literal("cron"), cron: z.string().min(1, "cron 表达式不能为空") }),
-  z.object({ type: z.literal("once"), runAt: z.string().min(1, "运行时间不能为空") }),
+  z.object({ type: z.literal("cron"), cron: z.string().min(1, "errors.cronRequired") }),
+  z.object({ type: z.literal("once"), runAt: z.string().min(1, "errors.runAtRequired") }),
 ]);
 export type ScheduleSpecZ = z.infer<typeof scheduleSpecSchema>;
 
 /** schedule:create-task 请求 */
 export const createScheduleTaskRequestSchema = z.object({
-  title: z.string().min(1, "标题不能为空"),
-  prompt: z.string().min(1, "提示词不能为空"),
+  title: z.string().min(1, "errors.titleRequired"),
+  prompt: z.string().min(1, "errors.promptRequired"),
   spec: scheduleSpecSchema,
   mode: z.enum(["daily", "coding"]).default("daily"),
   providerId: z.string().optional(),
@@ -848,9 +848,9 @@ export type CreateScheduleTaskRequestZ = z.infer<typeof createScheduleTaskReques
 
 /** schedule:update-task 请求（全可选，变更触发重排定时器） */
 export const updateScheduleTaskRequestSchema = z.object({
-  id: z.string().min(1, "参数缺失"),
-  title: z.string().min(1, "标题不能为空").optional(),
-  prompt: z.string().min(1, "提示词不能为空").optional(),
+  id: z.string().min(1, "errors.paramMissing"),
+  title: z.string().min(1, "errors.titleRequired").optional(),
+  prompt: z.string().min(1, "errors.promptRequired").optional(),
   spec: scheduleSpecSchema.optional(),
   mode: z.enum(["daily", "coding"]).optional(),
   providerId: z.string().optional(),
@@ -860,11 +860,11 @@ export const updateScheduleTaskRequestSchema = z.object({
 export type UpdateScheduleTaskRequestZ = z.infer<typeof updateScheduleTaskRequestSchema>;
 
 /** schedule:run-now / delete-task / list-runs 请求 */
-export const scheduleIdRequestSchema = z.object({ id: z.string().min(1, "参数缺失") });
+export const scheduleIdRequestSchema = z.object({ id: z.string().min(1, "errors.paramMissing") });
 
 // ── expert:*（专家） ──
 export const expertCreateRequestSchema = z.object({
-  name: z.string().min(1, "名称不能为空"),
+  name: z.string().min(1, "errors.nameRequired"),
   icon: z.string().min(1).default("briefcase"),
   description: z.string().default(""),
   mode: z.enum(["daily", "coding"]).default("daily"),
@@ -880,8 +880,8 @@ export const expertCreateRequestSchema = z.object({
 export type ExpertCreateRequestZ = z.infer<typeof expertCreateRequestSchema>;
 
 export const expertUpdateRequestSchema = z.object({
-  id: z.string().min(1, "参数缺失"),
-  name: z.string().min(1, "名称不能为空").optional(),
+  id: z.string().min(1, "errors.paramMissing"),
+  name: z.string().min(1, "errors.nameRequired").optional(),
   icon: z.string().optional(),
   description: z.string().optional(),
   mode: z.enum(["daily", "coding"]).optional(),
@@ -896,7 +896,7 @@ export const expertUpdateRequestSchema = z.object({
 });
 export type ExpertUpdateRequestZ = z.infer<typeof expertUpdateRequestSchema>;
 
-export const expertIdRequestSchema = z.object({ id: z.string().min(1, "参数缺失") });
+export const expertIdRequestSchema = z.object({ id: z.string().min(1, "errors.paramMissing") });
 
 /** expert:reset 请求 = 仅内置专家可重置，删除 override 回退模式默认 */
 export const expertResetRequestSchema = expertIdRequestSchema;
@@ -905,7 +905,7 @@ export const expertResetRequestSchema = expertIdRequestSchema;
 export const teamRoutingStrategySchema = z.enum(["manual", "auto", "workflow"]);
 
 export const teamCreateRequestSchema = z.object({
-  name: z.string().min(1, "名称不能为空"),
+  name: z.string().min(1, "errors.nameRequired"),
   icon: z.string().min(1).default("users"),
   description: z.string().default(""),
   expertIds: z.array(z.string()).default([]),
@@ -917,8 +917,8 @@ export const teamCreateRequestSchema = z.object({
 export type TeamCreateRequestZ = z.infer<typeof teamCreateRequestSchema>;
 
 export const teamUpdateRequestSchema = z.object({
-  id: z.string().min(1, "参数缺失"),
-  name: z.string().min(1, "名称不能为空").optional(),
+  id: z.string().min(1, "errors.paramMissing"),
+  name: z.string().min(1, "errors.nameRequired").optional(),
   icon: z.string().optional(),
   description: z.string().optional(),
   expertIds: z.array(z.string()).optional(),
@@ -929,20 +929,20 @@ export const teamUpdateRequestSchema = z.object({
 });
 export type TeamUpdateRequestZ = z.infer<typeof teamUpdateRequestSchema>;
 
-export const teamIdRequestSchema = z.object({ id: z.string().min(1, "参数缺失") });
+export const teamIdRequestSchema = z.object({ id: z.string().min(1, "errors.paramMissing") });
 
 // ── skill:*（技能） ──
 export const skillCreateRequestSchema = z.object({
-  name: z.string().regex(/^[a-z0-9][a-z0-9_-]*$/, "技能名需小写字母开头，仅限小写字母/数字/连字符"),
-  description: z.string().min(1, "描述不能为空"),
+  name: z.string().regex(/^[a-z0-9][a-z0-9_-]*$/, "errors.skillNamePattern"),
+  description: z.string().min(1, "errors.descriptionRequired"),
   /** SKILL.md 正文（frontmatter 之外） */
-  content: z.string().min(1, "技能内容不能为空"),
+  content: z.string().min(1, "errors.skillContentRequired"),
   tags: z.array(z.string()).default([]),
 });
 export type SkillCreateRequestZ = z.infer<typeof skillCreateRequestSchema>;
 
 export const skillUpdateRequestSchema = z.object({
-  id: z.string().min(1, "参数缺失"),
+  id: z.string().min(1, "errors.paramMissing"),
   name: z.string().optional(),
   description: z.string().optional(),
   content: z.string().optional(),
@@ -951,25 +951,31 @@ export const skillUpdateRequestSchema = z.object({
 export type SkillUpdateRequestZ = z.infer<typeof skillUpdateRequestSchema>;
 
 export const skillEnableRequestSchema = z.object({
-  id: z.string().min(1, "参数缺失"),
+  id: z.string().min(1, "errors.paramMissing"),
   enabled: z.boolean(),
 });
 export type SkillEnableRequestZ = z.infer<typeof skillEnableRequestSchema>;
 
 export const skillInstallRequestSchema = z.object({
-  sourcePath: z.string().min(1, "路径不能为空"),
+  sourcePath: z.string().min(1, "errors.pathRequired"),
 });
 export type SkillInstallRequestZ = z.infer<typeof skillInstallRequestSchema>;
 
-export const skillIdRequestSchema = z.object({ id: z.string().min(1, "参数缺失") });
+export const skillIdRequestSchema = z.object({ id: z.string().min(1, "errors.paramMissing") });
 
 // ── connector:*（连接器） ──
-export const connectorTypeSchema = z.enum(["mcp", "http-api", "datasource", "filesystem", "custom"]);
+export const connectorTypeSchema = z.enum([
+  "mcp",
+  "http-api",
+  "datasource",
+  "filesystem",
+  "custom",
+]);
 export const connectorStatusSchema = z.enum(["connected", "disconnected", "error", "reserved"]);
 export const connectorConfigSchema = z.record(z.unknown());
 
 export const connectorCreateRequestSchema = z.object({
-  name: z.string().min(1, "名称不能为空"),
+  name: z.string().min(1, "errors.nameRequired"),
   type: connectorTypeSchema,
   icon: z.string().min(1).default("hub"),
   description: z.string().default(""),
@@ -982,8 +988,8 @@ export const connectorCreateRequestSchema = z.object({
 export type ConnectorCreateRequestZ = z.infer<typeof connectorCreateRequestSchema>;
 
 export const connectorUpdateRequestSchema = z.object({
-  id: z.string().min(1, "参数缺失"),
-  name: z.string().min(1, "名称不能为空").optional(),
+  id: z.string().min(1, "errors.paramMissing"),
+  name: z.string().min(1, "errors.nameRequired").optional(),
   type: connectorTypeSchema.optional(),
   icon: z.string().optional(),
   description: z.string().optional(),
@@ -997,8 +1003,10 @@ export const connectorUpdateRequestSchema = z.object({
 });
 export type ConnectorUpdateRequestZ = z.infer<typeof connectorUpdateRequestSchema>;
 
-export const connectorIdRequestSchema = z.object({ id: z.string().min(1, "参数缺失") });
-export const connectorTestRequestSchema = z.object({ id: z.string().min(1, "参数缺失") });
+export const connectorIdRequestSchema = z.object({ id: z.string().min(1, "errors.paramMissing") });
+export const connectorTestRequestSchema = z.object({
+  id: z.string().min(1, "errors.paramMissing"),
+});
 
 // ────────────────────────────────────────────────
 // Preload API 形状（见 §6.3）

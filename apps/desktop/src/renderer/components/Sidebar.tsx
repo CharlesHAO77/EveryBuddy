@@ -1,4 +1,8 @@
+import type { TFunction } from "i18next";
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
+import i18n from "../i18n";
+import { translateError } from "../i18n/translateError";
 import { useSessionStore } from "../stores/sessionStore";
 import { useUIStore } from "../stores/uiStore";
 import { ConfirmDialog } from "./ConfirmDialog";
@@ -19,21 +23,21 @@ import { WorkspaceListItem } from "./WorkspaceListItem";
 /* ── Data ────────────────────────────────────── */
 
 const navItems = [
-  { id: "expert", label: "专家·技能·连接器", icon: IconSparkles },
-  { id: "auto", label: "自动化", icon: IconZap },
+  { id: "expert", labelKey: "nav.expert", icon: IconSparkles },
+  { id: "auto", labelKey: "nav.auto", icon: IconZap },
 ];
 
 /** 相对时间格式化 */
-function relativeTime(iso: string): string {
+function relativeTime(iso: string, t: TFunction): string {
   const diff = Date.now() - new Date(iso).getTime();
   const min = Math.floor(diff / 60000);
-  if (min < 1) return "刚刚";
-  if (min < 60) return `${min}分钟前`;
+  if (min < 1) return t("time.justNow");
+  if (min < 60) return t("time.minutes", { count: min });
   const hr = Math.floor(min / 60);
-  if (hr < 24) return `${hr}小时前`;
+  if (hr < 24) return t("time.hours", { count: hr });
   const day = Math.floor(hr / 24);
-  if (day < 30) return `${day}天前`;
-  return new Date(iso).toLocaleDateString("zh-CN");
+  if (day < 30) return t("time.days", { count: day });
+  return new Date(iso).toLocaleDateString(i18n.language);
 }
 
 /* ── Component ───────────────────────────────── */
@@ -44,6 +48,7 @@ type ConfirmState =
   | { kind: "workspace"; id: string; name: string; taskCount: number };
 
 export function Sidebar() {
+  const { t } = useTranslation();
   // 折叠状态上提至 uiStore，供 MainView（对话区标题左内边距避让）联动订阅
   const collapsed = useUIStore((s) => s.sidebarCollapsed);
   const setCollapsed = useUIStore((s) => s.setSidebarCollapsed);
@@ -71,7 +76,7 @@ export function Sidebar() {
   const tempTasks = allTasks
     .filter((t) => t.type === "temp")
     .sort((a, b) => (a.updatedAt < b.updatedAt ? 1 : a.updatedAt > b.updatedAt ? -1 : 0))
-    .map((t) => ({ id: t.id, title: t.title, time: relativeTime(t.updatedAt) }));
+    .map((task) => ({ id: task.id, title: task.title, time: relativeTime(task.updatedAt, t) }));
 
   const handleNewTask = () => {
     setActiveNav("");
@@ -94,7 +99,11 @@ export function Sidebar() {
       const wsTasks = allTasks
         .filter((t) => t.type === "workspace" && t.workspaceId === ws.id)
         .sort((a, b) => (a.updatedAt < b.updatedAt ? 1 : a.updatedAt > b.updatedAt ? -1 : 0))
-        .map((t) => ({ id: t.id, title: t.title, time: relativeTime(t.updatedAt) }));
+        .map((task) => ({
+          id: task.id,
+          title: task.title,
+          time: relativeTime(task.updatedAt, t),
+        }));
       return {
         id: ws.id,
         name: ws.name,
@@ -118,7 +127,8 @@ export function Sidebar() {
       }
       setConfirm(null);
     } catch (err) {
-      setConfirmError(err instanceof Error ? err.message : String(err));
+      const raw = err instanceof Error ? err.message : String(err);
+      setConfirmError(translateError(raw, t));
     } finally {
       setConfirmLoading(false);
     }
@@ -136,18 +146,21 @@ export function Sidebar() {
   const confirmText =
     confirm?.kind === "task"
       ? {
-          title: "删除任务",
+          title: t("confirm.deleteTask"),
           description:
             confirmTask?.type === "temp"
-              ? `将删除任务「${confirm.title}」及其全部会话记录。\n磁盘上的会话文件（~/EveryBuddy/sessions 下）与临时工作目录也会被一并清除，此操作不可恢复。`
-              : `将删除任务「${confirm.title}」及其全部会话记录。\n磁盘上的会话文件（~/EveryBuddy/sessions 下）也会被一并清除，此操作不可恢复。`,
-          confirmLabel: "删除",
+              ? t("confirm.deleteTaskTempDesc", { title: confirm.title })
+              : t("confirm.deleteTaskWsDesc", { title: confirm.title }),
+          confirmLabel: t("common.delete"),
         }
       : confirm?.kind === "workspace"
         ? {
-            title: "移除空间",
-            description: `将移除空间「${confirm.name}」：\n· 空间下 ${confirm.taskCount} 个任务及其会话记录将被一并删除；\n· 空间目录本身保留在磁盘上，不会被删除。\n此操作不可恢复。`,
-            confirmLabel: "移除空间",
+            title: t("confirm.removeWorkspace"),
+            description: t("confirm.removeWorkspaceDesc", {
+              name: confirm.name,
+              num: confirm.taskCount,
+            }),
+            confirmLabel: t("confirm.removeWorkspace"),
           }
         : null;
 
@@ -162,7 +175,7 @@ export function Sidebar() {
         type="button"
         onClick={() => setCollapsed(!collapsed)}
         className="titlebar-no-drag flex h-[30px] w-[30px] items-center justify-center rounded-s text-ink-2 transition hover:bg-hover hover:text-ink"
-        title={collapsed ? "展开侧栏" : "折叠侧栏"}
+        title={collapsed ? t("sidebar.expand") : t("sidebar.collapse")}
       >
         {collapsed ? <IconPanelLeftOpen /> : <IconPanelLeftClose />}
       </button>
@@ -176,7 +189,7 @@ export function Sidebar() {
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="搜索任务或会话..."
+              placeholder={t("sidebar.searchPlaceholder")}
               className="w-full border-0 bg-transparent text-[14px] text-ink placeholder:text-ink-3 focus:outline-none"
               // biome-ignore lint/a11y/noAutofocus: 点击搜索按钮展开后需立即聚焦输入
               autoFocus
@@ -192,7 +205,7 @@ export function Sidebar() {
             type="button"
             onClick={() => setShowSearch(true)}
             className="titlebar-no-drag flex h-[30px] w-[30px] items-center justify-center rounded-s text-ink-2 transition hover:bg-hover hover:text-ink"
-            title="搜索任务"
+            title={t("sidebar.searchTasks")}
           >
             <IconSearch />
           </button>
@@ -231,7 +244,7 @@ export function Sidebar() {
             type="button"
             onClick={handleNewTask}
             className="flex h-[30px] w-[30px] items-center justify-center rounded-s text-ink-2 transition hover:bg-hover"
-            title="新建任务"
+            title={t("sidebar.newTask")}
           >
             <IconPlus />
           </button>
@@ -245,7 +258,7 @@ export function Sidebar() {
               type="button"
               onClick={() => useUIStore.getState().setSettingsOpen(true)}
               className="flex h-[30px] w-[30px] items-center justify-center rounded-s text-ink-2 transition hover:bg-hover hover:text-ink"
-              title="设置"
+              title={t("settings.title")}
             >
               <IconSettings />
             </button>
@@ -262,7 +275,7 @@ export function Sidebar() {
               className="flex h-[40px] w-full items-center gap-[10px] rounded-s px-[12px] text-[15px] text-ink transition hover:bg-hover active:scale-[0.98]"
             >
               <IconPlus className="text-ink-2" />
-              新建任务
+              {t("sidebar.newTask")}
             </button>
           </div>
 
@@ -281,7 +294,7 @@ export function Sidebar() {
                   }`}
                 >
                   <Icon className={isActive ? "text-accent" : "text-ink-2"} />
-                  <span>{item.label}</span>
+                  <span>{t(item.labelKey)}</span>
                 </button>
               );
             })}
@@ -297,7 +310,7 @@ export function Sidebar() {
               onClick={() => setTasksOpen((v) => !v)}
               className="flex h-[30px] w-full items-center justify-between rounded-s px-[10px] text-[12px] font-semibold tracking-[0.08em] text-ink-3 transition hover:bg-hover"
             >
-              <span>任务 ({filteredTasks.length})</span>
+              <span>{t("sidebar.tasks", { num: filteredTasks.length })}</span>
               <IconChevronDown
                 size={12}
                 strokeWidth={2}
@@ -329,7 +342,7 @@ export function Sidebar() {
               onClick={() => setWorkspacesOpen((v) => !v)}
               className="flex h-[30px] w-full items-center justify-between rounded-s px-[10px] text-[12px] font-semibold tracking-[0.08em] text-ink-3 transition hover:bg-hover"
             >
-              <span>空间 ({filteredWorkspaces.length})</span>
+              <span>{t("sidebar.spaces", { num: filteredWorkspaces.length })}</span>
               <IconChevronDown
                 size={12}
                 strokeWidth={2}
@@ -392,7 +405,7 @@ export function Sidebar() {
                 type="button"
                 onClick={() => useUIStore.getState().setSettingsOpen(true)}
                 className="flex h-[28px] w-[28px] items-center justify-center rounded-s text-ink-2 transition hover:bg-hover hover:text-ink"
-                title="设置"
+                title={t("settings.title")}
               >
                 <IconSettings />
               </button>

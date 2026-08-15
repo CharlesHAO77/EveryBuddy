@@ -4,6 +4,7 @@
  */
 
 import type { WorkspaceDirEntry } from "@everybuddy/ipc-contract";
+import { useTranslation } from "react-i18next";
 import { IconChevronRight, IconFile, IconFolder } from "./icons";
 
 interface Props {
@@ -30,6 +31,7 @@ export function FileMentionMenu({
   onGoCrumb,
   onSelect,
 }: Props) {
+  const { t } = useTranslation();
   if (!open) return null;
   return (
     <div className="absolute bottom-full left-0 z-50 mb-[6px] w-[280px] overflow-hidden rounded-m border border-line bg-card shadow-pop">
@@ -42,7 +44,7 @@ export function FileMentionMenu({
             path.length === 0 ? "font-bold text-ink" : ""
           }`}
         >
-          工作区
+          {t("fileMention.workspace")}
         </button>
         {path.map((p, i) => (
           <span key={path.slice(0, i + 1).join("/")} className="flex items-center gap-0.5">
@@ -63,9 +65,9 @@ export function FileMentionMenu({
       {/* 目录条目（单层） */}
       <div className="max-h-[220px] overflow-y-auto py-1">
         {loading ? (
-          <div className="px-3 py-2 text-[12.5px] text-ink-3">加载中…</div>
+          <div className="px-3 py-2 text-[12.5px] text-ink-3">{t("common.loading")}</div>
         ) : entries.length === 0 ? (
-          <div className="px-3 py-2 text-[12.5px] text-ink-3">空目录</div>
+          <div className="px-3 py-2 text-[12.5px] text-ink-3">{t("fileMention.emptyDir")}</div>
         ) : (
           entries.map((e, i) => (
             <button

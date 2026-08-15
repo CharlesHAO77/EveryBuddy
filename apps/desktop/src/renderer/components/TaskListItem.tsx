@@ -102,9 +102,9 @@ export function TaskListItem({
       <span className="shrink-0 text-[13px] text-ink-3 group-hover:hidden">{time}</span>
       <ActionMenu
         items={[
-          { label: "重命名", onSelect: startRename },
-          { label: "打开所在目录", onSelect: () => void openTaskDir(id) },
-          { label: "删除", danger: true, onSelect: () => onDeleteRequest(id, title) },
+          { label: "task.rename", onSelect: startRename },
+          { label: "task.openDir", onSelect: () => void openTaskDir(id) },
+          { label: "common.delete", danger: true, onSelect: () => onDeleteRequest(id, title) },
         ]}
       />
     </div>

@@ -7,7 +7,9 @@
  * 注意：components 对象定义在模块作用域，保证引用稳定、避免 react-markdown 重挂载。
  */
 
+import i18n from "i18next";
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import type { Components } from "react-markdown";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -18,6 +20,7 @@ interface CodeBlockProps {
 }
 
 function CodeBlock({ code, lang }: CodeBlockProps) {
+  const { t } = useTranslation();
   const [copied, setCopied] = useState(false);
   const handleCopy = () => {
     navigator.clipboard.writeText(code).then(() => {
@@ -34,7 +37,7 @@ function CodeBlock({ code, lang }: CodeBlockProps) {
           onClick={handleCopy}
           className="text-[11px] text-white/40 transition hover:text-white/80"
         >
-          {copied ? "已复制" : "复制"}
+          {copied ? t("common.copied") : t("common.copy")}
         </button>
       </div>
       <pre className="overflow-x-auto px-3 py-2 text-[13px] leading-relaxed text-terminal-text">
@@ -123,8 +126,10 @@ const components: Components = {
     );
   },
   img({ src, alt }) {
+    // 用 i18next 单例取当前语言（react-markdown 组件覆写按组件渲染，但静态分析不识别小写 renderer，
+    // 避免在「非组件」里调 hook；语言变化由父级重渲染驱动）
     if (!isSafeImageSrc(src)) {
-      return <span className="text-ink-3">{alt || "[图片]"}</span>;
+      return <span className="text-ink-3">{alt || i18n.t("markdown.imageAlt")}</span>;
     }
     return (
       <img src={src} alt={alt ?? ""} className="my-2 max-w-full rounded-s border border-line" />

@@ -1,4 +1,5 @@
 import { useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { useSessionStore } from "../stores/sessionStore";
 
 interface ConversationTitleProps {
@@ -12,6 +13,7 @@ interface ConversationTitleProps {
  * 编辑态为 input（Enter 提交 / Esc 取消 / blur 提交），复用 sessionStore.renameTask。
  */
 export function ConversationTitle({ taskId, title }: ConversationTitleProps) {
+  const { t } = useTranslation();
   const renameTask = useSessionStore((s) => s.renameTask);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState("");
@@ -60,7 +62,7 @@ export function ConversationTitle({ taskId, title }: ConversationTitleProps) {
     <button
       type="button"
       onClick={startRename}
-      title="点击重命名"
+      title={t("chat.renameTitle")}
       className="titlebar-no-drag -ml-[6px] flex min-w-0 items-center rounded-s px-[6px] py-[2px] text-[16px] font-semibold text-ink transition hover:bg-hover"
     >
       <span className="min-w-0 truncate">{title}</span>

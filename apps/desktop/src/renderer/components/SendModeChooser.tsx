@@ -9,6 +9,8 @@
  * 不预设默认选项，由用户明确选择。
  */
 
+import { useTranslation } from "react-i18next";
+
 interface SendModeChooserProps {
   open: boolean;
   onSteer: () => void;
@@ -17,12 +19,13 @@ interface SendModeChooserProps {
 }
 
 export function SendModeChooser({ open, onSteer, onQueue, onCancel }: SendModeChooserProps) {
+  const { t } = useTranslation();
   if (!open) return null;
   return (
     <div className="absolute bottom-[calc(100%+8px)] left-0 right-0 z-40 rounded-m border border-line-strong bg-card p-1.5 shadow-pop">
       <div className="flex items-center gap-1.5 px-2 pb-1.5 text-[12px] text-ink-2">
         <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-danger" />
-        Agent 正在生成，如何处理这条新消息？
+        {t("chat.chooserPrompt")}
       </div>
       <div className="flex items-stretch gap-1">
         <button
@@ -30,21 +33,21 @@ export function SendModeChooser({ open, onSteer, onQueue, onCancel }: SendModeCh
           onClick={onSteer}
           className="flex flex-1 flex-col items-start gap-0.5 rounded-s px-2.5 py-1.5 text-left transition hover:bg-hover"
         >
-          <span className="text-[12.5px] font-semibold text-danger-strong">转向（打断当前）</span>
+          <span className="text-[12.5px] font-semibold text-danger-strong">{t("chat.steer")}</span>
         </button>
         <button
           type="button"
           onClick={onQueue}
           className="flex flex-1 flex-col items-start gap-0.5 rounded-s px-2.5 py-1.5 text-left transition hover:bg-hover"
         >
-          <span className="text-[12.5px] font-semibold text-ink">排队（完成后处理）</span>
+          <span className="text-[12.5px] font-semibold text-ink">{t("chat.queue")}</span>
         </button>
         <button
           type="button"
           onClick={onCancel}
           className="flex shrink-0 items-center rounded-s px-2.5 py-1.5 text-[12.5px] font-semibold text-ink transition hover:bg-hover"
         >
-          取消
+          {t("common.cancel")}
         </button>
       </div>
     </div>

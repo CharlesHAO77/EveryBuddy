@@ -26,6 +26,7 @@ import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/
 import spawn from "cross-spawn";
 import type { TSchema } from "typebox";
 import { APP_ROOT, ensureAppDirs } from "./configStore";
+import { uiError } from "./errors";
 
 /** 异步执行子进程（用 cross-spawn：Windows 下解析 npm → npm.cmd 并走 cmd.exe，绕开原生 execFile 对 .cmd 的 ENOENT/EINVAL） */
 function spawnAsync(command: string, args: string[], options: SpawnOptions): Promise<void> {
@@ -103,12 +104,11 @@ async function ensureServerInstalled(pkg: string, version?: string): Promise<str
   mkdirSync(installDir, { recursive: true });
   const spec = `${pkg}@${version ?? "latest"}`;
   // npm 经 cross-spawn 解析 npm.cmd（Windows）；GUI 启动若缺 PATH，spawnAsync 的 error 分支会透传 ENOENT
-  await spawnAsync(
-    "npm",
-    ["install", "--prefix", installDir, "--no-audit", "--no-fund", spec],
-    { cwd: installDir, timeout: 120_000 },
-  );
-  if (!existsSync(marker)) throw new Error(`MCP server 安装失败：${spec}`);
+  await spawnAsync("npm", ["install", "--prefix", installDir, "--no-audit", "--no-fund", spec], {
+    cwd: installDir,
+    timeout: 120_000,
+  });
+  if (!existsSync(marker)) throw uiError("errors.mcpInstallFailed", { spec });
   return resolvePackageBin(pkgDir, JSON.parse(readFileSync(marker, "utf-8")));
 }
 
@@ -125,7 +125,7 @@ async function stdioSpawnConfig(cfg: McpConfig): Promise<{
     return { command: process.execPath, args: [bin], env: { ...env, ELECTRON_RUN_AS_NODE: "1" } };
   }
   const command = typeof cfg.command === "string" ? cfg.command.trim() : "";
-  if (!command) throw new Error("缺少 MCP server 命令（config.command 或 config.package）");
+  if (!command) throw uiError("errors.mcpCommandMissing");
   const args = Array.isArray(cfg.args)
     ? cfg.args.filter((a): a is string => typeof a === "string")
     : [];

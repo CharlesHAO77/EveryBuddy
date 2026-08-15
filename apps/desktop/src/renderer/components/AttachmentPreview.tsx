@@ -2,6 +2,8 @@
  * AttachmentPreview - 输入框上方的附件预览条（chips）。
  * 展示已选/已拖入文件的名称与大小，支持逐项移除；空时不渲染。
  */
+
+import { useTranslation } from "react-i18next";
 import type { AttachmentItem } from "../hooks/useAttachments";
 import { IconFile, IconX } from "./icons";
 
@@ -17,6 +19,7 @@ interface AttachmentPreviewProps {
 }
 
 export function AttachmentPreview({ attachments, onRemove }: AttachmentPreviewProps) {
+  const { t } = useTranslation();
   if (attachments.length === 0) return null;
   return (
     <div className="mb-2 flex flex-wrap gap-2">
@@ -33,7 +36,7 @@ export function AttachmentPreview({ attachments, onRemove }: AttachmentPreviewPr
           <button
             type="button"
             onClick={() => onRemove(a.id)}
-            title="移除附件"
+            title={t("attachment.remove")}
             className="ml-0.5 flex h-4 w-4 items-center justify-center rounded-s text-ink-3 transition hover:bg-hover hover:text-ink"
           >
             <IconX size={12} />

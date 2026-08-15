@@ -1,5 +1,6 @@
 import type { AttachmentRef, Expert } from "@everybuddy/ipc-contract";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { useShallow } from "zustand/react/shallow";
 import { MENTION_TOKEN_RE, type MentionFile, parseFileMentions } from "../fileMentions";
 import { useAttachments } from "../hooks/useAttachments";
@@ -81,19 +82,19 @@ function groupMessages(messages: ChatMessage[]): MessageGroup[] {
 
 /** 助手 tab：模式与内置专家合并展示（id 仍是模式，图标/名称对应当前模式内置专家） */
 const modes = [
-  { id: "daily" as CategoryId, label: "办公助理", icon: "briefcase" },
-  { id: "coding" as CategoryId, label: "编码助手", icon: "code" },
+  { id: "daily" as CategoryId, labelKey: "welcome.mode.daily", icon: "briefcase" },
+  { id: "coding" as CategoryId, labelKey: "welcome.mode.coding", icon: "code" },
 ];
 
-const dailyTags = [{ id: "ppt", label: "PPT生成" }];
+const dailyTags = [{ id: "ppt", labelKey: "welcome.tag.ppt" }];
 
 const codingTags = [
-  { id: "daily-dev", label: "日常开发" },
-  { id: "website", label: "网站开发" },
-  { id: "agent", label: "Agent应用" },
-  { id: "skill", label: "Skill开发" },
-  { id: "cicd", label: "CI/CD" },
-  { id: "docs", label: "文档" },
+  { id: "daily-dev", labelKey: "welcome.tag.dailyDev" },
+  { id: "website", labelKey: "welcome.tag.website" },
+  { id: "agent", labelKey: "welcome.tag.agent" },
+  { id: "skill", labelKey: "welcome.tag.skill" },
+  { id: "cicd", labelKey: "welcome.tag.cicd" },
+  { id: "docs", labelKey: "welcome.tag.docs" },
 ];
 
 /**
@@ -184,6 +185,7 @@ export function MainView() {
  * 选定后写入 sessionStore.pendingWorkspaceId，发送首条消息时据此创建空间任务。
  */
 function WorkspaceSelector() {
+  const { t } = useTranslation();
   const workspaces = useSessionStore((s) => s.workspaces);
   const pendingWorkspaceId = useSessionStore((s) => s.pendingWorkspaceId);
   const setPendingWorkspace = useSessionStore((s) => s.setPendingWorkspace);
@@ -207,7 +209,7 @@ function WorkspaceSelector() {
   }, [open]);
 
   const selected = workspaces.find((w) => w.id === pendingWorkspaceId) ?? null;
-  const label = selected ? selected.name : "选择工作空间";
+  const label = selected ? selected.name : t("welcome.selectWorkspace");
 
   const handlePickFolder = async () => {
     const dir = await window.electronAPI.workspace.selectDir();
@@ -270,7 +272,7 @@ function WorkspaceSelector() {
             className="flex w-full items-center gap-[8px] px-[12px] py-[7px] text-left text-[14px] text-ink-2 transition hover:bg-hover"
           >
             <IconFolder className="text-ink-2" />
-            指定文件夹
+            {t("welcome.pickFolder")}
           </button>
 
           {creating ? (
@@ -291,7 +293,7 @@ function WorkspaceSelector() {
                     setName("");
                   }
                 }}
-                placeholder="空间名称"
+                placeholder={t("welcome.workspaceName")}
                 className="w-full rounded-s border border-line bg-card px-[8px] py-[5px] text-[14px] text-ink placeholder:text-ink-3 focus:border-accent focus:outline-none"
               />
               <div className="mt-[6px] flex gap-[6px]">
@@ -301,7 +303,7 @@ function WorkspaceSelector() {
                   disabled={!name.trim()}
                   className="rounded-s bg-accent px-[10px] py-[4px] text-[13px] text-white transition hover:bg-accent-strong disabled:opacity-30"
                 >
-                  创建
+                  {t("common.create")}
                 </button>
                 <button
                   type="button"
@@ -311,7 +313,7 @@ function WorkspaceSelector() {
                   }}
                   className="rounded-s px-[10px] py-[4px] text-[13px] text-ink-3 transition hover:bg-hover"
                 >
-                  取消
+                  {t("common.cancel")}
                 </button>
               </div>
             </div>
@@ -322,7 +324,7 @@ function WorkspaceSelector() {
               className="flex w-full items-center gap-[8px] px-[12px] py-[7px] text-left text-[14px] text-ink-2 transition hover:bg-hover"
             >
               <IconPlus className="text-ink-2" />
-              新建空间
+              {t("welcome.newWorkspace")}
             </button>
           )}
 
@@ -337,7 +339,7 @@ function WorkspaceSelector() {
             className="flex w-full items-center gap-[8px] px-[12px] py-[7px] text-left text-[14px] text-ink-3 transition hover:bg-hover"
           >
             <IconX className="text-ink-2" />
-            无工作空间
+            {t("welcome.noWorkspace")}
           </button>
         </div>
       )}
@@ -348,6 +350,7 @@ function WorkspaceSelector() {
 /* ── Welcome View ────────────────────────────── */
 
 function WelcomeView() {
+  const { t } = useTranslation();
   const { activeCategory, setActiveCategory } = useUIStore();
   const [text, setText] = useState("");
   // 欢迎页可选专家：缺省跟随模式内置专家；选中自定义专家后 createTask 带 expertId
@@ -397,9 +400,7 @@ function WelcomeView() {
     // 裸 /steer /follow-up：提示不发送（欢迎页无任务可挂通知时静默）
     if (isBareSteerCommand(raw)) {
       if (currentTaskId) {
-        useSessionStore
-          .getState()
-          .pushChatNotice(currentTaskId, "请输入要发送的内容，如：/steer 换个思路", "warn");
+        useSessionStore.getState().pushChatNotice(currentTaskId, t("welcome.steerHint"), "warn");
       }
       return;
     }
@@ -416,14 +417,14 @@ function WelcomeView() {
                 mode: activeCategory,
                 expertId: selectedExpert?.id,
                 workspaceId: pendingWorkspaceId,
-                title: trimmed.slice(0, 30) || "新任务",
+                title: trimmed.slice(0, 30) || t("welcome.newTaskTitle"),
                 providerId: effectiveProviderId ?? undefined,
               }
             : {
                 type: "temp",
                 mode: activeCategory,
                 expertId: selectedExpert?.id,
-                title: trimmed.slice(0, 30) || "新任务",
+                title: trimmed.slice(0, 30) || t("welcome.newTaskTitle"),
                 providerId: effectiveProviderId ?? undefined,
               },
         );
@@ -474,7 +475,7 @@ function WelcomeView() {
 
         {/* Title */}
         <h1 className="font-display text-[36px] font-semibold tracking-tight text-ink">
-          EveryBuddy, 我帮你
+          {t("welcome.tagline")}
         </h1>
 
         {/* 助手 tab（模式与内置专家合并；自定义专家经输入框「+」菜单选择） */}
@@ -496,7 +497,7 @@ function WelcomeView() {
                 <span className={isActive ? "text-accent-tint" : "text-ink-3"}>
                   {expertIcon(mode.icon)}
                 </span>
-                {mode.label}
+                {t(mode.labelKey)}
               </button>
             );
           })}
@@ -515,7 +516,7 @@ function WelcomeView() {
                   className="flex h-[32px] items-center gap-[6px] rounded-full border border-line bg-card px-[14px] text-[14px] text-ink-2 transition hover:border-line-strong hover:bg-hover"
                 >
                   <IconClock size={12} className="text-ink-3" />
-                  {tag.label}
+                  {t(tag.labelKey)}
                 </button>
               ))}
             </div>
@@ -543,8 +544,8 @@ function WelcomeView() {
             {/* 占位提示：主句 + 提示同行排列（输入非空时隐藏） */}
             {!text ? (
               <div className="pointer-events-none absolute left-[20px] top-[20px] flex items-baseline gap-[8px]">
-                <span className="text-[17px] text-ink-3">今天帮你做些什么？</span>
-                <span className="text-[12.5px] text-ink-3 opacity-75">· @引用对话文件，/调用技能与指令</span>
+                <span className="text-[17px] text-ink-3">{t("welcome.placeholder")}</span>
+                <span className="text-[12.5px] text-ink-3 opacity-75">{t("welcome.hint")}</span>
               </div>
             ) : null}
             <textarea
@@ -618,6 +619,7 @@ function WelcomeView() {
 /* ── Chat View ───────────────────────────────── */
 
 function ChatView({ taskId }: { taskId: string }) {
+  const { t } = useTranslation();
   const { task, messages } = useSessionStore(
     useShallow((s) => {
       const t = s.tasks.find((item) => item.id === taskId);
@@ -680,11 +682,7 @@ function ChatView({ taskId }: { taskId: string }) {
     if (!raw && attachments.length === 0) return;
     // 裸 /steer /follow-up：提示不发送
     if (isBareSteerCommand(raw)) {
-      pushChatNotice(
-        taskId,
-        "请输入要发送的内容，如：/steer 换个思路 或 /follow-up 稍后处理",
-        "warn",
-      );
+      pushChatNotice(taskId, t("chat.steerHint"), "warn");
       return;
     }
     const cmd = parseCommandChannel(raw);
@@ -772,7 +770,7 @@ function ChatView({ taskId }: { taskId: string }) {
                 <button
                   type="button"
                   onClick={() => dismissChatNotice(taskId, n.id)}
-                  aria-label="关闭"
+                  aria-label={t("common.close")}
                   className="shrink-0 rounded-full px-1 text-ink-3 transition hover:bg-hover hover:text-ink"
                 >
                   ✕
@@ -784,7 +782,7 @@ function ChatView({ taskId }: { taskId: string }) {
         {messages.length === 0 ? (
           <div className="flex min-h-full flex-col items-center justify-center">
             <p className="text-sm text-ink-3">
-              {hydrating ? "加载历史中…" : "新会话，发送消息开始对话"}
+              {hydrating ? t("chat.loadingHistory") : t("chat.emptyStart")}
             </p>
           </div>
         ) : (
@@ -858,7 +856,7 @@ function ChatView({ taskId }: { taskId: string }) {
               onKeyDown={handleKeyDown}
               onCompositionStart={() => (slash.composingRef.current = true)}
               onCompositionEnd={() => (slash.composingRef.current = false)}
-              placeholder="今天帮你做些什么？ @引用对话文件，/调用技能与指令"
+              placeholder={t("chat.inputPlaceholder")}
               rows={2}
               className="h-full w-full resize-none border-0 bg-transparent px-[20px] pt-[16px] text-[17px] text-ink placeholder:text-ink-3 focus:outline-none"
             />
@@ -867,7 +865,7 @@ function ChatView({ taskId }: { taskId: string }) {
                 <button
                   type="button"
                   onClick={openPicker}
-                  title="添加附件"
+                  title={t("chat.addAttachment")}
                   className="flex h-[28px] w-[28px] items-center justify-center rounded-s text-ink-2 transition hover:bg-hover hover:text-ink"
                 >
                   <IconPlus />
@@ -891,7 +889,7 @@ function ChatView({ taskId }: { taskId: string }) {
                   <button
                     type="button"
                     onClick={() => void abortTask(taskId)}
-                    title="停止生成"
+                    title={t("chat.stopGenerating")}
                     className="flex h-[30px] w-[30px] items-center justify-center rounded-full bg-accent text-white transition hover:bg-accent-strong active:scale-95"
                   >
                     <IconStop size={14} />

@@ -3,6 +3,7 @@
  * 点击后显示「已复制」反馈，1.5s 后复原；剪贴板被拒时静默，避免 unhandled rejection。
  */
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { IconCheck, IconCopy } from "./icons";
 
 interface CopyButtonProps {
@@ -19,11 +20,12 @@ interface CopyButtonProps {
 
 export function CopyButton({
   text,
-  label = "复制",
+  label = "common.copy",
   title,
   className,
   size = 12,
 }: CopyButtonProps) {
+  const { t } = useTranslation();
   const [copied, setCopied] = useState(false);
   const handleCopy = () => {
     void navigator.clipboard
@@ -39,7 +41,7 @@ export function CopyButton({
     <button
       type="button"
       onClick={handleCopy}
-      title={title ?? "复制"}
+      title={title ?? t("common.copy")}
       className={`inline-flex shrink-0 items-center gap-0.5 rounded-s px-1.5 py-0.5 text-[11px] text-ink-3 transition hover:bg-hover hover:text-ink-2 ${
         className ?? ""
       }`}
@@ -49,7 +51,7 @@ export function CopyButton({
       ) : (
         <IconCopy size={size} strokeWidth={2} />
       )}
-      <span>{copied ? "已复制" : label}</span>
+      <span>{copied ? t("common.copied") : t(label)}</span>
     </button>
   );
 }

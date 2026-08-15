@@ -9,26 +9,33 @@
 import type { ExecutionMode } from "@everybuddy/ipc-contract";
 import type { ReactNode } from "react";
 import { useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { useSessionStore } from "../stores/sessionStore";
 import { IconCheck, IconChevronDown, IconClipboardCheck, IconHand, IconZap } from "./icons";
 
 const MODES: Array<{
   id: ExecutionMode;
-  label: string;
-  hint: string;
+  labelKey: string;
+  hintKey: string;
   icon: ReactNode;
 }> = [
-  { id: "auto", label: "自动", hint: "工具直接执行", icon: <IconZap size={13} /> },
-  { id: "manual", label: "手动", hint: "副作用工具需确认", icon: <IconHand size={13} /> },
+  { id: "auto", labelKey: "mode.auto", hintKey: "mode.autoHint", icon: <IconZap size={13} /> },
+  {
+    id: "manual",
+    labelKey: "mode.manual",
+    hintKey: "mode.manualHint",
+    icon: <IconHand size={13} />,
+  },
   {
     id: "plan",
-    label: "计划",
-    hint: "只读探索 + 计划执行",
+    labelKey: "mode.plan",
+    hintKey: "mode.planHint",
     icon: <IconClipboardCheck size={13} />,
   },
 ];
 
 export function ModeSelect({ taskId }: { taskId: string | null }) {
+  const { t } = useTranslation();
   const storedMode = useSessionStore((s) => (taskId ? s.modes[taskId] : s.pendingMode));
   const setMode = useSessionStore((s) => s.setMode);
   const setPendingMode = useSessionStore((s) => s.setPendingMode);
@@ -45,7 +52,7 @@ export function ModeSelect({ taskId }: { taskId: string | null }) {
 
   // 派生当前模式：计划真实开启时显示「计划」；否则直接采纳存储值。
   // 进入/退出计划均由 /plan 与下拉写回 modes[taskId]，按钮不再只依赖异步 extension_status 事件
-  const effective: ExecutionMode = planOn ? "plan" : storedMode ?? "auto";
+  const effective: ExecutionMode = planOn ? "plan" : (storedMode ?? "auto");
 
   useEffect(() => {
     if (!open) return;
@@ -90,8 +97,8 @@ export function ModeSelect({ taskId }: { taskId: string | null }) {
 
   const current = MODES.find((x) => x.id === effective) ?? {
     id: "auto" as ExecutionMode,
-    label: "自动",
-    hint: "工具直接执行",
+    labelKey: "mode.auto",
+    hintKey: "mode.autoHint",
     icon: <IconZap size={13} />,
   };
 
@@ -100,7 +107,7 @@ export function ModeSelect({ taskId }: { taskId: string | null }) {
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        title={`执行模式：${current.hint}`}
+        title={t("mode.titleWithHint", { hint: t(current.hintKey) })}
         className={`flex items-center gap-[5px] rounded-s px-2 py-[5px] text-[12px] transition ${
           effective === "plan"
             ? "bg-accent-tint font-semibold text-accent-strong"
@@ -108,12 +115,14 @@ export function ModeSelect({ taskId }: { taskId: string | null }) {
         }`}
       >
         {current.icon}
-        <span>{current.label}</span>
+        <span>{t(current.labelKey)}</span>
         <IconChevronDown size={10} strokeWidth={2} />
       </button>
       {open && (
         <div className="absolute bottom-full right-0 z-50 mb-[6px] w-[180px] rounded-m border border-line bg-card py-1 shadow-pop">
-          <div className="px-3 pb-1 pt-1 text-[11px] tracking-wide text-ink-3">执行模式</div>
+          <div className="px-3 pb-1 pt-1 text-[11px] tracking-wide text-ink-3">
+            {t("mode.title")}
+          </div>
           {MODES.map((m) => (
             <button
               key={m.id}
@@ -127,8 +136,8 @@ export function ModeSelect({ taskId }: { taskId: string | null }) {
             >
               <span className="flex min-w-0 items-center gap-2">
                 {m.icon}
-                <span className="shrink-0">{m.label}</span>
-                <span className="truncate text-[11px] text-ink-3">{m.hint}</span>
+                <span className="shrink-0">{t(m.labelKey)}</span>
+                <span className="truncate text-[11px] text-ink-3">{t(m.hintKey)}</span>
               </span>
               {m.id === effective && <IconCheck size={12} strokeWidth={2.5} className="shrink-0" />}
             </button>

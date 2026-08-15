@@ -7,10 +7,12 @@
  */
 
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { useSessionStore } from "../stores/sessionStore";
 import { IconChevronDown, IconX } from "./icons";
 
 export function PendingQueueBar({ taskId }: { taskId: string }) {
+  const { t } = useTranslation();
   const items = useSessionStore((s) => s.pendingFollowUps[taskId]);
   const cancelFollowUpItem = useSessionStore((s) => s.cancelFollowUpItem);
   const [collapsed, setCollapsed] = useState(false);
@@ -22,15 +24,15 @@ export function PendingQueueBar({ taskId }: { taskId: string }) {
       <button
         type="button"
         onClick={() => setCollapsed((v) => !v)}
-        title={collapsed ? "点击展开排队列表" : "点击折叠排队列表"}
+        title={collapsed ? t("queue.toggleExpand") : t("queue.toggleCollapse")}
         className="flex w-full items-center gap-1.5 rounded-s px-2 pb-1 text-left text-[12px] font-semibold text-accent-strong transition hover:bg-accent-tint"
       >
         <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-accent" />
-        排队中{" "}
+        {t("queue.title")}{" "}
         <span className="rounded bg-hover px-1 text-[10.5px] leading-[1.6] text-ink-2">
           {items.length}
         </span>{" "}
-        条 · 当前任务完成后依次处理
+        {t("queue.processNote")}
         <IconChevronDown
           size={12}
           strokeWidth={2.5}
@@ -48,14 +50,14 @@ export function PendingQueueBar({ taskId }: { taskId: string }) {
               className="flex items-center gap-1.5 rounded-s px-1.5 py-0.5 text-[11.5px] text-ink-2 transition hover:bg-hover"
             >
               <span className="shrink-0 rounded px-1 text-[9.5px] font-bold leading-[1.5] bg-accent-tint text-accent-strong">
-                排队
+                {t("queue.item")}
               </span>
               <span className="shrink-0 text-[11px] tabular-nums text-ink-3">#{i + 1}</span>
               <span className="truncate">{item.text}</span>
               <button
                 type="button"
-                aria-label="取消该条排队"
-                title="取消该条"
+                aria-label={t("queue.cancelItemAria")}
+                title={t("queue.cancelItem")}
                 onClick={(e) => {
                   e.stopPropagation();
                   void cancelFollowUpItem(taskId, item.id);

@@ -9,6 +9,8 @@
 
 import type { ReadFileResult } from "@everybuddy/ipc-contract";
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
+import { translateError } from "../i18n/translateError";
 import { type PreviewItem, useSessionStore } from "../stores/sessionStore";
 import { Empty } from "./Empty";
 import { IconFile } from "./icons";
@@ -34,6 +36,7 @@ function isMarkdown(name: string): boolean {
 }
 
 export function PreviewView() {
+  const { t } = useTranslation();
   const taskId = useSessionStore((s) => s.currentTaskId);
   const items = useSessionStore((s) =>
     taskId ? (s.previewItems[taskId] ?? EMPTY_ITEMS) : EMPTY_ITEMS,
@@ -76,8 +79,8 @@ export function PreviewView() {
     }
   }, [taskId, items, selected, setPreviewSelection]);
 
-  if (!taskId) return <Empty text="选择或新建对话查看结果预览" />;
-  if (items.length === 0) return <Empty text="点击文件树中的文件，或等待 agent 生成结果" />;
+  if (!taskId) return <Empty text={t("preview.emptySelectTask")} />;
+  if (items.length === 0) return <Empty text={t("preview.emptyNoResults")} />;
 
   const revealButtons = (
     <div className="mt-3 flex flex-col items-center gap-1.5">
@@ -86,7 +89,7 @@ export function PreviewView() {
         onClick={() => void window.electronAPI.workspace.revealPath(selected?.absPath ?? "")}
         className="w-full rounded-s bg-hover px-2 py-1.5 text-[12px] text-ink-2 transition hover:bg-active hover:text-ink"
       >
-        在文件夹中显示
+        {t("preview.revealInFolder")}
       </button>
       <button
         type="button"
@@ -95,7 +98,7 @@ export function PreviewView() {
         }
         className="w-full rounded-s bg-hover px-2 py-1.5 text-[12px] text-ink-2 transition hover:bg-active hover:text-ink"
       >
-        打开所在目录
+        {t("task.openDir")}
       </button>
     </div>
   );
@@ -105,7 +108,7 @@ export function PreviewView() {
       {/* 最近结果条 */}
       <div className="flex items-center gap-1.5 text-[11px] font-semibold tracking-wide text-ink-2">
         <span className="shrink-0">✨</span>
-        最近结果
+        {t("preview.recentResults")}
       </div>
       <div className="flex gap-1.5 overflow-x-auto pb-1">
         {items.map((item) => (
@@ -130,16 +133,18 @@ export function PreviewView() {
       <div className="min-h-0 flex-1 overflow-auto">
         {loadError ? (
           <div className="flex flex-col items-center justify-center px-3 py-6 text-center">
-            <p className="text-[12px] text-ink-3">无法读取「{selected?.name ?? ""}」</p>
-            <p className="mt-1 break-all text-[11px] text-danger">{loadError}</p>
+            <p className="text-[12px] text-ink-3">
+              {t("preview.unreadable", { name: selected?.name ?? "" })}
+            </p>
+            <p className="mt-1 break-all text-[11px] text-danger">{translateError(loadError, t)}</p>
             {revealButtons}
           </div>
         ) : content === null ? (
-          <div className="py-6 text-center text-[12px] text-ink-3">加载中…</div>
+          <div className="py-6 text-center text-[12px] text-ink-3">{t("common.loading")}</div>
         ) : content.kind === "image" ? (
           <img
             src={content.dataUrl}
-            alt={selected?.name ?? "图片"}
+            alt={selected?.name ?? t("preview.imageAlt")}
             className="max-h-full max-w-full rounded-s border border-line bg-card object-contain"
           />
         ) : content.kind === "text" ? (
@@ -155,8 +160,8 @@ export function PreviewView() {
         ) : (
           <div className="flex flex-col items-center justify-center px-3 py-6 text-center">
             <p className="text-[12px] text-ink-3">
-              无法预览「{selected?.name ?? ""}」
-              {content.kind === "binary" ? "（二进制或文件过大）" : ""}
+              {t("preview.unpreviewable", { name: selected?.name ?? "" })}
+              {content.kind === "binary" ? t("preview.binaryHint") : ""}
             </p>
             {revealButtons}
           </div>

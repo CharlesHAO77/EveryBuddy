@@ -1,5 +1,7 @@
 import type { AgentMode, ScheduledTask, ScheduleSpec } from "@everybuddy/ipc-contract";
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
+import { translateError } from "../../i18n/translateError";
 import { humanizeSchedule, presetCron, validateCronShape } from "../../scheduleUtils";
 import { useAutomationStore } from "../../stores/automationStore";
 import { IconX } from "../icons";
@@ -14,16 +16,17 @@ interface ScheduleFormModalProps {
 }
 
 const DOW_OPTIONS = [
-  { v: "1", label: "周一" },
-  { v: "2", label: "周二" },
-  { v: "3", label: "周三" },
-  { v: "4", label: "周四" },
-  { v: "5", label: "周五" },
-  { v: "6", label: "周六" },
-  { v: "0", label: "周日" },
+  { v: "1", labelKey: "time.dow.1" },
+  { v: "2", labelKey: "time.dow.2" },
+  { v: "3", labelKey: "time.dow.3" },
+  { v: "4", labelKey: "time.dow.4" },
+  { v: "5", labelKey: "time.dow.5" },
+  { v: "6", labelKey: "time.dow.6" },
+  { v: "0", labelKey: "time.dow.0" },
 ];
 
 export function ScheduleFormModal({ task, onClose }: ScheduleFormModalProps) {
+  const { t } = useTranslation();
   const createTask = useAutomationStore((s) => s.createTask);
   const updateTask = useAutomationStore((s) => s.updateTask);
 
@@ -68,12 +71,12 @@ export function ScheduleFormModal({ task, onClose }: ScheduleFormModalProps) {
     return { type: "once", runAt: new Date(Date.now() + delayMin * 60000).toISOString() };
   })();
 
-  const cronError = tab === "cron" ? validateCronShape(cron) : null;
+  const cronError = tab === "cron" ? validateCronShape(cron, t) : null;
 
   const handleSubmit = async () => {
     setError(null);
-    if (!title.trim()) return setError("标题不能为空");
-    if (!prompt.trim()) return setError("提示词不能为空");
+    if (!title.trim()) return setError(t("errors.titleRequired"));
+    if (!prompt.trim()) return setError(t("errors.promptRequired"));
     if (tab === "cron" && cronError) return setError(cronError);
     setSaving(true);
     try {
@@ -91,21 +94,26 @@ export function ScheduleFormModal({ task, onClose }: ScheduleFormModalProps) {
       }
       onClose();
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      const raw = err instanceof Error ? err.message : String(err);
+      setError(translateError(raw, t));
     } finally {
       setSaving(false);
     }
   };
 
   const pad = (n: number) => String(n).padStart(2, "0");
+  const timeText = `${pad(hour)}:${pad(minute)}`;
   const presetPreview =
     preset === "hourly"
-      ? "每小时 0 分触发"
+      ? t("schedule.presetHourlyPreview")
       : preset === "weekly"
-        ? `每周${DOW_OPTIONS.find((d) => d.v === dow)?.label ?? dow} ${pad(hour)}:${pad(minute)} 触发`
+        ? t("schedule.presetWeeklyPreview", {
+            name: t(DOW_OPTIONS.find((d) => d.v === dow)?.labelKey ?? "time.dow.1"),
+            time: timeText,
+          })
         : preset === "monthly"
-          ? `每月${dom}日 ${pad(hour)}:${pad(minute)} 触发`
-          : `每天 ${pad(hour)}:${pad(minute)} 触发`;
+          ? t("schedule.presetMonthlyPreview", { day: dom, time: timeText })
+          : t("schedule.presetDailyPreview", { time: timeText });
 
   const inputCls =
     "w-full rounded-s border border-line-strong bg-card px-3 py-[7px] text-[13.5px] text-ink transition placeholder:text-ink-3 focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent-tint";
@@ -123,11 +131,11 @@ export function ScheduleFormModal({ task, onClose }: ScheduleFormModalProps) {
       <div className="max-h-[calc(100vh-48px)] w-[560px] max-w-[calc(100vw-40px)] overflow-y-auto rounded-xl border border-line-strong bg-paper p-5 shadow-modal">
         <div className="mb-4 flex items-center">
           <h3 className="text-[16px] font-semibold text-ink">
-            {task ? "编辑自动化" : "新建自动化"}
+            {task ? t("automation.editTitle") : t("automation.new")}
           </h3>
           <button
             type="button"
-            aria-label="关闭"
+            aria-label={t("common.close")}
             onClick={onClose}
             className="ml-auto flex h-[28px] w-[28px] items-center justify-center rounded-s text-ink-3 transition hover:bg-hover hover:text-ink"
           >
@@ -140,13 +148,13 @@ export function ScheduleFormModal({ task, onClose }: ScheduleFormModalProps) {
             htmlFor="sched-title"
             className="mb-[6px] block text-[12px] font-semibold text-ink-2"
           >
-            标题 <span className="text-danger">*</span>
+            {t("automation.titleLabel")} <span className="text-danger">*</span>
           </label>
           <input
             id="sched-title"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
-            placeholder="给这条自动化起个名字"
+            placeholder={t("automation.titlePlaceholder")}
             className={inputCls}
           />
         </div>
@@ -154,39 +162,41 @@ export function ScheduleFormModal({ task, onClose }: ScheduleFormModalProps) {
         <div className="mb-[14px]">
           <div className="mb-[6px] flex items-center">
             <label htmlFor="sched-prompt" className="text-[12px] font-semibold text-ink-2">
-              提示词 <span className="text-danger">*</span>
+              {t("automation.promptLabel")} <span className="text-danger">*</span>
             </label>
-            <span className="ml-auto text-[11px] text-ink-3">到点自动执行的内容</span>
+            <span className="ml-auto text-[11px] text-ink-3">{t("automation.promptHint")}</span>
           </div>
           <textarea
             id="sched-prompt"
             value={prompt}
             onChange={(e) => setPrompt(e.target.value)}
             rows={4}
-            placeholder="例如：总结昨天的待办完成情况，输出今日工作要点"
+            placeholder={t("automation.promptPlaceholder")}
             className={`${inputCls} resize-y leading-[1.6]`}
           />
         </div>
 
         <div className="mb-[14px]">
-          <div className="mb-[6px] block text-[12px] font-semibold text-ink-2">调度</div>
+          <div className="mb-[6px] block text-[12px] font-semibold text-ink-2">
+            {t("automation.schedule")}
+          </div>
           <div className="flex gap-[2px] rounded-s bg-hover p-[3px]">
             {(
               [
-                { id: "preset", label: "预设" },
-                { id: "cron", label: "Cron" },
-                { id: "once", label: "一次性" },
+                { id: "preset", labelKey: "automation.tab.preset" },
+                { id: "cron", labelKey: "automation.tab.cron" },
+                { id: "once", labelKey: "automation.tab.once" },
               ] as const
-            ).map((t) => (
+            ).map((tabItem) => (
               <button
-                key={t.id}
+                key={tabItem.id}
                 type="button"
-                onClick={() => setTab(t.id)}
+                onClick={() => setTab(tabItem.id)}
                 className={`h-[28px] flex-1 rounded-s text-[12.5px] font-semibold transition ${
-                  tab === t.id ? "bg-card text-ink shadow-card" : "text-ink-2 hover:text-ink"
+                  tab === tabItem.id ? "bg-card text-ink shadow-card" : "text-ink-2 hover:text-ink"
                 }`}
               >
-                {t.label}
+                {t(tabItem.labelKey)}
               </button>
             ))}
           </div>
@@ -199,10 +209,10 @@ export function ScheduleFormModal({ task, onClose }: ScheduleFormModalProps) {
                   onChange={(e) => setPreset(e.target.value as PresetId)}
                   className={selCls}
                 >
-                  <option value="daily">每天</option>
-                  <option value="weekly">每周</option>
-                  <option value="monthly">每月</option>
-                  <option value="hourly">每小时</option>
+                  <option value="daily">{t("schedule.preset.daily")}</option>
+                  <option value="weekly">{t("schedule.preset.weekly")}</option>
+                  <option value="monthly">{t("schedule.preset.monthly")}</option>
+                  <option value="hourly">{t("schedule.preset.hourly")}</option>
                 </select>
                 {preset !== "hourly" && (
                   <>
@@ -229,7 +239,7 @@ export function ScheduleFormModal({ task, onClose }: ScheduleFormModalProps) {
                   <select value={dow} onChange={(e) => setDow(e.target.value)} className={selCls}>
                     {DOW_OPTIONS.map((d) => (
                       <option key={d.v} value={d.v}>
-                        {d.label}
+                        {t(d.labelKey)}
                       </option>
                     ))}
                   </select>
@@ -238,7 +248,7 @@ export function ScheduleFormModal({ task, onClose }: ScheduleFormModalProps) {
                   <select value={dom} onChange={(e) => setDom(e.target.value)} className={selCls}>
                     {[1, 2, 3, 5, 10, 15, 20, 25].map((d) => (
                       <option key={d} value={d}>
-                        {d}日
+                        {t("schedule.daySuffix", { day: d })}
                       </option>
                     ))}
                   </select>
@@ -252,18 +262,18 @@ export function ScheduleFormModal({ task, onClose }: ScheduleFormModalProps) {
                 <input
                   value={cron}
                   onChange={(e) => setCron(e.target.value)}
-                  placeholder="分 时 日 月 星期"
+                  placeholder={t("schedule.cronPlaceholder")}
                   className={inputCls}
                 />
                 {cronError ? (
                   <p className="mt-[5px] text-[11.5px] text-danger">{cronError}</p>
                 ) : (
                   <p className="mt-[5px] text-[11.5px] text-ink-3">
-                    标准 5 段 cron（本地时区）。例如{" "}
-                    <code className="rounded-s bg-hover px-[4px] text-[11px]">0 9 * * 1-5</code> =
-                    每个工作日 09:00；
-                    <code className="rounded-s bg-hover px-[4px] text-[11px]">*/30 * * * *</code> =
-                    每 30 分钟。
+                    {t("schedule.cronHelpPrefix")}{" "}
+                    <code className="rounded-s bg-hover px-[4px] text-[11px]">0 9 * * 1-5</code>
+                    {t("schedule.cronHelpWorkdays")}
+                    <code className="rounded-s bg-hover px-[4px] text-[11px]">*/30 * * * *</code>
+                    {t("schedule.cronHelpEvery30")}
                   </p>
                 )}
               </>
@@ -279,24 +289,26 @@ export function ScheduleFormModal({ task, onClose }: ScheduleFormModalProps) {
                     onChange={(e) => setDelayMin(Number(e.target.value))}
                     className={`${selCls} w-[88px]`}
                   />
-                  <span className="text-[13px] text-ink-2">分钟后执行一次</span>
+                  <span className="text-[13px] text-ink-2">{t("schedule.minutesLaterOnce")}</span>
                 </div>
-                <p className="mt-[5px] text-[11.5px] text-ink-3">
-                  创建后立即开始倒计时；到期运行一次后自动停用。
-                </p>
+                <p className="mt-[5px] text-[11.5px] text-ink-3">{t("schedule.onceHint")}</p>
               </>
             )}
-            <p className="mt-[6px] text-[11.5px] text-ink-3">→ {humanizeSchedule(previewSpec)}</p>
+            <p className="mt-[6px] text-[11.5px] text-ink-3">
+              → {humanizeSchedule(previewSpec, t)}
+            </p>
           </div>
         </div>
 
         <div className="mb-[14px]">
-          <div className="mb-[6px] block text-[12px] font-semibold text-ink-2">模式</div>
+          <div className="mb-[6px] block text-[12px] font-semibold text-ink-2">
+            {t("automation.modeLabel")}
+          </div>
           <div className="flex gap-[2px] rounded-s bg-hover p-[3px]">
             {(
               [
-                { id: "daily", label: "日常" },
-                { id: "coding", label: "代码" },
+                { id: "daily", labelKey: "automation.modeTab.daily" },
+                { id: "coding", labelKey: "automation.modeTab.coding" },
               ] as const
             ).map((m) => (
               <button
@@ -307,7 +319,7 @@ export function ScheduleFormModal({ task, onClose }: ScheduleFormModalProps) {
                   mode === m.id ? "bg-card text-ink shadow-card" : "text-ink-2 hover:text-ink"
                 }`}
               >
-                {m.label}
+                {t(m.labelKey)}
               </button>
             ))}
           </div>
@@ -320,7 +332,7 @@ export function ScheduleFormModal({ task, onClose }: ScheduleFormModalProps) {
             onChange={(e) => setNotify(e.target.checked)}
             className="h-[15px] w-[15px] accent-[var(--accent)]"
           />
-          完成后通知我
+          {t("automation.notifyMe")}
         </label>
 
         {error && <p className="mt-3 text-[13px] text-danger">{error}</p>}
@@ -331,7 +343,7 @@ export function ScheduleFormModal({ task, onClose }: ScheduleFormModalProps) {
             onClick={onClose}
             className="rounded-s border border-line-strong px-4 py-[7px] text-[13.5px] font-semibold text-ink-2 transition hover:bg-hover"
           >
-            取消
+            {t("common.cancel")}
           </button>
           <button
             type="button"
@@ -339,7 +351,7 @@ export function ScheduleFormModal({ task, onClose }: ScheduleFormModalProps) {
             onClick={() => void handleSubmit()}
             className="rounded-s bg-accent px-4 py-[7px] text-[13.5px] font-semibold text-white transition hover:bg-accent-strong disabled:opacity-50"
           >
-            {saving ? "保存中…" : task ? "保存" : "创建"}
+            {saving ? t("common.saving") : task ? t("common.save") : t("common.create")}
           </button>
         </div>
       </div>

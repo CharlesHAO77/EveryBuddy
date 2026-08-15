@@ -2,6 +2,8 @@
  * SlashCommandMenu - / 命令建议下拉面板（照 ModelSelector dropdown 样式）。
  * 由 useSlashCommands 驱动：open + items + highlightIndex；键盘/鼠标选中走 onSelect。
  */
+
+import { useTranslation } from "react-i18next";
 import type { SlashCommand } from "../slashCommands";
 
 interface Props {
@@ -12,6 +14,7 @@ interface Props {
 }
 
 export function SlashCommandMenu({ open, items, highlightIndex, onSelect }: Props) {
+  const { t } = useTranslation();
   if (!open || items.length === 0) return null;
   return (
     <div className="absolute bottom-full left-0 z-50 mb-[6px] w-[240px] rounded-m border border-line bg-card py-1 shadow-pop">
@@ -29,7 +32,7 @@ export function SlashCommandMenu({ open, items, highlightIndex, onSelect }: Prop
             <b className="shrink-0 font-semibold">/{c.id}</b>
             <span className="truncate">{c.label}</span>
           </span>
-          <span className="shrink-0 text-[11px] text-ink-3">回车</span>
+          <span className="shrink-0 text-[11px] text-ink-3">{t("common.enter")}</span>
         </button>
       ))}
     </div>

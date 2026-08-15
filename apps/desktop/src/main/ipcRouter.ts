@@ -48,10 +48,12 @@ import {
   updateScheduleTaskRequestSchema,
 } from "@everybuddy/ipc-contract";
 import { type BrowserWindow, ipcMain, shell } from "electron";
+import { ZodError } from "zod";
 import { agentRuntime } from "./agentRuntime";
 import { configStore, SESSIONS_DIR, WORK_SPACES_DIR } from "./configStore";
 import { connectorStore } from "./connectorStore";
 import { rmIfDirectChild } from "./dirCleanup";
+import { uiError } from "./errors";
 import { buildExpertCatalog } from "./expertCatalog";
 import { expertStore } from "./expertStore";
 import * as modelStore from "./modelStore";
@@ -69,9 +71,16 @@ import {
   selectDirectory,
 } from "./workspaceManager";
 
-/** 校验入参，失败抛错 */
+/** 校验入参，失败抛错；Zod 拒绝时归一化为首条 issue 的 message（即 i18n key），渲染层经 translateError 翻译 */
 function validate<T>(schema: { parse: (v: unknown) => T }, value: unknown): T {
-  return schema.parse(value);
+  try {
+    return schema.parse(value);
+  } catch (err) {
+    if (err instanceof ZodError) {
+      throw new Error(err.issues[0]?.message ?? "errors.paramMissing");
+    }
+    throw err;
+  }
 }
 
 /**
@@ -184,7 +193,7 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
     const req = validate(createTaskRequestSchema, raw);
     const workspace = req.workspaceId ? configStore.getWorkspace(req.workspaceId) : undefined;
     if (req.type === "workspace" && !workspace) {
-      throw new Error("工作空间任务需要有效的 workspaceId");
+      throw uiError("errors.workspaceIdRequired");
     }
     const { sessionDir, workDir } = resolveSessionLocation(req.type, workspace);
 
@@ -214,7 +223,9 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
       console.error(`[ipcRouter] createTaskSession 失败:`, err);
       agentRuntime.emitError(
         task.id,
-        `会话初始化失败: ${err instanceof Error ? err.message : String(err)}`,
+        uiError("errors.sessionInitFailed", {
+          message: err instanceof Error ? err.message : String(err),
+        }).message,
       );
     }
 
@@ -229,7 +240,7 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
   ipcMain.handle("task:resume", async (_evt, raw) => {
     const { id } = validate(idRequestSchema, raw);
     const task = configStore.getTask(id);
-    if (!task) throw new Error("任务不存在");
+    if (!task) throw uiError("errors.taskNotFound");
     // 已有活跃会话则跳过
     if (agentRuntime.hasSession(id)) return;
     await agentRuntime.createTaskSession(
@@ -256,7 +267,7 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
   ipcMain.handle("task:openDir", async (_evt, raw) => {
     const { id } = validate(idRequestSchema, raw);
     const task = configStore.getTask(id);
-    if (!task) throw new Error("任务不存在");
+    if (!task) throw uiError("errors.taskNotFound");
     // 打开工作目录（临时任务 -> work-spaces 下的工作目录，空间任务 -> 空间路径），而非 JSONL 会话目录
     await openInFinder(getTaskCwd(task));
   });
@@ -367,7 +378,7 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
   // system:* —— markdown 链接等外链打开（仅放行 http/https，防任意协议注入）
   ipcMain.handle("system:openExternal", async (_evt, raw) => {
     const { url } = validate(openExternalRequestSchema, raw);
-    if (!/^https?:\/\//i.test(url)) throw new Error("仅支持 http/https 链接");
+    if (!/^https?:\/\//i.test(url)) throw uiError("errors.httpOnly");
     await shell.openExternal(url);
   });
 
@@ -410,7 +421,7 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
   ipcMain.handle("expert:update", (_evt, raw) => {
     const req = validate(expertUpdateRequestSchema, raw);
     const updated = expertStore.update(req);
-    if (!updated) throw new Error("专家不存在");
+    if (!updated) throw uiError("errors.expertNotFound");
     return updated;
   });
 
@@ -437,7 +448,7 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
   ipcMain.handle("team:update", (_evt, raw) => {
     const req = validate(teamUpdateRequestSchema, raw);
     const updated = teamStore.update(req);
-    if (!updated) throw new Error("专家团不存在");
+    if (!updated) throw uiError("errors.teamNotFound");
     return updated;
   });
 
@@ -457,7 +468,7 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
   ipcMain.handle("skill:update", (_evt, raw) => {
     const req = validate(skillUpdateRequestSchema, raw);
     const updated = skillStore.update(req);
-    if (!updated) throw new Error("技能不存在");
+    if (!updated) throw uiError("errors.skillNotFound");
     return updated;
   });
 
@@ -487,7 +498,7 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
   ipcMain.handle("connector:update", (_evt, raw) => {
     const req = validate(connectorUpdateRequestSchema, raw);
     const updated = connectorStore.update(req);
-    if (!updated) throw new Error("连接器不存在");
+    if (!updated) throw uiError("errors.connectorNotFound");
     return updated;
   });
 

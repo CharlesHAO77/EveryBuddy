@@ -6,6 +6,7 @@
  * 形态（url 先 fetch 转 base64，保证落盘可控）。fetch 可注入便于单测。
  */
 
+import { uiError } from "./errors";
 import { detectImageMimeType } from "./fileParser";
 
 export interface GenerateImageParams {
@@ -50,11 +51,15 @@ function detectMimeFromBytes(buf: Uint8Array): string {
 }
 
 /** 下载 URL 图片为 Buffer（生图响应为 url 形态时用） */
-async function fetchUrlBytes(url: string, fetchImpl: FetchLike, signal?: AbortSignal): Promise<Uint8Array> {
+async function fetchUrlBytes(
+  url: string,
+  fetchImpl: FetchLike,
+  signal?: AbortSignal,
+): Promise<Uint8Array> {
   const res = await fetchImpl(url, { signal });
   if (!res.ok) {
     const body = await res.text().catch(() => "");
-    throw new Error(`下载生图结果失败 ${res.status}: ${body.slice(0, 200)}`);
+    throw uiError("errors.imageDownloadFailed", { status: res.status, detail: body.slice(0, 200) });
   }
   const buf = await res.arrayBuffer();
   return new Uint8Array(buf);
@@ -88,7 +93,7 @@ export async function httpGenerateImage(
 
   if (!res.ok) {
     const body = await res.text().catch(() => "");
-    throw new Error(`图片生成接口返回 ${res.status}: ${body.slice(0, 500) || "未知错误"}`);
+    throw uiError("errors.imageStatusError", { status: res.status, detail: body.slice(0, 500) });
   }
 
   const json = (await res.json()) as {
@@ -97,7 +102,7 @@ export async function httpGenerateImage(
   };
   const items = json.data ?? [];
   if (items.length === 0) {
-    throw new Error("图片生成接口未返回图片数据");
+    throw uiError("errors.imageNoData");
   }
 
   const images: Array<{ data: string; mimeType: string }> = [];
@@ -114,7 +119,7 @@ export async function httpGenerateImage(
     }
   }
   if (images.length === 0) {
-    throw new Error("图片生成接口返回了空内容");
+    throw uiError("errors.imageEmpty");
   }
 
   return {

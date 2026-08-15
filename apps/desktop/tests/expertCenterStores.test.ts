@@ -84,14 +84,16 @@ describe("ExpertStore", () => {
     expect(store.getBuiltinMerged("coding")?.description).toBe("改描述");
     const fresh = store.reset("coding");
     expect(fresh.description).toBe("读取与修改代码、执行命令、完成开发任务");
-    expect(store.getBuiltinMerged("coding")?.description).toBe("读取与修改代码、执行命令、完成开发任务");
+    expect(store.getBuiltinMerged("coding")?.description).toBe(
+      "读取与修改代码、执行命令、完成开发任务",
+    );
     const custom = store.create({ name: "自定义" });
-    expect(() => store.reset(custom.id)).toThrow(/内置专家/);
+    expect(() => store.reset(custom.id)).toThrow(/errors\.expertResetBuiltinOnly/);
   });
 
   it("内置专家 delete 仍抛错", () => {
     const store = new ExpertStore(path.join(dir, "experts.json"));
-    expect(() => store.delete("coding")).toThrow(/内置专家/);
+    expect(() => store.delete("coding")).toThrow(/errors\.expertDeleteBuiltinOnly/);
   });
 
   it("delete 仅移除自定义", () => {
@@ -302,7 +304,7 @@ describe("ConnectorStore", () => {
     const c = store.create({ name: "mcp", type: "mcp", config: {} });
     const r = await store.test({ id: c.id });
     expect(r.status).toBe("error");
-    expect(r.message).toContain("command");
+    expect(r.message).toContain("errors.mcpCommandMissing");
   });
 
   it("test filesystem 按 rootDir 判定", async () => {

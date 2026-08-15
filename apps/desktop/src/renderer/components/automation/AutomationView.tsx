@@ -1,5 +1,7 @@
 import type { ScheduledTask } from "@everybuddy/ipc-contract";
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
+import i18n from "../../i18n";
 import { humanizeSchedule } from "../../scheduleUtils";
 import { useAutomationStore } from "../../stores/automationStore";
 import { ConfirmDialog } from "../ConfirmDialog";
@@ -21,6 +23,7 @@ const sectionLabel =
   "flex items-center gap-[8px] text-[12px] font-semibold tracking-[0.08em] text-ink-2";
 
 export function AutomationView() {
+  const { t } = useTranslation();
   const tasks = useAutomationStore((s) => s.tasks);
   const loaded = useAutomationStore((s) => s.loaded);
   const loadTasks = useAutomationStore((s) => s.loadTasks);
@@ -77,14 +80,14 @@ export function AutomationView() {
           isWin ? "pr-[160px]" : "pr-[16px]"
         } ${isWin || isMac ? "titlebar-drag" : ""}`}
       >
-        <h1 className="text-[20px] font-bold text-ink">自动化</h1>
+        <h1 className="text-[20px] font-bold text-ink">{t("automation.title")}</h1>
         <span className="rounded-full border border-accent-line bg-accent-tint px-[8px] py-[1px] text-[11px] font-semibold text-accent-strong">
           {tasks.length}
         </span>
         <div className="flex-1" />
         <button type="button" onClick={openCreate} className={`${btnPrimary} titlebar-no-drag`}>
           <IconPlus size={15} />
-          新建自动化
+          {t("automation.new")}
         </button>
       </div>
 
@@ -94,7 +97,7 @@ export function AutomationView() {
         <div className="flex w-[300px] shrink-0 flex-col border-r border-line bg-paper">
           <div className={`${sectionLabel} px-[16px] pb-[8px] pt-[14px]`}>
             <IconClock size={13} />
-            定时任务
+            {t("automation.scheduledTasks")}
             <span className="rounded-full border border-accent-line bg-accent-tint px-[7px] text-[11px] font-semibold text-accent-strong">
               {tasks.length}
             </span>
@@ -106,15 +109,17 @@ export function AutomationView() {
                 <div className="flex h-[44px] w-[44px] items-center justify-center rounded-m bg-accent-tint text-accent">
                   <IconClock size={22} />
                 </div>
-                <div className="text-[14px] font-semibold text-ink">还没有自动化任务</div>
+                <div className="text-[14px] font-semibold text-ink">
+                  {t("automation.emptyTitle")}
+                </div>
                 <div className="text-[12.5px] leading-[1.6] text-ink-3">
-                  设置一条定时任务，EveryBuddy 会到点自动为你运行提示词，
+                  {t("automation.emptyDesc1")}
                   <br />
-                  结果沉淀在运行历史里。
+                  {t("automation.emptyDesc2")}
                 </div>
                 <button type="button" onClick={openCreate} className={`${btnPrimary} mt-[4px]`}>
                   <IconPlus size={15} />
-                  新建自动化
+                  {t("automation.new")}
                 </button>
               </div>
             ) : (
@@ -145,7 +150,7 @@ export function AutomationView() {
             <>
               <div className="pt-[10px]">
                 <div className="flex flex-wrap items-center gap-[10px] text-[19px] font-bold text-ink">
-                  {selected.title || "未命名任务"}
+                  {selected.title || t("automation.unnamedTask")}
                   <span
                     className={`flex shrink-0 items-center gap-[4px] rounded-full border px-[8px] text-[11px] font-semibold ${
                       selected.enabled
@@ -154,20 +159,26 @@ export function AutomationView() {
                     }`}
                   >
                     <span className="h-[6px] w-[6px] rounded-full bg-current" />
-                    {selected.enabled ? "启用" : "已暂停"}
+                    {selected.enabled ? t("automation.enabled") : t("automation.paused")}
                   </span>
                 </div>
                 <div className="mt-[6px] flex items-center gap-[6px] text-[13px] text-ink-2">
                   <IconClock size={14} />
-                  {humanizeSchedule(selected.spec)} ·{" "}
-                  {selected.mode === "coding" ? "代码模式" : "日常模式"}
+                  {humanizeSchedule(selected.spec, t)} ·{" "}
+                  {selected.mode === "coding"
+                    ? t("automation.mode.coding")
+                    : t("automation.mode.daily")}
                 </div>
                 <div className="mt-[4px] text-[12px] text-ink-3">
                   {selected.lastRunAt
-                    ? `上次运行 ${new Date(selected.lastRunAt).toLocaleString("zh-CN")}`
-                    : "尚未运行"}
+                    ? t("automation.lastRunAt", {
+                        time: new Date(selected.lastRunAt).toLocaleString(i18n.language),
+                      })
+                    : t("automation.neverRun")}
                   {selected.nextRunAt
-                    ? ` · 下次运行 ${new Date(selected.nextRunAt).toLocaleString("zh-CN")}`
+                    ? t("automation.nextRunAt", {
+                        time: new Date(selected.nextRunAt).toLocaleString(i18n.language),
+                      })
                     : ""}
                 </div>
               </div>
@@ -179,7 +190,7 @@ export function AutomationView() {
                   className={btnPrimary}
                 >
                   <IconZap size={14} />
-                  立即执行
+                  {t("automation.runNow")}
                 </button>
                 <button
                   type="button"
@@ -189,29 +200,29 @@ export function AutomationView() {
                   }}
                   className={btnGhost}
                 >
-                  编辑
+                  {t("common.edit")}
                 </button>
                 <button
                   type="button"
                   onClick={() => void updateTask(selected.id, { enabled: !selected.enabled })}
                   className={btnGhost}
                 >
-                  {selected.enabled ? "暂停" : "恢复"}
+                  {selected.enabled ? t("automation.pause") : t("automation.resume")}
                 </button>
                 <button
                   type="button"
                   onClick={() => setConfirmDelete(selected)}
                   className={btnDanger}
                 >
-                  删除
+                  {t("common.delete")}
                 </button>
               </div>
 
               <div className="mt-[22px]">
                 <div className={`${sectionLabel} mb-[8px]`}>
-                  运行历史
+                  {t("automation.runHistory")}
                   <span className="text-[11px] font-normal tracking-normal text-ink-3">
-                    点击条目展开结果
+                    {t("automation.expandHint")}
                   </span>
                 </div>
                 <RunHistoryList taskId={selected.id} />
@@ -219,7 +230,7 @@ export function AutomationView() {
             </>
           ) : (
             <div className="pt-[60px] text-center text-[14px] text-ink-3">
-              选择左侧一条自动化任务，查看它的调度信息与运行历史。
+              {t("automation.selectHint")}
             </div>
           )}
         </div>
@@ -229,9 +240,9 @@ export function AutomationView() {
       {confirmDelete && (
         <ConfirmDialog
           open
-          title="删除自动化"
-          description={`将删除任务「${confirmDelete.title}」及其全部运行历史。\n此操作不可恢复。`}
-          confirmLabel="删除"
+          title={t("automation.deleteTitle")}
+          description={t("automation.deleteDesc", { title: confirmDelete.title })}
+          confirmLabel="common.delete"
           loading={deleteLoading}
           onConfirm={() => void handleDelete()}
           onCancel={() => setConfirmDelete(null)}

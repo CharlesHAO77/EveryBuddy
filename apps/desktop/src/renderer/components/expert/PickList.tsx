@@ -7,6 +7,7 @@
 
 import type { ExpertCatalog, ExpertCatalogExtension } from "@everybuddy/ipc-contract";
 import { useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { IconCheck } from "./icons";
 import { ChipRemovable } from "./ui";
 
@@ -103,6 +104,7 @@ export function ToolMultiSelect({
   catalog: ExpertCatalog;
   mcpTools: string[];
 }) {
+  const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState("");
   const [filter, setFilter] = useState("");
@@ -139,7 +141,7 @@ export function ToolMultiSelect({
           onClick={() => setOpen((v) => !v)}
           className="rounded-full border border-dashed border-line-strong px-[12px] py-[4px] text-[13px] text-ink-3 transition hover:border-accent-line hover:text-accent"
         >
-          添加工具
+          {t("picklist.addTools")}
         </button>
       </div>
       {open ? (
@@ -148,14 +150,14 @@ export function ToolMultiSelect({
             <input
               value={filter}
               onChange={(e) => setFilter(e.target.value)}
-              placeholder="搜索工具…"
+              placeholder={t("picklist.searchTools")}
               className={searchInputCls}
             />
           </div>
           <div className="max-h-[280px] overflow-y-auto p-[4px]">
             {platformTools.length > 0 ? (
               <>
-                <GroupLabel>平台工具</GroupLabel>
+                <GroupLabel>{t("picklist.platformTools")}</GroupLabel>
                 {platformTools.map((t) => (
                   <PickItem
                     key={t.name}
@@ -169,12 +171,12 @@ export function ToolMultiSelect({
             ) : null}
             {mcpList.length > 0 ? (
               <>
-                <GroupLabel>已连接 MCP 工具</GroupLabel>
+                <GroupLabel>{t("picklist.mcpTools")}</GroupLabel>
                 {mcpList.map((n) => (
                   <PickItem
                     key={n}
                     name={n}
-                    desc="MCP 工具"
+                    desc={t("picklist.mcpToolDesc")}
                     on={value.includes(n)}
                     onClick={() => toggle(n)}
                   />
@@ -183,14 +185,22 @@ export function ToolMultiSelect({
             ) : null}
             {custom.length > 0 ? (
               <>
-                <GroupLabel>自定义</GroupLabel>
+                <GroupLabel>{t("expert.filter.custom")}</GroupLabel>
                 {custom.map((n) => (
-                  <PickItem key={n} name={n} desc="自定义" on onClick={() => toggle(n)} />
+                  <PickItem
+                    key={n}
+                    name={n}
+                    desc={t("expert.filter.custom")}
+                    on
+                    onClick={() => toggle(n)}
+                  />
                 ))}
               </>
             ) : null}
             {platformTools.length === 0 && mcpList.length === 0 ? (
-              <div className="px-[12px] py-[10px] text-[13px] text-ink-3">无匹配</div>
+              <div className="px-[12px] py-[10px] text-[13px] text-ink-3">
+                {t("plusMenu.noMatch")}
+              </div>
             ) : null}
           </div>
           <div className="flex items-center gap-[8px] border-t border-line bg-paper px-[12px] py-[8px]">
@@ -203,7 +213,7 @@ export function ToolMultiSelect({
                   addDraft();
                 }
               }}
-              placeholder="手动输入工具名…"
+              placeholder={t("picklist.manualToolPlaceholder")}
               className={footerInputCls}
             />
             <button
@@ -211,7 +221,7 @@ export function ToolMultiSelect({
               onClick={addDraft}
               className="shrink-0 rounded-full bg-accent px-[12px] py-[5px] text-[13px] font-semibold text-white transition hover:bg-accent-strong"
             >
-              添加
+              {t("picklist.add")}
             </button>
           </div>
         </div>
@@ -230,6 +240,7 @@ export function ExtensionMultiSelect({
   onChange: (v: string[]) => void;
   options: ExpertCatalogExtension[];
 }) {
+  const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState("");
   const [filter, setFilter] = useState("");
@@ -263,7 +274,7 @@ export function ExtensionMultiSelect({
           onClick={() => setOpen((v) => !v)}
           className="rounded-full border border-dashed border-line-strong px-[12px] py-[4px] text-[13px] text-ink-3 transition hover:border-accent-line hover:text-accent"
         >
-          添加扩展
+          {t("picklist.addExtensions")}
         </button>
       </div>
       {open ? (
@@ -272,19 +283,19 @@ export function ExtensionMultiSelect({
             <input
               value={filter}
               onChange={(e) => setFilter(e.target.value)}
-              placeholder="搜索扩展…"
+              placeholder={t("picklist.searchExtensions")}
               className={searchInputCls}
             />
           </div>
           <div className="max-h-[280px] overflow-y-auto p-[4px]">
-            <GroupLabel>扩展目录</GroupLabel>
+            <GroupLabel>{t("picklist.extensionCatalog")}</GroupLabel>
             {filteredOptions.map((o) =>
               o.alwaysOn ? (
                 <PickItem
                   key={o.name}
                   name={o.name}
                   desc={o.description}
-                  badge="恒启用"
+                  badge={t("picklist.alwaysOn")}
                   on
                   disabled
                   onClick={() => {}}
@@ -301,14 +312,22 @@ export function ExtensionMultiSelect({
             )}
             {custom.length > 0 ? (
               <>
-                <GroupLabel>自定义</GroupLabel>
+                <GroupLabel>{t("expert.filter.custom")}</GroupLabel>
                 {custom.map((n) => (
-                  <PickItem key={n} name={n} desc="自定义" on onClick={() => toggle(n)} />
+                  <PickItem
+                    key={n}
+                    name={n}
+                    desc={t("expert.filter.custom")}
+                    on
+                    onClick={() => toggle(n)}
+                  />
                 ))}
               </>
             ) : null}
             {filteredOptions.length === 0 ? (
-              <div className="px-[12px] py-[10px] text-[13px] text-ink-3">无匹配</div>
+              <div className="px-[12px] py-[10px] text-[13px] text-ink-3">
+                {t("plusMenu.noMatch")}
+              </div>
             ) : null}
           </div>
           <div className="flex items-center gap-[8px] border-t border-line bg-paper px-[12px] py-[8px]">
@@ -321,7 +340,7 @@ export function ExtensionMultiSelect({
                   addDraft();
                 }
               }}
-              placeholder="手动输入扩展名…"
+              placeholder={t("picklist.manualExtensionPlaceholder")}
               className={footerInputCls}
             />
             <button
@@ -329,7 +348,7 @@ export function ExtensionMultiSelect({
               onClick={addDraft}
               className="shrink-0 rounded-full bg-accent px-[12px] py-[5px] text-[13px] font-semibold text-white transition hover:bg-accent-strong"
             >
-              添加
+              {t("picklist.add")}
             </button>
           </div>
         </div>

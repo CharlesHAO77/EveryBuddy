@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { IconMoreVertical } from "./icons";
 
 export interface MenuItem {
@@ -19,6 +20,7 @@ interface ActionMenuProps {
  * 注意：依赖父级行元素的 `group` class 实现 hover 出现。
  */
 export function ActionMenu({ items }: ActionMenuProps) {
+  const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   const [dropUp, setDropUp] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -59,7 +61,7 @@ export function ActionMenu({ items }: ActionMenuProps) {
     <div ref={containerRef} className="relative shrink-0">
       <button
         type="button"
-        aria-label="更多操作"
+        aria-label={t("common.moreActions")}
         onClick={handleTriggerClick}
         onMouseDown={(e) => e.stopPropagation()}
         className={`flex h-[20px] w-[20px] items-center justify-center rounded-s text-ink-3 transition hover:bg-active ${
@@ -70,7 +72,7 @@ export function ActionMenu({ items }: ActionMenuProps) {
           if (e.key === "Enter" || e.key === " ") e.stopPropagation();
         }}
       >
-        <IconMoreVertical size={14} title="更多操作" />
+        <IconMoreVertical size={14} title={t("common.moreActions")} />
       </button>
 
       {open && (
@@ -94,7 +96,7 @@ export function ActionMenu({ items }: ActionMenuProps) {
                 item.danger ? "text-danger hover:bg-danger/10" : "text-ink-2 hover:bg-hover"
               }`}
             >
-              {item.label}
+              {t(item.label)}
             </button>
           ))}
         </div>

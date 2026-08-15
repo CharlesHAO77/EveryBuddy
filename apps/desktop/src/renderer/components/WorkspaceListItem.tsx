@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { useTranslation } from "react-i18next";
 import { ActionMenu } from "./ActionMenu";
 import { IconChevronDown, IconFolder } from "./icons";
 
@@ -25,6 +26,7 @@ export function WorkspaceListItem({
   onOpenDir,
   children,
 }: WorkspaceListItemProps) {
+  const { t } = useTranslation();
   return (
     <div>
       {/* biome-ignore lint/a11y/useSemanticElements: 行内含 ⋯ 按钮等嵌套交互元素，无法用 button */}
@@ -37,12 +39,12 @@ export function WorkspaceListItem({
         }}
         className="group flex h-[30px] w-full cursor-pointer items-center gap-[8px] rounded-s px-[10px] text-[14px] text-ink-2 transition hover:bg-hover"
       >
-        <IconFolder title="空间" className="shrink-0 text-ink-2" />
+        <IconFolder title={t("sidebar.spaceItem")} className="shrink-0 text-ink-2" />
         <span className="flex-1 truncate text-left">{name}</span>
         <ActionMenu
           items={[
-            { label: "打开所在目录", onSelect: onOpenDir },
-            { label: "移除空间", danger: true, onSelect: onRemoveRequest },
+            { label: "task.openDir", onSelect: onOpenDir },
+            { label: "confirm.removeWorkspace", danger: true, onSelect: onRemoveRequest },
           ]}
         />
         {/* chevron hover 时让位给 ⋯ 按钮 */}
@@ -50,7 +52,7 @@ export function WorkspaceListItem({
           <IconChevronDown
             size={12}
             strokeWidth={2}
-            title={open ? "折叠" : "展开"}
+            title={open ? t("common.collapse") : t("common.expand")}
             className={`shrink-0 transition-transform ${open ? "rotate-180" : ""}`}
           />
         </span>

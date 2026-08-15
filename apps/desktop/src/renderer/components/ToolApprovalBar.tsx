@@ -5,6 +5,7 @@
  * 勾选与允许/拒绝。应答经 agent:approveTool 恢复主进程中被暂停的工具调用。
  */
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { useSessionStore } from "../stores/sessionStore";
 import { IconCheck, IconShield } from "./icons";
 
@@ -22,6 +23,7 @@ function formatArgs(args: unknown): string {
 }
 
 export function ToolApprovalBar({ taskId }: { taskId: string }) {
+  const { t } = useTranslation();
   // 注意：selector 不能 `?? []` 兜底——每次调用都新建数组引用会让 useSyncExternalStore 判定快照变化而无限重渲染。
   // 直接取 undefined（稳定值），组件内再兜底。
   const approvals = useSessionStore((s) => s.pendingApprovals[taskId]);
@@ -58,7 +60,7 @@ export function ToolApprovalBar({ taskId }: { taskId: string }) {
             <IconShield size={11} />
             {a.toolName}
           </span>
-          <span className="text-[11px] text-ink-3">命令执行 · 手动批准模式</span>
+          <span className="text-[11px] text-ink-3">{t("tool.manualApprovalNote")}</span>
         </div>
         <pre className="mt-1 max-h-[72px] overflow-auto whitespace-pre-wrap break-all font-mono text-[12px] leading-relaxed text-ink-2">
           {formatArgs(a.args)}
@@ -78,7 +80,7 @@ export function ToolApprovalBar({ taskId }: { taskId: string }) {
           >
             {always && <IconCheck size={10} strokeWidth={3} />}
           </span>
-          本会话总是允许
+          {t("tool.alwaysAllow")}
         </button>
         <div className="flex gap-2">
           <button
@@ -86,14 +88,14 @@ export function ToolApprovalBar({ taskId }: { taskId: string }) {
             onClick={() => answer(false)}
             className="rounded-s border border-line-strong bg-card px-3 py-1.5 text-[12.5px] font-semibold text-danger transition hover:border-danger"
           >
-            拒绝
+            {t("common.reject")}
           </button>
           <button
             type="button"
             onClick={() => answer(true)}
             className="rounded-s bg-accent px-3 py-1.5 text-[12.5px] font-semibold text-white transition hover:bg-accent-strong"
           >
-            允许
+            {t("common.allow")}
           </button>
         </div>
       </div>

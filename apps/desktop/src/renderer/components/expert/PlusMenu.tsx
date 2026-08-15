@@ -11,6 +11,7 @@
 
 import type { Expert, ExpertTeam } from "@everybuddy/ipc-contract";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { useExpertCenterStore } from "../../stores/expertCenterStore";
 import { IconChevronRight, IconFile, IconPlus, IconSearch, IconSparkles, IconX } from "../icons";
 import { IconUsers } from "./icons";
@@ -19,9 +20,9 @@ import { expertIcon } from "./ui";
 type Submenu = "experts" | "teams" | "skills" | null;
 
 const SUB_LABEL: Record<Exclude<Submenu, null>, string> = {
-  experts: "选择专家",
-  teams: "选择专家团",
-  skills: "选择技能（/调用）",
+  experts: "plusMenu.experts",
+  teams: "plusMenu.teams",
+  skills: "plusMenu.skills",
 };
 
 export function PlusMenu({
@@ -39,6 +40,7 @@ export function PlusMenu({
   onAddAttachment: () => void;
   onSelectSkill: (name: string) => void;
 }) {
+  const { t } = useTranslation();
   const experts = useExpertCenterStore((s) => s.experts);
   const teams = useExpertCenterStore((s) => s.teams);
   const skills = useExpertCenterStore((s) => s.skills);
@@ -146,7 +148,7 @@ export function PlusMenu({
       <button
         type="button"
         onClick={toggleOpen}
-        title="选择专家 / 专家团 / 技能，或添加附件"
+        title={t("plusMenu.triggerTitle")}
         className="flex h-[28px] w-[28px] items-center justify-center rounded-s text-accent transition hover:bg-hover hover:text-accent-strong"
       >
         <IconPlus />
@@ -157,7 +159,7 @@ export function PlusMenu({
           <button
             type="button"
             onClick={toggleOpen}
-            title="点击更换专家"
+            title={t("plusMenu.switchExpert")}
             className="flex h-full items-center gap-[6px] pl-[6px] pr-[2px] transition hover:bg-accent-line/40"
           >
             <span className="flex h-[16px] w-[16px] items-center justify-center rounded-[5px] bg-white text-accent">
@@ -168,7 +170,7 @@ export function PlusMenu({
           <button
             type="button"
             onClick={onClearExpert}
-            title="清除，回到当前 tab 内置助手"
+            title={t("plusMenu.clearExpert")}
             className="flex h-full items-center px-[5px] text-accent opacity-60 transition hover:opacity-100"
           >
             <IconX size={12} />
@@ -189,7 +191,7 @@ export function PlusMenu({
             className="w-[150px] shrink-0 overflow-hidden rounded-[12px] border border-line bg-card py-[6px] shadow-pop"
           >
             <div className="px-[14px] pb-[4px] pt-[2px] text-[11px] font-semibold tracking-[0.05em] text-ink-3">
-              添加
+              {t("plusMenu.add")}
             </div>
             <button
               type="button"
@@ -199,7 +201,7 @@ export function PlusMenu({
               <span className="flex h-[20px] w-[20px] items-center justify-center rounded-[6px] bg-accent-tint text-accent">
                 <IconSparkles size={13} />
               </span>
-              <span className="flex-1">专家</span>
+              <span className="flex-1">{t("expert.tab.expert")}</span>
               <IconChevronRight size={11} className="opacity-60" />
             </button>
             <button
@@ -210,7 +212,7 @@ export function PlusMenu({
               <span className="flex h-[20px] w-[20px] items-center justify-center rounded-[6px] bg-hover text-ink-2">
                 <IconUsers size={13} />
               </span>
-              <span className="flex-1">专家团</span>
+              <span className="flex-1">{t("expert.tab.team")}</span>
               <IconChevronRight size={11} className="opacity-60" />
             </button>
             <button
@@ -221,7 +223,7 @@ export function PlusMenu({
               <span className="flex h-[20px] w-[20px] items-center justify-center rounded-[6px] bg-warn-tint text-warn">
                 <IconSparkles size={13} />
               </span>
-              <span className="flex-1">技能</span>
+              <span className="flex-1">{t("expert.tab.skill")}</span>
               <IconChevronRight size={11} className="opacity-60" />
             </button>
             <button
@@ -235,7 +237,7 @@ export function PlusMenu({
               <span className="flex h-[20px] w-[20px] items-center justify-center rounded-[6px] bg-hover text-ink-2">
                 <IconFile size={13} />
               </span>
-              <span className="flex-1">附件</span>
+              <span className="flex-1">{t("plusMenu.attachment")}</span>
             </button>
           </div>
 
@@ -247,15 +249,17 @@ export function PlusMenu({
             >
               <div className="flex shrink-0 items-center justify-between border-b border-line px-[12px] py-[7px]">
                 <span className="text-[11px] font-semibold tracking-[0.05em] text-ink-3">
-                  {SUB_LABEL[submenu]}
+                  {t(SUB_LABEL[submenu])}
                 </span>
                 <span className="text-[11px] text-ink-3">
-                  {submenu === "experts"
-                    ? experts.length
-                    : submenu === "teams"
-                      ? teams.length
-                      : enabledSkills.length}{" "}
-                  项
+                  {t("plusMenu.itemCount", {
+                    num:
+                      submenu === "experts"
+                        ? experts.length
+                        : submenu === "teams"
+                          ? teams.length
+                          : enabledSkills.length,
+                  })}
                 </span>
               </div>
               {!emptyBase ? (
@@ -265,7 +269,7 @@ export function PlusMenu({
                     <input
                       value={search}
                       onChange={(e) => setSearch(e.target.value)}
-                      placeholder="搜索…"
+                      placeholder={t("plusMenu.searchPlaceholder")}
                       className="w-full bg-transparent text-[13px] text-ink outline-none placeholder:text-ink-3"
                     />
                   </div>
@@ -274,7 +278,7 @@ export function PlusMenu({
               <div className="min-h-0 flex-1 overflow-y-auto py-[4px]">
                 {emptyBase ? (
                   <div className="px-[14px] py-[10px] text-[13px] text-ink-3">
-                    {submenu === "teams" ? "暂无专家团" : "暂无可用技能"}
+                    {submenu === "teams" ? t("plusMenu.noTeams") : t("plusMenu.noSkills")}
                   </div>
                 ) : (submenu === "experts"
                     ? filteredExperts
@@ -282,7 +286,9 @@ export function PlusMenu({
                       ? filteredTeams
                       : filteredSkills
                   ).length === 0 ? (
-                  <div className="px-[14px] py-[10px] text-[13px] text-ink-3">无匹配</div>
+                  <div className="px-[14px] py-[10px] text-[13px] text-ink-3">
+                    {t("plusMenu.noMatch")}
+                  </div>
                 ) : submenu === "experts" ? (
                   filteredExperts.map((e) => {
                     const isActive =
@@ -302,31 +308,35 @@ export function PlusMenu({
                         </span>
                         <span className="flex-1 truncate">{e.name}</span>
                         <span className="text-[11px] font-medium text-ink-3">
-                          {e.source === "builtin" ? "内置" : e.mode === "daily" ? "日常" : "开发"}
+                          {e.source === "builtin"
+                            ? t("expert.source.builtin")
+                            : e.mode === "daily"
+                              ? t("plusMenu.modeDaily")
+                              : t("plusMenu.modeCoding")}
                         </span>
                       </button>
                     );
                   })
                 ) : submenu === "teams" ? (
                   <>
-                    {filteredTeams.map((t) => (
+                    {filteredTeams.map((team) => (
                       <button
-                        key={t.id}
+                        key={team.id}
                         type="button"
-                        onClick={() => handleSelectTeam(t)}
+                        onClick={() => handleSelectTeam(team)}
                         className="flex w-full items-center gap-[9px] px-[12px] py-[8px] text-left text-[14px] text-ink transition hover:bg-hover"
                       >
                         <span className="flex h-[20px] w-[20px] shrink-0 items-center justify-center rounded-[6px] bg-hover text-ink-2">
                           <IconUsers size={13} />
                         </span>
-                        <span className="flex-1 truncate">{t.name}</span>
+                        <span className="flex-1 truncate">{team.name}</span>
                         <span className="text-[11px] font-medium text-ink-3">
-                          {t.expertIds.length} 人
+                          {t("expert.memberCount", { num: team.expertIds.length })}
                         </span>
                       </button>
                     ))}
                     <div className="px-[14px] pb-[2px] pt-[6px] text-[11px] text-ink-3">
-                      团队调度后续支持，当前以其首位成员为助手
+                      {t("plusMenu.teamNote")}
                     </div>
                   </>
                 ) : (

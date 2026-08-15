@@ -116,9 +116,18 @@ describe("type → capabilities", () => {
     saveProvider(GEN_REQ, paths);
     saveProvider(LLM_REQ, paths);
     const list = listProviders(paths);
-    expect(list.find((m) => m.id === "v1")?.capabilities).toEqual({ vision: true, imageGen: false });
-    expect(list.find((m) => m.id === "g1")?.capabilities).toEqual({ vision: false, imageGen: true });
-    expect(list.find((m) => m.id === "p1")?.capabilities).toEqual({ vision: false, imageGen: false });
+    expect(list.find((m) => m.id === "v1")?.capabilities).toEqual({
+      vision: true,
+      imageGen: false,
+    });
+    expect(list.find((m) => m.id === "g1")?.capabilities).toEqual({
+      vision: false,
+      imageGen: true,
+    });
+    expect(list.find((m) => m.id === "p1")?.capabilities).toEqual({
+      vision: false,
+      imageGen: false,
+    });
     expect(list.find((m) => m.id === "v1")?.type).toBe("vlm");
     expect(list.find((m) => m.id === "g1")?.type).toBe("image");
   });
@@ -155,7 +164,10 @@ describe("type → capabilities", () => {
     );
     const list = listProviders(paths);
     expect(list.find((m) => m.id === "old")?.type).toBe("llm");
-    expect(list.find((m) => m.id === "old")?.capabilities).toEqual({ vision: false, imageGen: false });
+    expect(list.find((m) => m.id === "old")?.capabilities).toEqual({
+      vision: false,
+      imageGen: false,
+    });
     expect(list.find((m) => m.id === "vision")?.type).toBe("vlm");
   });
 
@@ -261,7 +273,7 @@ describe("setActiveModel / 每类型激活模型", () => {
   });
 
   it("throws for unknown provider", () => {
-    expect(() => setActiveModel("ghost", paths)).toThrow("模型不存在");
+    expect(() => setActiveModel("ghost", paths)).toThrow("errors.modelNotFound");
   });
 
   it("saveProvider preserves active on upsert", () => {
@@ -327,7 +339,7 @@ describe("setApiKey / auth.json", () => {
   });
 
   it("throws for unknown provider", () => {
-    expect(() => setApiKey("ghost", "sk-x", paths)).toThrow("模型不存在");
+    expect(() => setApiKey("ghost", "sk-x", paths)).toThrow("errors.modelNotFound");
   });
 
   it("leaves no .tmp file behind after write", () => {

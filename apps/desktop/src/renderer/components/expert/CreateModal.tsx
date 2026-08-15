@@ -4,6 +4,7 @@
 
 import type { AgentMode, ConnectorType } from "@everybuddy/ipc-contract";
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { useExpertCenterStore } from "../../stores/expertCenterStore";
 import { ModalShell } from "./DetailModal";
 import { IconClose, IconPlus } from "./icons";
@@ -11,22 +12,23 @@ import { btnGhost, btnPrimary, Field, Select, TextArea, TextInput } from "./ui";
 
 type TabId = "expert" | "team" | "skill" | "connector";
 
-const TYPE_OPTIONS: Array<{ id: ConnectorType; label: string }> = [
-  { id: "mcp", label: "MCP Server" },
-  { id: "filesystem", label: "文件系统" },
-  { id: "http-api", label: "HTTP API" },
-  { id: "datasource", label: "数据源" },
-  { id: "custom", label: "自定义" },
+const TYPE_OPTIONS: Array<{ id: ConnectorType; labelKey: string }> = [
+  { id: "mcp", labelKey: "expert.connectorType.mcp" },
+  { id: "filesystem", labelKey: "expert.connectorType.filesystem" },
+  { id: "http-api", labelKey: "expert.connectorType.httpApi" },
+  { id: "datasource", labelKey: "expert.connectorType.datasource" },
+  { id: "custom", labelKey: "expert.connectorType.custom" },
 ];
 
 const TITLES: Record<TabId, string> = {
-  expert: "新建专家",
-  team: "新建专家团",
-  skill: "新建技能",
-  connector: "新建连接器",
+  expert: "expert.new.expert",
+  team: "expert.new.team",
+  skill: "expert.new.skill",
+  connector: "expert.new.connector",
 };
 
 export function CreateModal({ kind, onClose }: { kind: TabId; onClose: () => void }) {
+  const { t } = useTranslation();
   const store = useExpertCenterStore();
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
@@ -65,11 +67,9 @@ export function CreateModal({ kind, onClose }: { kind: TabId; onClose: () => voi
     <ModalShell onClose={onClose}>
       <div className="flex shrink-0 items-center gap-[14px] border-b border-line px-[24px] py-[20px]">
         <div className="min-w-0 flex-1">
-          <div className="text-[20px] font-bold text-ink">{TITLES[kind]}</div>
+          <div className="text-[20px] font-bold text-ink">{t(TITLES[kind])}</div>
           <div className="mt-[3px] text-[14px] text-ink-2">
-            {kind === "skill"
-              ? "技能 = 一个目录里的 SKILL.md（对齐 pi SDK Skill）"
-              : "填写基本信息，保存后出现在对应 tab"}
+            {kind === "skill" ? t("expert.create.skillSubtitle") : t("expert.create.basicSubtitle")}
           </div>
         </div>
         <button
@@ -82,47 +82,51 @@ export function CreateModal({ kind, onClose }: { kind: TabId; onClose: () => voi
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto px-[24px] py-[22px]">
-        <Field label={kind === "skill" ? "技能名（kebab-case，即目录名）" : "名称"}>
+        <Field
+          label={
+            kind === "skill" ? t("expert.create.skillNameLabel") : t("expert.create.nameLabel")
+          }
+        >
           <TextInput
             value={name}
             onChange={setName}
             placeholder={kind === "skill" ? "prd-writer" : undefined}
           />
         </Field>
-        <Field label="描述">
+        <Field label={t("expert.create.descriptionLabel")}>
           <TextArea value={description} onChange={setDescription} rows={2} />
         </Field>
         {kind === "expert" ? (
-          <Field label="基准模式">
+          <Field label={t("expert.create.modeLabel")}>
             <Select
               value={mode}
               onChange={(v) => setMode(v as AgentMode)}
               options={[
-                { value: "daily", label: "daily 日常办公" },
-                { value: "coding", label: "coding 代码开发" },
+                { value: "daily", label: t("expert.create.modeDaily") },
+                { value: "coding", label: t("expert.create.modeCoding") },
               ]}
             />
           </Field>
         ) : null}
         {kind === "connector" ? (
           <>
-            <Field label="类型">
+            <Field label={t("expert.create.typeLabel")}>
               <Select
                 value={type}
                 onChange={(v) => setType(v as ConnectorType)}
-                options={TYPE_OPTIONS.map((t) => ({ value: t.id, label: t.label }))}
+                options={TYPE_OPTIONS.map((o) => ({ value: o.id, label: t(o.labelKey) }))}
               />
             </Field>
             {type === "mcp" ? (
               <>
-                <Field label="传输方式">
+                <Field label={t("expert.create.transportLabel")}>
                   <div className="grid grid-cols-2 gap-[8px]">
                     {(
                       [
-                        ["stdio", "STDIO · 本地进程"],
-                        ["streamable-http", "Streamable HTTP · 远程"],
+                        ["stdio", "expert.create.transportStdio"],
+                        ["streamable-http", "expert.create.transportHttp"],
                       ] as const
-                    ).map(([id, label]) => (
+                    ).map(([id, labelKey]) => (
                       <button
                         key={id}
                         type="button"
@@ -133,7 +137,7 @@ export function CreateModal({ kind, onClose }: { kind: TabId; onClose: () => voi
                             : "border-line bg-card text-ink-2 hover:bg-hover"
                         }`}
                       >
-                        {label}
+                        {t(labelKey)}
                       </button>
                     ))}
                   </div>
@@ -148,8 +152,8 @@ export function CreateModal({ kind, onClose }: { kind: TabId; onClose: () => voi
                   </Field>
                 ) : (
                   <Field
-                    label="npm 包（托管安装到 ~/EveryBuddy/mcp-servers/）"
-                    hint="首次测试连接时自动 npm install，绕开 npx 漏装依赖问题。"
+                    label={t("expert.create.mcpPackageLabel")}
+                    hint={t("expert.create.mcpPackageHint")}
                   >
                     <TextInput
                       value={mcpPackage}
@@ -163,7 +167,10 @@ export function CreateModal({ kind, onClose }: { kind: TabId; onClose: () => voi
           </>
         ) : null}
         {kind === "skill" ? (
-          <Field label="SKILL.md 正文" hint="name/description 会写入 frontmatter，正文在下方。">
+          <Field
+            label={t("expert.create.skillContentLabel")}
+            hint={t("expert.create.skillContentHint")}
+          >
             <TextArea value={content} onChange={setContent} rows={9} mono />
           </Field>
         ) : null}
@@ -177,10 +184,10 @@ export function CreateModal({ kind, onClose }: { kind: TabId; onClose: () => voi
           className={`${btnPrimary} ${!name.trim() ? "cursor-not-allowed opacity-50" : ""}`}
         >
           <IconPlus size={16} />
-          创建
+          {t("common.create")}
         </button>
         <button type="button" onClick={onClose} className={btnGhost}>
-          取消
+          {t("common.cancel")}
         </button>
       </div>
     </ModalShell>

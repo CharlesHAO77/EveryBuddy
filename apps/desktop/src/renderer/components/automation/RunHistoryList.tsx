@@ -1,5 +1,8 @@
 import type { ScheduledRun } from "@everybuddy/ipc-contract";
+import type { TFunction } from "i18next";
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
+import { translateError } from "../../i18n/translateError";
 import { formatCost, formatDuration } from "../../scheduleUtils";
 import { useAutomationStore } from "../../stores/automationStore";
 import { IconChevronDown } from "../icons";
@@ -8,35 +11,53 @@ interface RunHistoryListProps {
   taskId: string;
 }
 
-function fmtTime(iso?: string): string {
+function fmtTime(iso: string | undefined, t: TFunction): string {
   if (!iso) return "";
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return "";
   const hhmm = `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
   const now = new Date();
-  if (d.toDateString() === now.toDateString()) return `今天 ${hhmm}`;
+  if (d.toDateString() === now.toDateString()) return t("time.todayAt", { time: hhmm });
   const yest = new Date(now);
   yest.setDate(now.getDate() - 1);
-  if (d.toDateString() === yest.toDateString()) return `昨天 ${hhmm}`;
-  return `${d.getMonth() + 1}月${d.getDate()}日 ${hhmm}`;
+  if (d.toDateString() === yest.toDateString()) return t("time.yesterdayAt", { time: hhmm });
+  return t("time.monthDayAt", {
+    month: d.getMonth() + 1,
+    day: d.getDate(),
+    time: hhmm,
+  });
 }
 
+/** status → 徽标配色（text 为 i18n key） */
 function statusStyle(status: ScheduledRun["status"]) {
   switch (status) {
     case "success":
-      return { dot: "bg-accent", label: "text-accent-strong", text: "成功" };
+      return {
+        dot: "bg-accent",
+        label: "text-accent-strong",
+        labelKey: "automation.status.success",
+      };
     case "failed":
-      return { dot: "bg-danger", label: "text-danger", text: "失败" };
+      return { dot: "bg-danger", label: "text-danger", labelKey: "automation.status.failed" };
     case "running":
-      return { dot: "bg-accent animate-pulse", label: "text-accent-strong", text: "运行中" };
+      return {
+        dot: "bg-accent animate-pulse",
+        label: "text-accent-strong",
+        labelKey: "automation.status.running",
+      };
     case "cancelled":
-      return { dot: "bg-danger", label: "text-danger-strong", text: "已取消" };
+      return {
+        dot: "bg-danger",
+        label: "text-danger-strong",
+        labelKey: "automation.status.cancelled",
+      };
     default:
-      return { dot: "bg-ink-3", label: "text-ink-3", text: "已跳过" };
+      return { dot: "bg-ink-3", label: "text-ink-3", labelKey: "automation.status.skipped" };
   }
 }
 
 export function RunHistoryList({ taskId }: RunHistoryListProps) {
+  const { t } = useTranslation();
   const runs = useAutomationStore((s) => s.runsByTask[taskId]);
   const loadRuns = useAutomationStore((s) => s.loadRuns);
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -51,7 +72,7 @@ export function RunHistoryList({ taskId }: RunHistoryListProps) {
   if (list.length === 0) {
     return (
       <div className="rounded-m border border-dashed border-line-strong py-[28px] text-center text-[13px] text-ink-3">
-        还没有运行记录，到点自动执行，或点击上方「立即执行」先跑一次。
+        {t("automation.noRuns")}
       </div>
     );
   }
@@ -80,16 +101,22 @@ export function RunHistoryList({ taskId }: RunHistoryListProps) {
           >
             <div className="flex items-center gap-[8px] px-[13px] py-[9px]">
               <span className={`h-[8px] w-[8px] shrink-0 rounded-full ${st.dot}`} />
-              <span className={`shrink-0 text-[11.5px] font-semibold ${st.label}`}>{st.text}</span>
+              <span className={`shrink-0 text-[11.5px] font-semibold ${st.label}`}>
+                {t(st.labelKey)}
+              </span>
               <span className="text-[12.5px] tabular-nums text-ink-2">
-                {fmtTime(run.startedAt)}
+                {fmtTime(run.startedAt, t)}
               </span>
               {run.status === "running" ? (
                 <span className="text-[11.5px] text-ink-3">
-                  {run.durationMs != null ? `已运行 ${formatDuration(run.durationMs)}` : "运行中…"}
+                  {run.durationMs != null
+                    ? t("automation.hasRunFor", { duration: formatDuration(run.durationMs, t) })
+                    : t("automation.runningElapsed")}
                 </span>
               ) : (
-                <span className="text-[11.5px] text-ink-3">{formatDuration(run.durationMs)}</span>
+                <span className="text-[11.5px] text-ink-3">
+                  {formatDuration(run.durationMs, t)}
+                </span>
               )}
               {run.status === "running" ? (
                 <span className="ml-auto inline-flex gap-[3px]">
@@ -118,7 +145,7 @@ export function RunHistoryList({ taskId }: RunHistoryListProps) {
                 ) : run.error ? (
                   <div className="flex items-start gap-[6px] rounded-s border border-danger/30 bg-danger/10 px-[11px] py-[8px] text-[12.5px] text-danger">
                     <span className="mt-[1px] text-[14px] leading-none">⚠</span>
-                    <span>{run.error}</span>
+                    <span>{translateError(run.error, t)}</span>
                   </div>
                 ) : null}
               </div>

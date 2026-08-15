@@ -4,6 +4,7 @@
  * 与其他消息卡片一样左对齐；默认折叠，点击标题展开压缩摘要（markdown，经 MarkdownText 渲染）。
  */
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { IconChevronDown, IconChevronRight, IconSparkles } from "./icons";
 import { MarkdownText } from "./MarkdownText";
 
@@ -13,6 +14,7 @@ interface CompactionNoticeCardProps {
 }
 
 export function CompactionNoticeCard({ summary }: CompactionNoticeCardProps) {
+  const { t } = useTranslation();
   const [expanded, setExpanded] = useState(false);
 
   return (
@@ -26,7 +28,7 @@ export function CompactionNoticeCard({ summary }: CompactionNoticeCardProps) {
           <span className="flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full bg-accent text-white">
             <IconSparkles size={10} strokeWidth={2.2} />
           </span>
-          <span className="text-[12px] font-bold text-accent-strong">上下文已压缩</span>
+          <span className="text-[12px] font-bold text-accent-strong">{t("chat.compacted")}</span>
           <span className="ml-auto flex items-center text-accent-strong">
             {expanded ? (
               <IconChevronDown size={11} strokeWidth={2.2} />

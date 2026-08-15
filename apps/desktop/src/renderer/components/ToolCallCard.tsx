@@ -2,7 +2,9 @@
  * ToolCallCard - 工具调用卡片（弱化，见 §0.4 / §6.6）。
  * 折叠态单行芯片：工具名 + 状态图标；展开态分节显示参数/输出/结果，各带复制按钮。
  */
+import type { TFunction } from "i18next";
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import type { ToolBlock } from "../stores/sessionStore";
 import { CopyButton } from "./CopyButton";
 import {
@@ -86,7 +88,7 @@ function extractResultBlocks(output: unknown): {
 }
 
 /** 工具结果复制文本：文本块逐条拼接、路径列出、图片只记数量（不复制兆字节 base64） */
-function serializeToolResultForCopy(output: unknown): string {
+function serializeToolResultForCopy(output: unknown, t: TFunction): string {
   const parsed = extractResultBlocks(output);
   if (!parsed) return safeStringify(output);
   const lines: string[] = [];
@@ -96,12 +98,13 @@ function serializeToolResultForCopy(output: unknown): string {
     if (b.type === "text") lines.push(b.text);
     else imageCount += 1;
   }
-  if (imageCount > 0) lines.push(`（含 ${imageCount} 张图片，图片数据未复制）`);
+  if (imageCount > 0) lines.push(t("tool.imageCopyNote", { count: imageCount }));
   return lines.join("\n");
 }
 
 /** 工具结果主体：图片块渲染 <img>，文本块渲染文本，其余回退 JSON */
 function ToolResultBody({ output }: { output: unknown }) {
+  const { t } = useTranslation();
   const parsed = extractResultBlocks(output);
   if (!parsed) {
     return (
@@ -129,7 +132,7 @@ function ToolResultBody({ output }: { output: unknown }) {
             <img
               key={key}
               src={`data:${b.mimeType ?? "image/png"};base64,${b.data}`}
-              alt="生成的图片"
+              alt={t("tool.generatedImage")}
               className="max-h-64 rounded-s border border-line bg-card"
             />
           );
@@ -155,16 +158,17 @@ function Section({ label, copyText }: { label: string; copyText: string }) {
 }
 
 export function ToolCallCard({ block }: ToolCallCardProps) {
+  const { t } = useTranslation();
   const [expanded, setExpanded] = useState(false);
-  const name = block.toolName || "工具";
+  const name = block.toolName || t("tool.defaultName");
   const statusLabel =
     block.status === "calling"
-      ? "调用中"
+      ? t("tool.status.calling")
       : block.status === "running"
-        ? "运行中"
+        ? t("tool.status.running")
         : block.status === "success"
-          ? "完成"
-          : "失败";
+          ? t("tool.status.success")
+          : t("tool.status.failed");
 
   return (
     <div>
@@ -192,7 +196,7 @@ export function ToolCallCard({ block }: ToolCallCardProps) {
           {(block.args !== undefined || block.argDelta) && (
             <div>
               <Section
-                label="参数"
+                label={t("tool.args")}
                 copyText={block.args !== undefined ? safeStringify(block.args) : block.argDelta}
               />
               <pre className="mt-0.5 overflow-x-auto rounded-s bg-hover px-2 py-1 text-[12px] text-ink-2">
@@ -204,7 +208,7 @@ export function ToolCallCard({ block }: ToolCallCardProps) {
           {/* 输出（bash 增量，终端样式） */}
           {block.outputDelta && (
             <div>
-              <Section label="输出" copyText={block.outputDelta} />
+              <Section label={t("tool.output")} copyText={block.outputDelta} />
               <pre className="mt-0.5 max-h-48 overflow-auto rounded-s bg-terminal px-2 py-1 text-[12px] leading-relaxed text-terminal-text">
                 {block.outputDelta}
               </pre>
@@ -214,7 +218,10 @@ export function ToolCallCard({ block }: ToolCallCardProps) {
           {/* 最终结果（结构化/图片渲染，可滚动） */}
           {!block.outputDelta && block.output !== undefined && block.output !== "" && (
             <div>
-              <Section label="结果" copyText={serializeToolResultForCopy(block.output)} />
+              <Section
+                label={t("tool.result")}
+                copyText={serializeToolResultForCopy(block.output, t)}
+              />
               <div className="mt-0.5 max-h-64 overflow-y-auto">
                 <ToolResultBody output={block.output} />
               </div>
@@ -224,7 +231,7 @@ export function ToolCallCard({ block }: ToolCallCardProps) {
           {/* 错误 */}
           {block.error && (
             <div>
-              <Section label="错误" copyText={block.error} />
+              <Section label={t("tool.error")} copyText={block.error} />
               <div className="mt-0.5 text-[12px] text-danger">{block.error}</div>
             </div>
           )}

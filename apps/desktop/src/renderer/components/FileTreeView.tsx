@@ -8,6 +8,8 @@
 
 import type { WorkspaceDirEntry } from "@everybuddy/ipc-contract";
 import { useCallback, useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
+import { translateError } from "../i18n/translateError";
 import { type PreviewItem, useSessionStore } from "../stores/sessionStore";
 import { useUIStore } from "../stores/uiStore";
 import { ActionMenu } from "./ActionMenu";
@@ -54,6 +56,7 @@ function DirContents({
   path: string;
   depth: number;
 }) {
+  const { t } = useTranslation();
   const [entries, setEntries] = useState<WorkspaceDirEntry[] | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -81,7 +84,7 @@ function DirContents({
         className="px-1.5 py-0.5 text-[11.5px] text-ink-3"
         style={{ paddingLeft: depth * 14 + 6 }}
       >
-        加载中…
+        {t("common.loading")}
       </div>
     );
   }
@@ -91,7 +94,7 @@ function DirContents({
         className="px-1.5 py-0.5 text-[11.5px] text-ink-3"
         style={{ paddingLeft: depth * 14 + 6 }}
       >
-        读取失败：{error}
+        {t("fileTree.readFailed", { message: translateError(error, t) })}
       </div>
     );
   }
@@ -102,7 +105,7 @@ function DirContents({
         className="px-1.5 py-0.5 text-[11.5px] text-ink-3"
         style={{ paddingLeft: depth * 14 + 6 }}
       >
-        {depth === 0 ? "文件为空" : "空目录"}
+        {depth === 0 ? t("fileTree.emptyFiles") : t("fileMention.emptyDir")}
       </div>
     );
   }
@@ -154,7 +157,7 @@ function FileNode({
       <ActionMenu
         items={[
           {
-            label: "打开所在目录",
+            label: "task.openDir",
             onSelect: () => void window.electronAPI.workspace.revealPath(entry.path),
           },
         ]}
@@ -199,7 +202,7 @@ function DirNode({
         <ActionMenu
           items={[
             {
-              label: "打开目录",
+              label: "fileTree.openDir",
               onSelect: () => void window.electronAPI.workspace.openDir(dirPath),
             },
           ]}
@@ -212,12 +215,13 @@ function DirNode({
 
 /** 文件树入口：当前任务工作空间目录（空间任务 -> workspacePath；临时任务 -> workDir） */
 export function FileTreeView() {
+  const { t } = useTranslation();
   const taskId = useSessionStore((s) => s.currentTaskId);
   const task = useSessionStore((s) => (taskId ? s.tasks.find((t) => t.id === taskId) : undefined));
   const rootPath = task?.workspacePath ?? task?.workDir;
 
   if (!taskId || !rootPath) {
-    return <Empty text="选择或新建对话查看工作空间文件" />;
+    return <Empty text={t("fileTree.emptySelectTask")} />;
   }
   return <DirContents key={rootPath} taskId={taskId} path={rootPath} depth={0} />;
 }

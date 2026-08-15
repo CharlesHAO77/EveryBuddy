@@ -16,6 +16,7 @@ import path from "node:path";
 import type { ReadFileResult, TaskMeta, Workspace } from "@everybuddy/ipc-contract";
 import { type BrowserWindow, dialog, shell } from "electron";
 import { APP_ROOT, configStore, WORK_SPACES_DIR } from "./configStore";
+import { uiError } from "./errors";
 import { detectImageMimeType } from "./fileParser";
 
 // 目录解析（datetime 命名 + 会话/工作目录拆分）迁至 sessionDirs.ts，此处重导出保持既有 import 不变
@@ -82,7 +83,7 @@ export async function revealInFolder(filePath: string): Promise<void> {
 export function getTaskCwd(task: TaskMeta): string {
   // 两者必有其一，缺失即异常（不做旧任务兜底——sessionDir 现在只存会话 JSONL，不再是 cwd）
   const cwd = task.workspacePath ?? task.workDir;
-  if (!cwd) throw new Error(`任务缺少工作目录: ${task.id}`);
+  if (!cwd) throw uiError("errors.taskMissingWorkDir", { id: task.id });
   return cwd;
 }
 

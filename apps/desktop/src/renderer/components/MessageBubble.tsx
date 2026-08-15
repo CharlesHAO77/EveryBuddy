@@ -2,7 +2,11 @@
  * MessageBubble - 用户消息与错误消息渲染（见 §0.4 / §6.3）。
  * 助手消息（一个 turn 内可能含多轮思考/文本/工具）由 AssistantGroup 合并渲染。
  */
+import type { TFunction } from "i18next";
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
+import i18n from "../i18n";
+import { translateError } from "../i18n/translateError";
 import type { ChatMessage, ContentBlock } from "../stores/sessionStore";
 import { formatFileSize } from "./AttachmentPreview";
 import { CompactionNoticeCard } from "./CompactionNoticeCard";
@@ -25,30 +29,37 @@ interface MessageBubbleProps {
   message: ChatMessage;
 }
 
-function formatTime(ts: number): string {
-  return new Date(ts).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" });
+function formatTime(ts: number, locale: string): string {
+  return new Date(ts).toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit" });
 }
 
 /** 按数量级格式化执行时长：秒 / 分秒 / 时分 */
-function formatDuration(ms: number): string {
+function formatDuration(ms: number, t: TFunction): string {
   if (ms <= 0) return "";
   const s = Math.round(ms / 1000);
-  if (s < 60) return `${s}秒`;
+  if (s < 60) return t("time.durSeconds", { count: s });
   const m = Math.floor(s / 60);
-  if (m < 60) return `${m}分${s % 60 ? `${s % 60}秒` : ""}`;
+  if (m < 60) {
+    const sec = s % 60;
+    return sec > 0
+      ? t("time.durMinutesSeconds", { m, s: sec })
+      : t("time.durMinutes", { count: m });
+  }
   const h = Math.floor(m / 60);
-  return `${h}小时${m % 60 ? `${m % 60}分` : ""}`;
+  const min = m % 60;
+  return min > 0 ? t("time.durHoursMinutes", { h, m: min }) : t("time.durHours", { count: h });
 }
 
 /** 用户消息 / 错误消息 */
 export function MessageBubble({ message }: MessageBubbleProps) {
-  const time = formatTime(message.timestamp);
+  const { t } = useTranslation();
+  const time = formatTime(message.timestamp, i18n.language);
   if (message.errorMessage) {
     return (
       <div className="flex justify-start">
         <div className="flex items-start gap-1.5 rounded-m border border-danger/30 bg-danger/5 px-4 py-2 text-[14px] text-danger">
           <IconAlertTriangle size={14} className="mt-[3px] shrink-0" />
-          <span>{message.errorMessage}</span>
+          <span>{translateError(message.errorMessage, t)}</span>
         </div>
       </div>
     );
@@ -82,7 +93,7 @@ export function MessageBubble({ message }: MessageBubbleProps) {
       {message.steerPending && (
         <span className="inline-flex items-center gap-1 rounded-full border border-[#ecd9a4] bg-[#fdf3d7] px-2 py-[1.5px] text-[11px] font-medium text-[#8a6d1f]">
           <span className="h-1 w-1 animate-pulse rounded-full bg-[#8a6d1f]" />
-          转向中
+          {t("chat.steering")}
         </span>
       )}
       <div className="pr-1 text-[11px] text-ink-3">{time}</div>
@@ -109,6 +120,7 @@ interface FlatBlock {
  * 流式过程中保持平铺实时反馈。时间戳在整条消息结束时显示一次。
  */
 export function AssistantGroup({ messages, taskId }: AssistantGroupProps) {
+  const { t } = useTranslation();
   const isStreaming = messages.some((m) => m.isStreaming);
   const [expanded, setExpanded] = useState(false);
   const first = messages[0];
@@ -169,7 +181,7 @@ export function AssistantGroup({ messages, taskId }: AssistantGroupProps) {
   // 执行时长：当前会话用 endedAt 精确；历史回放无 endedAt 时退化为末条 timestamp（近似）
   const endTs = lastMsg?.endedAt ?? lastMsg?.timestamp ?? first?.timestamp ?? 0;
   const durationMs = first ? endTs - first.timestamp : 0;
-  const durationLabel = formatDuration(durationMs);
+  const durationLabel = formatDuration(durationMs, t);
 
   const renderBlock = ({ block, key, streaming }: FlatBlock) => {
     if (block.kind === "notice") return <CompactionNoticeCard key={key} summary={block.content} />;
@@ -187,14 +199,14 @@ export function AssistantGroup({ messages, taskId }: AssistantGroupProps) {
         {redirected && !redirectCard && !isStreaming && (
           <span className="inline-flex w-fit items-center gap-1 rounded-full border border-[#ecd9a4] bg-[#fdf3d7] px-2.5 py-0.5 text-[12px] font-medium text-[#8a6d1f]">
             <IconRedirect size={10} />
-            任务已转向
+            {t("chat.redirected")}
           </span>
         )}
         {/* 已取消且无过程可折叠（首 token 前取消）：退化为危险色 pill + 平铺 */}
         {cancelled && !cancelCard && !isStreaming && (
           <span className="inline-flex w-fit items-center gap-1 rounded-full border border-danger/30 bg-danger/5 px-2.5 py-0.5 text-[12px] font-medium text-danger">
             <IconStop size={10} />
-            任务已取消
+            {t("chat.cancelled")}
           </span>
         )}
         {cancelCard ? (
@@ -208,14 +220,14 @@ export function AssistantGroup({ messages, taskId }: AssistantGroupProps) {
               <span className="flex h-[20px] w-[20px] shrink-0 items-center justify-center rounded-full bg-danger text-white shadow-sm">
                 <IconStop size={11} strokeWidth={3} />
               </span>
-              <span className="text-[12.5px] font-semibold text-danger">任务已取消</span>
+              <span className="text-[12.5px] font-semibold text-danger">{t("chat.cancelled")}</span>
               {durationLabel && (
                 <span className="rounded-full bg-hover px-2 py-[2px] text-[11px] font-medium text-ink-2 tabular-nums">
                   {durationLabel}
                 </span>
               )}
               <span className="ml-auto flex items-center gap-1 text-[11px] text-ink-3 transition group-hover:text-ink-2">
-                <span>{expanded ? "收起" : "详情"}</span>
+                <span>{expanded ? t("chat.collapse") : t("chat.details")}</span>
                 {expanded ? (
                   <IconChevronDown size={12} strokeWidth={2.5} />
                 ) : (
@@ -237,14 +249,16 @@ export function AssistantGroup({ messages, taskId }: AssistantGroupProps) {
               <span className="flex h-[20px] w-[20px] shrink-0 items-center justify-center rounded-full bg-[#8a6d1f] text-white shadow-sm">
                 <IconRedirect size={11} strokeWidth={2.5} />
               </span>
-              <span className="text-[12.5px] font-semibold text-[#8a6d1f]">任务已转向</span>
+              <span className="text-[12.5px] font-semibold text-[#8a6d1f]">
+                {t("chat.redirected")}
+              </span>
               {durationLabel && (
                 <span className="rounded-full bg-hover px-2 py-[2px] text-[11px] font-medium text-ink-2 tabular-nums">
                   {durationLabel}
                 </span>
               )}
               <span className="ml-auto flex items-center gap-1 text-[11px] text-ink-3 transition group-hover:text-ink-2">
-                <span>{expanded ? "收起" : "详情"}</span>
+                <span>{expanded ? t("chat.collapse") : t("chat.details")}</span>
                 {expanded ? (
                   <IconChevronDown size={12} strokeWidth={2.5} />
                 ) : (
@@ -266,14 +280,14 @@ export function AssistantGroup({ messages, taskId }: AssistantGroupProps) {
               <span className="flex h-[20px] w-[20px] shrink-0 items-center justify-center rounded-full bg-accent text-white shadow-sm">
                 <IconCheck size={11} strokeWidth={3.5} />
               </span>
-              <span className="text-[12.5px] font-semibold text-ink">任务已完成</span>
+              <span className="text-[12.5px] font-semibold text-ink">{t("chat.completed")}</span>
               {durationLabel && (
                 <span className="rounded-full bg-hover px-2 py-[2px] text-[11px] font-medium text-ink-2 tabular-nums">
                   {durationLabel}
                 </span>
               )}
               <span className="ml-auto flex items-center gap-1 text-[11px] text-ink-3 transition group-hover:text-ink-2">
-                <span>{expanded ? "收起" : "详情"}</span>
+                <span>{expanded ? t("chat.collapse") : t("chat.details")}</span>
                 {expanded ? (
                   <IconChevronDown size={12} strokeWidth={2.5} />
                 ) : (

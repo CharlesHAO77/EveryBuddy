@@ -21,6 +21,7 @@ import type {
   SaveModelRequest,
 } from "@everybuddy/ipc-contract";
 import { APP_ROOT, CONFIG_PATH } from "./configStore";
+import { uiError } from "./errors";
 
 export const MODELS_JSON_PATH = path.join(APP_ROOT, "models.json");
 export const AUTH_PATH = path.join(APP_ROOT, "auth.json");
@@ -181,8 +182,9 @@ export function saveProvider(req: SaveModelRequest, paths = DEFAULT_PATHS): Mode
 export function setActiveModel(id: string, paths = DEFAULT_PATHS): void {
   const providers = readProviders(paths);
   const entry = providers[id];
-  if (!entry) throw new Error(`模型不存在: ${id}`);
-  const type = entry.type ?? typeFromCapabilities(entry.capabilities ?? { ...DEFAULT_CAPABILITIES });
+  if (!entry) throw uiError("errors.modelNotFound", { id });
+  const type =
+    entry.type ?? typeFromCapabilities(entry.capabilities ?? { ...DEFAULT_CAPABILITIES });
   for (const [pid, p] of Object.entries(providers)) {
     const pType = p.type ?? typeFromCapabilities(p.capabilities ?? { ...DEFAULT_CAPABILITIES });
     if (pType === type) {
@@ -219,7 +221,7 @@ export function hasApiKey(providerId: string, paths = DEFAULT_PATHS): boolean {
 /** 写入密钥（未知 provider 抛错，与旧 configStore.setApiKey 语义一致） */
 export function setApiKey(providerId: string, apiKey: string, paths = DEFAULT_PATHS): void {
   if (!(providerId in readProviders(paths))) {
-    throw new Error(`模型不存在: ${providerId}`);
+    throw uiError("errors.modelNotFound", { id: providerId });
   }
   const entries = readAuth(paths);
   if (entries[providerId]?.key === apiKey) return; // 幂等
@@ -244,7 +246,8 @@ export function getProvider(id: string, paths = DEFAULT_PATHS): ProviderEntry | 
 export function isChatModelProviderId(id: string, paths = DEFAULT_PATHS): boolean {
   const entry = readProviders(paths)[id];
   if (!entry) return false;
-  const type = entry.type ?? typeFromCapabilities(entry.capabilities ?? { ...DEFAULT_CAPABILITIES });
+  const type =
+    entry.type ?? typeFromCapabilities(entry.capabilities ?? { ...DEFAULT_CAPABILITIES });
   return type !== "image";
 }
 

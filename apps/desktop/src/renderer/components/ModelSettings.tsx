@@ -7,15 +7,16 @@
 
 import type { ModelProviderConfig, ModelType, SaveModelRequest } from "@everybuddy/ipc-contract";
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { useUIStore } from "../stores/uiStore";
 import { IconTrash } from "./icons";
 
 const TYPE_LABELS: Record<ModelType, string> = { llm: "LLM", vlm: "VLM", image: "Image" };
 
-const GROUPS: Array<{ type: ModelType; label: string }> = [
-  { type: "llm", label: "LLM 模型" },
-  { type: "vlm", label: "VLM 模型" },
-  { type: "image", label: "Image 模型" },
+const GROUPS: Array<{ type: ModelType; labelKey: string }> = [
+  { type: "llm", labelKey: "model.group.llm" },
+  { type: "vlm", labelKey: "model.group.vlm" },
+  { type: "image", labelKey: "model.group.image" },
 ];
 
 /** 类型徽标配色：llm 中性，vlm/image accent-tint */
@@ -26,6 +27,7 @@ const typeBadge: Record<ModelType, string> = {
 };
 
 export function ModelSettings() {
+  const { t } = useTranslation();
   const models = useUIStore((s) => s.models);
   const saveModel = useUIStore((s) => s.saveModel);
   const removeModel = useUIStore((s) => s.removeModel);
@@ -81,15 +83,17 @@ export function ModelSettings() {
 
   return (
     <div className="mx-auto w-full max-w-3xl p-6">
-      <h2 className="text-[16px] font-semibold text-ink">模型设置</h2>
-      <p className="text-[12px] text-ink-3">支持 OpenAI 兼容格式的自定义模型，按类型分类管理</p>
+      <h2 className="text-[16px] font-semibold text-ink">{t("settings.models")}</h2>
+      <p className="text-[12px] text-ink-3">{t("model.subtitle")}</p>
 
       <div className="mt-6 flex flex-col gap-6">
         {GROUPS.map((g) => (
           <div key={g.type}>
             {/* 分组头 */}
             <div className="flex h-[30px] items-center gap-2">
-              <span className="text-[12px] font-semibold tracking-[0.08em] text-ink-3">{g.label}</span>
+              <span className="text-[12px] font-semibold tracking-[0.08em] text-ink-3">
+                {t(g.labelKey)}
+              </span>
               <span className="text-[12px] text-ink-3">
                 ({models.filter((m) => m.type === g.type).length})
               </span>
@@ -133,7 +137,7 @@ export function ModelSettings() {
                                   onClick={() => setActiveModel(m.id)}
                                   className="rounded-s px-2 py-1 text-[13px] font-semibold text-accent-strong transition hover:bg-accent-tint"
                                 >
-                                  设为激活
+                                  {t("model.setActive")}
                                 </button>
                               )}
                               <button
@@ -141,7 +145,7 @@ export function ModelSettings() {
                                 onClick={() => startEdit(m)}
                                 className="rounded-s px-2 py-1 text-[13px] text-ink-3 transition hover:bg-accent-tint hover:text-ink-2"
                               >
-                                编辑
+                                {t("common.edit")}
                               </button>
                               {models.length > 1 && (
                                 <button
@@ -149,7 +153,11 @@ export function ModelSettings() {
                                   onClick={() => removeModel(m.id)}
                                   className="rounded-s p-1 text-danger transition hover:bg-danger/10"
                                 >
-                                  <IconTrash size={13} strokeWidth={2} title="删除模型" />
+                                  <IconTrash
+                                    size={13}
+                                    strokeWidth={2}
+                                    title={t("model.deleteModel")}
+                                  />
                                 </button>
                               )}
                             </div>
@@ -158,11 +166,11 @@ export function ModelSettings() {
                           <div className="mt-2 flex items-center gap-2">
                             {m.hasApiKey ? (
                               <span className="rounded-full bg-accent-tint px-2 py-0.5 text-[11px] text-accent-strong">
-                                ✓ API Key 已配置
+                                {t("model.apiKeyConfigured")}
                               </span>
                             ) : (
                               <span className="rounded-full bg-hover px-2 py-0.5 text-[11px] text-ink-3">
-                                未配置 API Key
+                                {t("model.apiKeyNotConfigured")}
                               </span>
                             )}
                             <input
@@ -171,7 +179,11 @@ export function ModelSettings() {
                               onChange={(e) =>
                                 setApiKeyInput((prev) => ({ ...prev, [m.id]: e.target.value }))
                               }
-                              placeholder={m.hasApiKey ? "输入新 Key 替换" : "输入 API Key"}
+                              placeholder={
+                                m.hasApiKey
+                                  ? t("model.apiKeyReplace")
+                                  : t("model.apiKeyPlaceholder")
+                              }
                               className="flex-1 rounded-s border border-line bg-card px-2 py-1 text-[13px] text-ink focus:border-accent focus:outline-none"
                             />
                             <button
@@ -185,7 +197,7 @@ export function ModelSettings() {
                               disabled={!apiKeyInput[m.id]?.trim()}
                               className="rounded-full bg-accent px-2 py-1 text-[13px] font-semibold text-white transition hover:bg-accent-strong disabled:opacity-40"
                             >
-                              保存
+                              {t("common.save")}
                             </button>
                           </div>
                         </div>
@@ -202,7 +214,7 @@ export function ModelSettings() {
               disabled={editingId !== null}
               className="mt-2 w-full rounded-full border border-dashed border-accent-line py-2 text-[13px] font-semibold text-accent transition hover:bg-accent-tint disabled:cursor-not-allowed disabled:opacity-50"
             >
-              + 添加 {g.label}
+              + {t("model.add")} {t(g.labelKey)}
             </button>
             {editingId &&
               draft &&
@@ -214,9 +226,7 @@ export function ModelSettings() {
                     draft={draft}
                     apiKey={apiKeyInput[draft.id] ?? ""}
                     onDraftChange={setDraft}
-                    onApiKeyChange={(v) =>
-                      setApiKeyInput((prev) => ({ ...prev, [draft.id]: v }))
-                    }
+                    onApiKeyChange={(v) => setApiKeyInput((prev) => ({ ...prev, [draft.id]: v }))}
                     onSave={saveDraft}
                     onCancel={cancelEdit}
                   />
@@ -231,13 +241,14 @@ export function ModelSettings() {
 
 /** 卡片信息：名称 + 「激活」/类型/能力徽标 + model·baseUrl（image 卡片带「生图专用」提示） */
 function ModelInfo({ m, isActive }: { m: ModelProviderConfig; isActive: boolean }) {
+  const { t } = useTranslation();
   return (
     <div>
       <div className="flex flex-wrap items-center gap-2">
         <span className="font-semibold text-ink">{m.name}</span>
         {isActive && (
           <span className="rounded-full bg-accent px-2 py-0.5 text-[11px] font-semibold text-white">
-            激活
+            {t("model.active")}
           </span>
         )}
         <span className={`rounded-full px-2 py-0.5 text-[11px] ${typeBadge[m.type]}`}>
@@ -245,12 +256,12 @@ function ModelInfo({ m, isActive }: { m: ModelProviderConfig; isActive: boolean 
         </span>
         {m.capabilities?.vision && (
           <span className="rounded-full bg-accent-tint px-2 py-0.5 text-[11px] text-accent-strong">
-            视觉
+            {t("model.vision")}
           </span>
         )}
         {m.capabilities?.imageGen && (
           <span className="rounded-full bg-accent-tint px-2 py-0.5 text-[11px] text-accent-strong">
-            生图
+            {t("model.imageGen")}
           </span>
         )}
       </div>
@@ -258,7 +269,7 @@ function ModelInfo({ m, isActive }: { m: ModelProviderConfig; isActive: boolean 
         {m.model} · {m.baseUrl}
       </div>
       {m.type === "image" && (
-        <div className="mt-1 text-[11px] text-ink-3">生图专用，不可作为对话模型</div>
+        <div className="mt-1 text-[11px] text-ink-3">{t("model.imageOnlyNote")}</div>
       )}
     </div>
   );
@@ -284,6 +295,7 @@ function ModelForm({
   onSave,
   onCancel,
 }: ModelFormProps) {
+  const { t } = useTranslation();
   const field =
     "w-full rounded-s border border-line bg-card px-3 py-2 text-[14px] text-ink outline-none transition focus:border-accent";
   const label = "mb-1 block text-[12px] font-semibold text-ink-3";
@@ -292,14 +304,14 @@ function ModelForm({
     <div className="space-y-2.5">
       <div>
         <label htmlFor="model-name" className={label}>
-          显示名称
+          {t("model.displayName")}
         </label>
         <input
           id="model-name"
           className={field}
           value={draft.name}
           onChange={(e) => onDraftChange({ ...draft, name: e.target.value })}
-          placeholder="例如：SiliconFlow"
+          placeholder={t("model.nameExample")}
         />
       </div>
       <div>
@@ -336,7 +348,7 @@ function ModelForm({
           className={field}
           value={apiKey}
           onChange={(e) => onApiKeyChange(e.target.value)}
-          placeholder={mode === "edit" ? "留空则不修改 API Key" : "sk-...（可留空）"}
+          placeholder={mode === "edit" ? t("model.apiKeyEditHint") : t("model.apiKeyAddHint")}
         />
       </div>
 
@@ -346,14 +358,14 @@ function ModelForm({
           onClick={onCancel}
           className="rounded-s px-3 py-1.5 text-[13px] text-ink-3 transition hover:bg-accent-tint"
         >
-          取消
+          {t("common.cancel")}
         </button>
         <button
           type="button"
           onClick={onSave}
           className="rounded-full bg-accent px-3 py-1.5 text-[13px] font-semibold text-white transition hover:bg-accent-strong active:scale-95"
         >
-          保存
+          {t("common.save")}
         </button>
       </div>
     </div>

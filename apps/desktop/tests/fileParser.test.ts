@@ -186,7 +186,7 @@ describe("parseFileContent", () => {
     const p = write("evil.txt", Buffer.from([0x00, 0x01, 0x41, 0x42]));
     const { content } = await parseFileContent(p);
     expect(content[0]!.type).toBe("text");
-    expect((content[0] as { text: string }).text).toContain("二进制");
+    expect((content[0] as { text: string }).text).toContain("errors.binaryAsText");
   });
 
   it("图片：魔数识别 + base64 视觉内容（resizeImages:false 避免 CI worker）", async () => {

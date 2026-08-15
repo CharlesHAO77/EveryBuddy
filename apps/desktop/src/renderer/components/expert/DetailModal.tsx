@@ -7,6 +7,8 @@
 
 import type { Connector, Expert, ExpertTeam, SkillEntry } from "@everybuddy/ipc-contract";
 import { useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
+import { translateError } from "../../i18n/translateError";
 import { useExpertCenterStore } from "../../stores/expertCenterStore";
 import {
   IconBot,
@@ -171,6 +173,7 @@ function ExpertForm({
   onCopy: (id: string) => void;
   onClose: () => void;
 }) {
+  const { t } = useTranslation();
   const store = useExpertCenterStore();
   const builtin = expert.source === "builtin";
   const catalog = useExpertCenterStore((s) => s.catalog);
@@ -193,7 +196,9 @@ function ExpertForm({
   const [appendPrompt, setAppendPrompt] = useState(expert.appendSystemPrompt?.join("\n") ?? "");
   // 内置专家：初始为模式默认 ∪ 覆盖，保证列表「自动勾选」当前生效工具/扩展
   const [tools, setTools] = useState<string[]>(
-    builtin ? Array.from(new Set([...defaultTools, ...(expert.tools ?? [])])) : (expert.tools ?? []),
+    builtin
+      ? Array.from(new Set([...defaultTools, ...(expert.tools ?? [])]))
+      : (expert.tools ?? []),
   );
   const [extensions, setExtensions] = useState<string[]>(
     builtin
@@ -229,9 +234,7 @@ function ExpertForm({
         mode: expert.mode,
         // 内置专家：等于模式默认（未自定义）→ 空串/空数组清除覆盖，保持跟随模式默认
         systemPrompt:
-          builtin && systemPrompt.trim() === defaultPrompt.trim()
-            ? ""
-            : systemPrompt || undefined,
+          builtin && systemPrompt.trim() === defaultPrompt.trim() ? "" : systemPrompt || undefined,
         appendSystemPrompt: parseAppendLines(appendPrompt),
         tools: builtin && arraysEqual(tools, defaultTools) ? [] : tools,
         extensions: builtin && arraysEqual(extensions, defaultExts) ? [] : extensions,
@@ -262,7 +265,7 @@ function ExpertForm({
 
   const copyAsCustom = async () => {
     const created = await store.createExpert({
-      name: `${expert.name}（副本）`,
+      name: `${expert.name}${t("expert.copySuffix")}`,
       icon: expert.icon,
       description: expert.description,
       mode: expert.mode,
@@ -294,26 +297,26 @@ function ExpertForm({
         onClose={onClose}
       />
       <div className="min-h-0 flex-1 overflow-y-auto px-[24px] py-[22px]">
-        <Field label="名称">
+        <Field label={t("expert.form.nameLabel")}>
           <TextInput value={name} onChange={setName} disabled={builtin} />
         </Field>
-        <Field label="描述">
+        <Field label={t("expert.form.descriptionLabel")}>
           <TextArea value={description} onChange={setDescription} rows={2} />
         </Field>
         <Field
-          label="系统提示词（systemPrompt）"
+          label={t("expert.form.systemPromptLabel")}
           hint={
             builtin
-              ? "内置专家默认显示当前生效提示词（main/prompts builder）；修改并保存即自定义，『重置为默认』恢复。"
-              : "缺省由 main/prompts/*.ts builder 生成；留空 = 跟随模式默认。"
+              ? t("expert.form.systemPromptHintBuiltin")
+              : t("expert.form.systemPromptHintCustom")
           }
         >
           <TextArea value={effectivePrompt} onChange={setSystemPrompt} rows={6} mono />
         </Field>
-        <Field label="追加提示词（appendSystemPrompt）" hint="每行一条，追加在系统提示词末尾。">
+        <Field label={t("expert.form.appendPromptLabel")} hint={t("expert.form.appendPromptHint")}>
           <TextArea value={appendPrompt} onChange={setAppendPrompt} rows={2} />
         </Field>
-        <Field label="工具 allowlist 追加（tools）">
+        <Field label={t("expert.form.toolsLabel")}>
           {catalog ? (
             <ToolMultiSelect
               value={tools}
@@ -322,10 +325,14 @@ function ExpertForm({
               mcpTools={mcpToolNames}
             />
           ) : (
-            <EditableTags value={tools} onChange={setTools} placeholder="如 understand_image" />
+            <EditableTags
+              value={tools}
+              onChange={setTools}
+              placeholder={t("expert.form.toolExample")}
+            />
           )}
         </Field>
-        <Field label="启用的扩展（extensions）">
+        <Field label={t("expert.form.extensionsLabel")}>
           {catalog ? (
             <ExtensionMultiSelect
               value={extensions}
@@ -333,11 +340,15 @@ function ExpertForm({
               options={catalog.extensions}
             />
           ) : (
-            <EditableTags value={extensions} onChange={setExtensions} placeholder="如 plan-mode" />
+            <EditableTags
+              value={extensions}
+              onChange={setExtensions}
+              placeholder={t("expert.form.extExample")}
+            />
           )}
         </Field>
-        <Field label="标签" hint="预留命名空间：domain:* / capability:* / source:* / team:*">
-          <EditableTags value={tags} onChange={setTags} placeholder="domain:office" />
+        <Field label={t("expert.form.tagsLabel")} hint={t("expert.form.tagsHint")}>
+          <EditableTags value={tags} onChange={setTags} placeholder={t("expert.form.tagExample")} />
         </Field>
       </div>
       <ModalFoot>
@@ -350,7 +361,7 @@ function ExpertForm({
               className={btnGhost}
             >
               <IconPlus size={16} />
-              复制为自定义
+              {t("expert.form.copyAsCustom")}
             </button>
             <button
               type="button"
@@ -358,10 +369,15 @@ function ExpertForm({
               disabled={busy}
               className={btnGhost}
             >
-              重置为默认
+              {t("expert.form.resetToDefault")}
             </button>
-            <button type="button" onClick={() => void save()} disabled={busy} className={btnPrimary}>
-              保存
+            <button
+              type="button"
+              onClick={() => void save()}
+              disabled={busy}
+              className={btnPrimary}
+            >
+              {t("common.save")}
             </button>
           </>
         ) : (
@@ -372,15 +388,15 @@ function ExpertForm({
               disabled={busy}
               className={btnPrimary}
             >
-              保存
+              {t("common.save")}
             </button>
             <button type="button" onClick={() => void remove()} className={btnDanger}>
-              删除
+              {t("common.delete")}
             </button>
           </>
         )}
         <button type="button" onClick={onClose} className={btnGhost}>
-          关闭
+          {t("common.close")}
         </button>
       </ModalFoot>
     </>
@@ -390,6 +406,7 @@ function ExpertForm({
 /* ════════════ 专家团 ════════════ */
 
 function TeamForm({ team, onClose }: { team: ExpertTeam; onClose: () => void }) {
+  const { t } = useTranslation();
   const store = useExpertCenterStore();
   const [expertIds, setExpertIds] = useState<string[]>(team.expertIds);
   const [busy, setBusy] = useState(false);
@@ -415,11 +432,14 @@ function TeamForm({ team, onClose }: { team: ExpertTeam; onClose: () => void }) 
         icon={team.icon}
         tone="accent"
         title={team.name}
-        sub={`${team.description} · 成员 ${team.expertIds.length} 人`}
+        sub={t("expert.team.memberSub", {
+          description: team.description,
+          num: team.expertIds.length,
+        })}
         onClose={onClose}
       />
       <div className="min-h-0 flex-1 overflow-y-auto px-[24px] py-[22px]">
-        <Field label="团队成员（手动切换专家）" hint="同一任务内可在这些专家间一键切换人格。">
+        <Field label={t("expert.team.membersLabel")} hint={t("expert.team.membersHint")}>
           <div className="grid grid-cols-2 gap-[9px]">
             {store.experts.map((e) => {
               const on = expertIds.includes(e.id);
@@ -451,31 +471,33 @@ function TeamForm({ team, onClose }: { team: ExpertTeam; onClose: () => void }) 
           </div>
         </Field>
         <div className="mt-[20px]">
-          <Note tone="warn" icon={<IconWarn size={18} />} title="专家团高级能力预留中。">
-            规划支持 Agent 团队形式调动子 Agent（主 Agent 分派任务给子 Agent 并汇总），以及 Agent
-            Workflow 编排（可视化节点编排多 Agent
-            流程）。当前先落地专家与技能，团队高级能力后续实现，字段已预留。
+          <Note
+            tone="warn"
+            icon={<IconWarn size={18} />}
+            title={t("expert.team.advancedNoteTitle")}
+          >
+            {t("expert.team.advancedNoteBody")}
           </Note>
         </div>
         <div className="mt-[20px] flex items-center justify-center gap-0">
-          <FlowNode icon={<IconBot />} name="主 Agent" lead />
+          <FlowNode icon={<IconBot />} name={t("expert.flow.mainAgent")} lead />
           <span className="px-[6px] text-[18px] text-ink-3">→</span>
-          <FlowNode icon={<IconClipboard />} name="子 Agent" />
+          <FlowNode icon={<IconClipboard />} name={t("expert.flow.subAgent")} />
           <span className="px-[6px] text-[18px] text-ink-3">→</span>
-          <FlowNode icon={<IconPalette />} name="子 Agent" />
+          <FlowNode icon={<IconPalette />} name={t("expert.flow.subAgent")} />
           <span className="px-[6px] text-[18px] text-ink-3">→</span>
-          <FlowNode icon={<IconBot />} name="汇总" lead />
+          <FlowNode icon={<IconBot />} name={t("expert.flow.aggregate")} lead />
         </div>
       </div>
       <ModalFoot>
         <button type="button" onClick={() => void save()} disabled={busy} className={btnPrimary}>
-          保存成员
+          {t("expert.team.saveMembers")}
         </button>
         <button type="button" onClick={() => void remove()} className={btnDanger}>
-          删除
+          {t("common.delete")}
         </button>
         <button type="button" onClick={onClose} className={btnGhost}>
-          关闭
+          {t("common.close")}
         </button>
       </ModalFoot>
     </>
@@ -508,6 +530,7 @@ function FlowNode({
 /* ════════════ 技能 ════════════ */
 
 function SkillForm({ skill, onClose }: { skill: SkillEntry; onClose: () => void }) {
+  const { t } = useTranslation();
   const store = useExpertCenterStore();
   const [description, setDescription] = useState(skill.description);
   const [content, setContent] = useState("");
@@ -568,39 +591,39 @@ function SkillForm({ skill, onClose }: { skill: SkillEntry; onClose: () => void 
         onClose={onClose}
       />
       <div className="min-h-0 flex-1 overflow-y-auto px-[24px] py-[22px]">
-        <Field label="启用状态">
+        <Field label={t("expert.skill.enabledLabel")}>
           <div className="flex items-center gap-[10px]">
             <Switch on={enabled} onChange={(v) => void toggleEnabled(v)} />
             <span className="text-[15px] text-ink-2">
-              {enabled ? "已启用（注入 system prompt，可 /调用）" : "已停用"}
+              {enabled ? t("expert.skill.enabledOn") : t("expert.skill.enabledOff")}
             </span>
           </div>
         </Field>
-        <Field label="描述">
+        <Field label={t("expert.form.descriptionLabel")}>
           <TextArea value={description} onChange={setDescription} rows={2} />
         </Field>
-        <Field label="SKILL.md 正文" hint="编辑后保存会更新技能包文件，/调用即按此指令执行。">
+        <Field label={t("expert.create.skillContentLabel")} hint={t("expert.skill.contentHint")}>
           <TextArea value={content} onChange={setContent} rows={9} mono />
         </Field>
-        <Field label="标签">
+        <Field label={t("expert.form.tagsLabel")}>
           <EditableTags value={tags} onChange={setTags} placeholder="domain:product" />
         </Field>
       </div>
       <ModalFoot>
         <button type="button" onClick={() => void save()} disabled={busy} className={btnPrimary}>
-          保存
+          {t("common.save")}
         </button>
         {skill.source === "builtin" ? (
           <button type="button" disabled className={`${btnGhost} cursor-not-allowed opacity-40`}>
-            内置不可卸载
+            {t("expert.skill.builtinNoUninstall")}
           </button>
         ) : (
           <button type="button" onClick={() => void uninstall()} className={btnDanger}>
-            卸载
+            {t("expert.skill.uninstall")}
           </button>
         )}
         <button type="button" onClick={onClose} className={btnGhost}>
-          关闭
+          {t("common.close")}
         </button>
       </ModalFoot>
     </>
@@ -610,14 +633,15 @@ function SkillForm({ skill, onClose }: { skill: SkillEntry; onClose: () => void 
 /* ════════════ 连接器 ════════════ */
 
 const CONN_TYPE_LABEL: Record<string, string> = {
-  mcp: "MCP",
-  filesystem: "文件系统",
-  "http-api": "HTTP API",
-  datasource: "数据源",
-  custom: "自定义",
+  mcp: "expert.connectorType.mcp",
+  filesystem: "expert.connectorType.filesystem",
+  "http-api": "expert.connectorType.httpApi",
+  datasource: "expert.connectorType.datasource",
+  custom: "expert.connectorType.custom",
 };
 
 function ConnectorForm({ connector, onClose }: { connector: Connector; onClose: () => void }) {
+  const { t } = useTranslation();
   const store = useExpertCenterStore();
   const [name, setName] = useState(connector.name);
   const [description, setDescription] = useState(connector.description);
@@ -673,7 +697,7 @@ function ConnectorForm({ connector, onClose }: { connector: Connector; onClose: 
     onClose();
   };
 
-  const typeLabel = CONN_TYPE_LABEL[connector.type] ?? connector.type;
+  const typeLabel = t(CONN_TYPE_LABEL[connector.type] ?? connector.type);
 
   return (
     <>
@@ -694,24 +718,31 @@ function ConnectorForm({ connector, onClose }: { connector: Connector; onClose: 
       />
       <div className="min-h-0 flex-1 overflow-y-auto px-[24px] py-[22px]">
         {status === "reserved" ? (
-          <Note tone="warn" icon={<IconWarn size={18} />} title="已注册，运行时接入即将推出。">
-            当前连接器已登记并打标签，尚未注入 agent。按类型分期激活：MCP / 文件系统已可用， HTTP
-            API / 数据源开发中。激活时零迁移。
+          <Note
+            tone="warn"
+            icon={<IconWarn size={18} />}
+            title={t("expert.connector.reservedTitle")}
+          >
+            {t("expert.connector.reservedBody")}
           </Note>
         ) : status === "connected" ? (
-          <Note tone="info" icon={<IconInfo size={18} />} title="已接入。">
-            启用的连接器能力会注入绑定的专家（MCP 工具作为 customTools），绑定关系即时生效。
+          <Note
+            tone="info"
+            icon={<IconInfo size={18} />}
+            title={t("expert.connector.connectedTitle")}
+          >
+            {t("expert.connector.connectedBody")}
           </Note>
         ) : null}
         {testMsg ? (
           <div className="mt-[12px] rounded-[10px] border border-line bg-paper px-[14px] py-[10px] text-[13px] text-ink-2">
-            测试：{testMsg}
+            {t("expert.connector.testResult", { msg: translateError(testMsg, t) })}
           </div>
         ) : null}
         {connector.lastTools && connector.lastTools.length > 0 ? (
           <div className="mt-[12px]">
             <div className="mb-[6px] text-[12px] font-semibold tracking-[0.04em] text-ink-2">
-              已探测工具（{connector.lastTools.length}）
+              {t("expert.connector.probedTools", { num: connector.lastTools.length })}
             </div>
             <div className="flex max-h-[96px] flex-wrap gap-[5px] overflow-y-auto">
               {connector.lastTools.map((t) => (
@@ -721,19 +752,19 @@ function ConnectorForm({ connector, onClose }: { connector: Connector; onClose: 
           </div>
         ) : null}
 
-        <Field label="名称">
+        <Field label={t("expert.form.nameLabel")}>
           <TextInput value={name} onChange={setName} />
         </Field>
-        <Field label="描述">
+        <Field label={t("expert.form.descriptionLabel")}>
           <TextArea value={description} onChange={setDescription} rows={2} />
         </Field>
 
-        <Field label="配置（config · 按 type 校验）">
+        <Field label={t("expert.connector.configLabel")}>
           {connector.type === "mcp" ? (
             <McpConfigForm config={config} replaceConfig={(c) => setConfig(c)} />
           ) : connector.type === "filesystem" ? (
             <div className="grid grid-cols-[140px_1fr] items-center gap-[14px]">
-              <span className="text-[14px] text-ink-2">白名单根目录</span>
+              <span className="text-[14px] text-ink-2">{t("expert.connector.whitelistRoot")}</span>
               <TextInput
                 value={String(config.rootDir ?? "")}
                 onChange={(v) => setCfg("rootDir", v)}
@@ -751,7 +782,7 @@ function ConnectorForm({ connector, onClose }: { connector: Connector; onClose: 
                 />
               </div>
               <div className="grid grid-cols-[140px_1fr] items-center gap-[14px]">
-                <span className="text-[14px] text-ink-2">鉴权</span>
+                <span className="text-[14px] text-ink-2">{t("expert.connector.auth")}</span>
                 <TextInput
                   value={String(config.auth ?? "")}
                   onChange={(v) => setCfg("auth", v)}
@@ -761,15 +792,12 @@ function ConnectorForm({ connector, onClose }: { connector: Connector; onClose: 
             </>
           ) : (
             <p className="text-[13px] text-ink-3">
-              {connector.type} 类型仅注册，运行时注入后续实现；配置为自由 JSON。
+              {t("expert.connector.customNote", { type: connector.type })}
             </p>
           )}
         </Field>
 
-        <Field
-          label="绑定专家（boundExpertIds）"
-          hint="声明哪些专家可用此连接器；MCP 启用时其工具注入这些专家。"
-        >
+        <Field label={t("expert.connector.boundLabel")} hint={t("expert.connector.boundHint")}>
           <div className="grid grid-cols-2 gap-[9px]">
             {store.experts.map((e) => {
               const on = bound.includes(e.id);
@@ -799,25 +827,27 @@ function ConnectorForm({ connector, onClose }: { connector: Connector; onClose: 
           </div>
         </Field>
 
-        <Field label="启用">
+        <Field label={t("expert.connector.enabledLabel")}>
           <div className="flex items-center gap-[10px]">
             <Switch on={enabled} onChange={setEnabled} />
-            <span className="text-[15px] text-ink-2">{enabled ? "启用中" : "已停用"}</span>
+            <span className="text-[15px] text-ink-2">
+              {enabled ? t("expert.connector.enabledOn") : t("expert.skill.enabledOff")}
+            </span>
           </div>
         </Field>
       </div>
       <ModalFoot>
         <button type="button" onClick={() => void test()} className={btnGhost}>
-          测试连接
+          {t("expert.connector.testConnection")}
         </button>
         <button type="button" onClick={() => void save()} disabled={busy} className={btnPrimary}>
-          保存
+          {t("common.save")}
         </button>
         <button type="button" onClick={() => void remove()} className={btnDanger}>
-          删除
+          {t("common.delete")}
         </button>
         <button type="button" onClick={onClose} className={btnGhost}>
-          关闭
+          {t("common.close")}
         </button>
       </ModalFoot>
     </>
@@ -839,6 +869,7 @@ function McpConfigForm({
   config: Record<string, unknown>;
   replaceConfig: (c: Record<string, unknown>) => void;
 }) {
+  const { t } = useTranslation();
   const [json, setJson] = useState(() => serializeMcpJson(config));
   const [jsonError, setJsonError] = useState<string | null>(null);
 
@@ -868,10 +899,10 @@ function McpConfigForm({
         replaceConfig({ ...p, transport });
         setJsonError(null);
       } else {
-        setJsonError("配置需为 JSON 对象");
+        setJsonError(t("errors.jsonObjectRequired"));
       }
     } catch {
-      setJsonError("JSON 格式错误，请检查");
+      setJsonError(t("errors.jsonInvalid"));
     }
   };
 
@@ -886,13 +917,15 @@ function McpConfigForm({
   return (
     <>
       <div className="mb-[6px] flex items-center justify-between">
-        <span className="text-[12.5px] font-semibold text-ink-2">MCP server 配置（JSON）</span>
+        <span className="text-[12.5px] font-semibold text-ink-2">
+          {t("expert.connector.mcpJsonLabel")}
+        </span>
         <button
           type="button"
           onClick={applyTemplate}
           className="text-[12px] font-semibold text-accent transition hover:underline"
         >
-          填入模板
+          {t("expert.connector.fillTemplate")}
         </button>
       </div>
       <textarea
@@ -910,11 +943,11 @@ function McpConfigForm({
       />
       {jsonError ? <p className="mt-[6px] text-[12.5px] text-danger">{jsonError}</p> : null}
       <p className="mt-[6px] text-[12.5px] leading-[1.6] text-ink-3">
-        传输按 JSON 自动识别：
+        {t("expert.connector.jsonHintPrefix")}
         {isHttp
-          ? "含 url → Streamable HTTP（远程）"
-          : "无 url → STDIO（本地进程，托管安装到 ~/EveryBuddy/mcp-servers/）"}
-        。填好 GITHUB_TOKEN 等环境变量后「测试连接」即通。
+          ? t("expert.connector.jsonTransportHttp")
+          : t("expert.connector.jsonTransportStdio")}
+        {t("expert.connector.jsonHintSuffix")}
       </p>
     </>
   );
@@ -923,11 +956,12 @@ function McpConfigForm({
 /* ════════════ 预留能力弹层（团队 tab 的占位卡） ════════════ */
 
 function ReservedModal({ kind, onClose }: { kind: string; onClose: () => void }) {
+  const { t } = useTranslation();
   const isBot = kind === "bot";
-  const title = isBot ? "子 Agent 调度" : "Workflow 编排";
+  const title = isBot ? t("expert.reservedSubAgent") : t("expert.reservedWorkflow");
   const desc = isBot
-    ? "主 Agent 调动子 Agent 协作：分派子任务、并行执行、汇总结果。"
-    : "可视化节点编排多 Agent 流程：需求分析 → 设计 → 编码 → 评审 的有向图执行。";
+    ? t("expert.reservedModal.subAgentDesc")
+    : t("expert.reservedModal.workflowDesc");
   const icon = isBot ? "bot" : "workflow";
   return (
     <>
@@ -938,29 +972,28 @@ function ReservedModal({ kind, onClose }: { kind: string; onClose: () => void })
         sub={desc}
         badges={
           <span className="rounded-[6px] bg-active px-[8px] py-[2px] text-[11px] font-semibold text-ink-2">
-            预留
+            {t("expert.reserved")}
           </span>
         }
         onClose={onClose}
       />
       <div className="min-h-0 flex-1 overflow-y-auto px-[24px] py-[22px]">
-        <Note tone="warn" icon={<IconWarn size={18} />} title="该能力预留中，后续实现。">
-          专家团本轮仅落地「成员登记 + 手动切换」。Agent 团队调度与 Workflow 编排为后续演进方向，
-          schema 字段已预留，激活时零迁移。
+        <Note tone="warn" icon={<IconWarn size={18} />} title={t("expert.reservedModal.noteTitle")}>
+          {t("expert.reservedModal.noteBody")}
         </Note>
         <div className="mt-[20px] flex items-center justify-center">
-          <FlowNode icon={<IconBot />} name="主 Agent" lead />
+          <FlowNode icon={<IconBot />} name={t("expert.flow.mainAgent")} lead />
           <span className="px-[6px] text-[18px] text-ink-3">→</span>
-          <FlowNode icon={<IconClipboard />} name="子 Agent" />
+          <FlowNode icon={<IconClipboard />} name={t("expert.flow.subAgent")} />
           <span className="px-[6px] text-[18px] text-ink-3">→</span>
-          <FlowNode icon={<IconMonitor />} name="子 Agent" />
+          <FlowNode icon={<IconMonitor />} name={t("expert.flow.subAgent")} />
           <span className="px-[6px] text-[18px] text-ink-3">→</span>
-          <FlowNode icon={<IconBot />} name="汇总" lead />
+          <FlowNode icon={<IconBot />} name={t("expert.flow.aggregate")} lead />
         </div>
       </div>
       <ModalFoot>
         <button type="button" onClick={onClose} className={btnGhost}>
-          关闭
+          {t("common.close")}
         </button>
       </ModalFoot>
     </>
@@ -978,6 +1011,7 @@ function EditableTags({
   onChange: (v: string[]) => void;
   placeholder?: string;
 }) {
+  const { t } = useTranslation();
   const [draft, setDraft] = useState("");
   const add = () => {
     const t = draft.trim();
@@ -1001,7 +1035,7 @@ function EditableTags({
           }
         }}
         onBlur={add}
-        placeholder={placeholder ?? "添加…"}
+        placeholder={placeholder ?? t("expert.tags.addPlaceholder")}
         className="rounded-full border border-dashed border-line-strong px-[12px] py-[4px] text-[13px] text-ink-3 outline-none transition placeholder:text-ink-3 focus:border-accent-line focus:text-ink-2"
       />
     </div>

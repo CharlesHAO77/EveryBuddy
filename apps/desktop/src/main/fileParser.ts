@@ -21,6 +21,7 @@ import type {
   HistoryFileBlock,
   HistoryTextBlock,
 } from "@everybuddy/ipc-contract";
+import { uiError } from "./errors";
 
 /** 解析结果内容块（与 pi-ai TextContent/ImageContent 形状一致） */
 export type ParseContent =
@@ -375,7 +376,7 @@ async function parseTextFile(filePath: string, max: number): Promise<string> {
   const buf = await readFile(filePath);
   const head = new Uint8Array(buf.buffer, buf.byteOffset, buf.byteLength).subarray(0, 1024);
   if (head.includes(0)) {
-    throw new Error("看起来是二进制文件，无法作为文本解析（可用 bash 工具自行处理）");
+    throw uiError("errors.binaryAsText");
   }
   let text = buf.toString("utf-8");
   if (text.charCodeAt(0) === 0xfeff) text = text.slice(1); // 去 BOM
@@ -464,7 +465,7 @@ async function parsePptx(filePath: string, max: number): Promise<string> {
     if (texts.length > 0)
       pages.push(`--- Slide ${f.match(/slide(\d+)/)?.[1] ?? ""} ---\n${texts.join("\n")}`);
   }
-  if (pages.length === 0) throw new Error("PPT 中没有可抽取的文本");
+  if (pages.length === 0) throw uiError("errors.pptNoText");
   return truncate(pages.join("\n\n"), max);
 }
 
