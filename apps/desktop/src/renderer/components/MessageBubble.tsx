@@ -189,7 +189,7 @@ export function AssistantGroup({ messages, taskId }: AssistantGroupProps) {
     if (block.kind === "thinking")
       return <ThinkingCard key={key} block={block} streaming={streaming} />;
     if (block.kind === "file") return null; // 附件块只出现在用户消息中
-    return <ToolCallCard key={key} block={block} />;
+    return <ToolCallCard key={key} block={block} taskId={taskId} />;
   };
 
   return (

@@ -189,6 +189,87 @@ export type AgentEvent =
       streamId: string;
       type: "extension_notify";
       payload: { message: string; level?: "info" | "warn" | "error" };
+    }
+  // 子 Agent 事件（专家团 auto 调度的 delegate 工具 / workflow 步骤触发；streamId = 父任务 taskId）
+  | {
+      streamId: string;
+      type: "subagent_start";
+      payload: {
+        subagentId: string;
+        /** 父会话 delegate 工具调用 id（渲染层 findToolBlock 定位父工具块，内嵌子面板） */
+        parentToolCallId: string;
+        expertId: string;
+        expertName: string;
+        prompt: string;
+        /** workflow 步骤绑定（workflow 内非 undefined；delegate 路径缺省） */
+        stepId?: string;
+      };
+    }
+  | {
+      streamId: string;
+      type: "subagent_delta";
+      payload: { subagentId: string; parentToolCallId: string; delta: string; stepId?: string };
+    }
+  | {
+      streamId: string;
+      type: "subagent_tool";
+      payload: {
+        subagentId: string;
+        parentToolCallId: string;
+        stepId?: string;
+        toolName: string;
+        toolCallId: string;
+        args?: unknown;
+        phase: "start" | "update" | "end";
+        ok?: boolean;
+        output?: unknown;
+        error?: string;
+      };
+    }
+  | {
+      streamId: string;
+      type: "subagent_end";
+      payload: {
+        subagentId: string;
+        parentToolCallId: string;
+        stepId?: string;
+        status: "ok" | "error" | "aborted";
+        text?: string;
+        error?: string;
+        usage?: MessageUsage;
+      };
+    }
+  // workflow 骨架事件（只发结构，步骤内容走 subagent_*；streamId = 任务 taskId）
+  | {
+      streamId: string;
+      type: "workflow_start";
+      payload: { workflowId: string; name: string; stepCount: number };
+    }
+  | {
+      streamId: string;
+      type: "workflow_step_start";
+      payload: { stepId: string; expertIds: string[]; prompt: string; kind: "serial" | "parallel" };
+    }
+  | {
+      streamId: string;
+      type: "workflow_step_end";
+      payload: {
+        stepId: string;
+        ok: boolean;
+        output?: string;
+        error?: string;
+        usage?: MessageUsage;
+      };
+    }
+  | {
+      streamId: string;
+      type: "workflow_end";
+      payload: {
+        status: "ok" | "error" | "aborted";
+        summary?: string;
+        error?: string;
+        usage?: MessageUsage;
+      };
     };
 
 // ────────────────────────────────────────────────
@@ -241,6 +322,8 @@ export interface TaskMeta {
   mode?: AgentMode;
   /** 任务选用的专家（缺省按 mode 回退到内置专家；custom 专家叠加覆盖字段） */
   expertId?: string;
+  /** 任务绑定的专家团（与 expertId 互斥；auto 团队→coordinator 会话 + delegate 工具，workflow 团队→无会话走工作流） */
+  teamId?: string;
   workspaceId?: string;
   workspacePath?: string;
   /** 临时任务的工作目录（app 托管，位于 work-spaces/ 下；空间任务无此字段） */
@@ -260,6 +343,8 @@ export interface CreateTaskRequest {
   mode?: AgentMode;
   /** 创建任务时选用的专家（缺省按 mode 回退到内置专家） */
   expertId?: string;
+  /** 创建任务时绑定的专家团（与 expertId 互斥） */
+  teamId?: string;
   workspaceId?: string;
   /** 创建任务时指定的模型 provider ID */
   providerId?: string;
@@ -551,20 +636,119 @@ export interface ExpertCatalog {
   defaultExtensions: Record<AgentMode, string[]>;
 }
 
-/** 专家团路由策略：本轮仅 "manual"；"auto" dispatcher / "workflow" 编排为后续（预留） */
+/** 专家团路由策略：manual 手动切换 / auto dispatcher 自动调度子 Agent / workflow 代码流程编排 */
 export type TeamRoutingStrategy = "manual" | "auto" | "workflow";
 
-/** 专家团（本轮仅登记成员 + 手动切换；Agent 团队调度 / Workflow 编排后续实现） */
+/** 团队来源：builtin 内置示例（代码内 const，不落盘）/ custom 自定义（teams.json）——对齐 Expert.source */
+export type TeamSource = "builtin" | "custom";
+
+/** 工作流单步引用（串行单专家 / 并行组内成员） */
+export interface WorkflowStepRef {
+  id: string;
+  expertId: string;
+  /** 步骤提示词模板；支持 `{user}`（触发消息）与 `{{stepId.result}}`（引用前步输出）占位 */
+  prompt: string;
+}
+
+/** 工作流步骤：串行单专家，或并行专家组（同依赖并发） */
+export type WorkflowStep =
+  | ({ kind: "serial" } & WorkflowStepRef)
+  | { kind: "parallel"; id: string; steps: WorkflowStepRef[] };
+
+/** 代码定义的工作流（本轮无可视化编辑器，由代码/种子构造，UI 只读展示） */
+export interface TeamWorkflow {
+  id: string;
+  name: string;
+  description?: string;
+  steps: WorkflowStep[];
+  /** 最终汇总专家（缺省 team.expertIds 末位） */
+  summarizerExpertId?: string;
+}
+
+// ── 团队运行记录（子 agent / workflow 执行过程持久化，供追溯） ──
+
+/** 子 agent 执行过程记录（存过程轨迹：最终文本 + 工具序列 + 状态 + 用量 + 时间戳，非逐字 delta） */
+export interface SubAgentRunRecord {
+  subagentId: string;
+  /** 父 delegate 工具调用 id（重开后挂回历史工具卡） */
+  parentToolCallId: string;
+  expertId: string;
+  expertName: string;
+  prompt: string;
+  stepId?: string;
+  status: "ok" | "error" | "aborted";
+  /** 最终全文（非增量） */
+  text: string;
+  /** 子工具调用序列（按 toolCallId 升位，保留最新 phase/output） */
+  tools: Array<{
+    toolName: string;
+    toolCallId: string;
+    phase: "start" | "update" | "end";
+    output?: unknown;
+    error?: string;
+  }>;
+  usage?: MessageUsage;
+  error?: string;
+  startedAt: number;
+  endedAt?: number;
+}
+
+/** workflow 单步执行过程记录 */
+export interface WorkflowStepRecord {
+  stepId: string;
+  expertIds: string[];
+  kind: "serial" | "parallel";
+  status: "pending" | "running" | "ok" | "error";
+  /** 该步最终输出（子 agent 文本拼接） */
+  output?: string;
+  error?: string;
+  /** 该步涉及的子 agent 过程 */
+  subagents: SubAgentRunRecord[];
+}
+
+/** workflow 运行过程记录（status 含 "running" 以支持分步落盘的部分记录） */
+export interface WorkflowRunRecord {
+  runId: string;
+  workflowId: string;
+  name: string;
+  /** 触发工作流的用户消息（重开后重建对话历史用） */
+  prompt?: string;
+  status: "running" | "ok" | "error" | "aborted";
+  steps: WorkflowStepRecord[];
+  summary?: string;
+  usage?: MessageUsage;
+  error?: string;
+  startedAt: number;
+  finishedAt?: number;
+}
+
+/** 任务级团队运行记录（任务下所有子 agent 活动 + 最近一次 workflow 运行） */
+export interface TeamRunRecord {
+  taskId: string;
+  subAgents: SubAgentRunRecord[];
+  workflowRun?: WorkflowRunRecord;
+  updatedAt: number;
+}
+
+/** 专家团（routingStrategy 决定运行时行为：manual 手动切换 / auto 子 Agent 调度 / workflow 流程编排） */
 export interface ExpertTeam {
   id: string;
   name: string;
   icon: string;
   description: string;
+  /** 成员 agent（不含主 agent） */
   expertIds: string[];
+  /** 主 agent（auto 团队必选：以该专家人格作为协调者并计入团队人数；manual/workflow 可选） */
+  leadExpertId?: string;
+  /** 各 agent 角色：key = expertId 或 leadExpertId，value = 角色名（如 协调者/分析师/编码/评审） */
+  roles?: Record<string, string>;
   tags: string[];
   routingStrategy: TeamRoutingStrategy;
   sharedTools?: string[];
   sharedExtensions?: string[];
+  /** 仅 workflow 策略使用；builtin 示例团队携带完整字面量，custom 可缺省由运行时 buildDefaultWorkflow 生成 */
+  workflow?: TeamWorkflow;
+  source: TeamSource;
   createdAt: string;
   updatedAt: string;
 }
@@ -574,10 +758,15 @@ export interface CreateTeamRequest {
   icon?: string;
   description?: string;
   expertIds?: string[];
+  /** 主 agent（auto 团队必选） */
+  leadExpertId?: string;
+  /** 各 agent 角色：key = expertId 或 leadExpertId，value = 角色名 */
+  roles?: Record<string, string>;
   tags?: string[];
   routingStrategy?: TeamRoutingStrategy;
   sharedTools?: string[];
   sharedExtensions?: string[];
+  workflow?: TeamWorkflow;
 }
 
 export interface UpdateTeamRequest {
@@ -586,10 +775,16 @@ export interface UpdateTeamRequest {
   icon?: string;
   description?: string;
   expertIds?: string[];
+  /** null 清除主 agent */
+  leadExpertId?: string | null;
+  /** null 清除角色 */
+  roles?: Record<string, string> | null;
   tags?: string[];
   routingStrategy?: TeamRoutingStrategy;
   sharedTools?: string[] | null;
   sharedExtensions?: string[] | null;
+  /** null 清除 workflow（回退运行时 buildDefaultWorkflow） */
+  workflow?: TeamWorkflow | null;
 }
 
 /** 技能来源（对齐 SDK Skill + EveryBuddy 管理） */
@@ -738,6 +933,7 @@ export const createTaskRequestSchema = z.object({
   type: z.enum(["temp", "workspace"]),
   mode: z.enum(["daily", "coding"]).optional(),
   expertId: z.string().optional(),
+  teamId: z.string().optional(),
   workspaceId: z.string().optional(),
   providerId: z.string().optional(),
 });
@@ -904,15 +1100,49 @@ export const expertResetRequestSchema = expertIdRequestSchema;
 // ── team:*（专家团） ──
 export const teamRoutingStrategySchema = z.enum(["manual", "auto", "workflow"]);
 
+export const workflowStepRefSchema = z.object({
+  id: z.string().min(1, "errors.paramMissing"),
+  expertId: z.string().min(1, "errors.paramMissing"),
+  prompt: z.string().min(1, "errors.promptRequired"),
+});
+export type WorkflowStepRefZ = z.infer<typeof workflowStepRefSchema>;
+
+export const workflowStepSchema = z.discriminatedUnion("kind", [
+  z.object({
+    kind: z.literal("serial"),
+    id: z.string().min(1, "errors.paramMissing"),
+    expertId: z.string().min(1, "errors.paramMissing"),
+    prompt: z.string().min(1, "errors.promptRequired"),
+  }),
+  z.object({
+    kind: z.literal("parallel"),
+    id: z.string().min(1, "errors.paramMissing"),
+    steps: z.array(workflowStepRefSchema).min(1, "errors.stepsRequired"),
+  }),
+]);
+export type WorkflowStepZ = z.infer<typeof workflowStepSchema>;
+
+export const teamWorkflowSchema = z.object({
+  id: z.string().min(1, "errors.paramMissing"),
+  name: z.string().min(1, "errors.nameRequired"),
+  description: z.string().optional(),
+  steps: z.array(workflowStepSchema).min(1, "errors.stepsRequired"),
+  summarizerExpertId: z.string().optional(),
+});
+export type TeamWorkflowZ = z.infer<typeof teamWorkflowSchema>;
+
 export const teamCreateRequestSchema = z.object({
   name: z.string().min(1, "errors.nameRequired"),
   icon: z.string().min(1).default("users"),
   description: z.string().default(""),
   expertIds: z.array(z.string()).default([]),
+  leadExpertId: z.string().optional(),
+  roles: z.record(z.string()).optional(),
   tags: z.array(z.string()).default([]),
   routingStrategy: teamRoutingStrategySchema.default("manual"),
   sharedTools: z.array(z.string()).optional(),
   sharedExtensions: z.array(z.string()).optional(),
+  workflow: teamWorkflowSchema.optional(),
 });
 export type TeamCreateRequestZ = z.infer<typeof teamCreateRequestSchema>;
 
@@ -922,14 +1152,31 @@ export const teamUpdateRequestSchema = z.object({
   icon: z.string().optional(),
   description: z.string().optional(),
   expertIds: z.array(z.string()).optional(),
+  leadExpertId: z.string().nullable().optional(),
+  roles: z.record(z.string()).nullable().optional(),
   tags: z.array(z.string()).optional(),
   routingStrategy: teamRoutingStrategySchema.optional(),
   sharedTools: z.array(z.string()).nullable().optional(),
   sharedExtensions: z.array(z.string()).nullable().optional(),
+  workflow: teamWorkflowSchema.nullable().optional(),
 });
 export type TeamUpdateRequestZ = z.infer<typeof teamUpdateRequestSchema>;
 
 export const teamIdRequestSchema = z.object({ id: z.string().min(1, "errors.paramMissing") });
+
+/** team:get-runs 请求：取任务级团队运行记录（子 agent / workflow 过程追溯） */
+export const teamGetRunsRequestSchema = z.object({
+  taskId: z.string().min(1, "errors.paramMissing"),
+});
+
+/** agent:run-workflow 请求：在绑定 workflow 团队的任务上运行流程（进度经 agent:event 推送 workflow_* + subagent_*） */
+export const runWorkflowRequestSchema = z.object({
+  taskId: z.string().min(1, "errors.paramMissing"),
+  teamId: z.string().min(1, "errors.paramMissing"),
+  prompt: z.string().min(1, "errors.promptRequired"),
+  providerId: z.string().optional(),
+});
+export type RunWorkflowRequest = z.infer<typeof runWorkflowRequestSchema>;
 
 // ── skill:*（技能） ──
 export const skillCreateRequestSchema = z.object({
@@ -1028,6 +1275,8 @@ export interface ElectronAPI {
     setMode: (req: SetModeRequest) => Promise<void>;
     /** 应答工具权限确认 */
     approveTool: (req: ApproveToolRequest) => Promise<void>;
+    /** 运行团队工作流（workflow 团队任务；进度经 agent:event 推送 workflow_* + subagent_*） */
+    runWorkflow: (req: RunWorkflowRequest) => Promise<void>;
   };
   task: {
     list: () => Promise<TaskMeta[]>;
@@ -1099,6 +1348,10 @@ export interface ElectronAPI {
     create: (req: CreateTeamRequest) => Promise<ExpertTeam>;
     update: (req: UpdateTeamRequest) => Promise<ExpertTeam>;
     delete: (id: string) => Promise<void>;
+    /** 复制为自定义（内置示例团队只读，先复制再编辑） */
+    duplicate: (id: string) => Promise<ExpertTeam>;
+    /** 任务级团队运行记录（子 agent / workflow 过程追溯；无记录返回 undefined） */
+    getRuns: (taskId: string) => Promise<TeamRunRecord | undefined>;
   };
   skill: {
     /** SDK 发现（global/project）+ EveryBuddy 管理（builtin/custom/installed）合并 */

@@ -207,11 +207,28 @@
     },
     "team": {
       "memberSub": "{{description}} · 成员 {{num}} 人",
-      "membersLabel": "团队成员（手动切换专家）",
-      "membersHint": "同一任务内可在这些专家间一键切换人格。",
-      "advancedNoteTitle": "专家团高级能力预留中。",
-      "advancedNoteBody": "规划支持 Agent 团队形式调动子 Agent（主 Agent 分派任务给子 Agent 并汇总），以及 Agent Workflow 编排（可视化节点编排多 Agent 流程）。当前先落地专家与技能，团队高级能力后续实现，字段已预留。",
-      "saveMembers": "保存成员"
+      "membersLabel": "团队成员",
+      "membersHint": "同一任务内按运行策略在这些专家间协作或切换。",
+      "saveMembers": "保存成员",
+      "strategyLabel": "运行策略",
+      "strategyHint": "决定团队在对话中的协作方式。",
+      "leadLabel": "主 Agent",
+      "leadHint": "团队调度时以该专家人格担任协调者，分派任务给成员并汇总（计入团队人数）。",
+      "rolesLabel": "角色定义",
+      "rolesHint": "为每位专家（含主 Agent）分别定义角色，运行时分派/汇总时参考。",
+      "strategy": {
+        "manual": "手动切换",
+        "manualDesc": "同一任务内手动切换成员专家人格",
+        "auto": "子 Agent 调度",
+        "autoDesc": "主 Agent 自动 delegate 并行调度成员子 Agent 并汇总",
+        "workflow": "Workflow 编排",
+        "workflowDesc": "按代码定义的流水线分步执行（分析→执行→评审）"
+      },
+      "workflowReadonlyTitle": "流程（代码定义，仅展示）",
+      "workflowReadonlyHint": "流程由代码生成，暂不支持可视化编辑。",
+      "builtinReadonlyHint": "内置示例团队为只读，可「复制为自定义」后编辑。",
+      "duplicate": "复制为自定义",
+      "builtinBadge": "内置示例"
     },
     "flow": {
       "mainAgent": "主 Agent",
@@ -266,6 +283,8 @@
     "triggerTitle": "选择专家 / 专家团 / 技能，或添加附件",
     "switchExpert": "点击更换专家",
     "clearExpert": "清除，回到当前 tab 内置助手",
+    "switchTeam": "点击更换专家团",
+    "clearTeam": "清除专家团",
     "add": "添加",
     "attachment": "附件",
     "itemCount": "{{num}} 项",
@@ -561,6 +580,8 @@
     "thisRun": "本条运行",
     "modelCalls": "{{num}} 次模型调用",
     "sessionTotal": "会话累计",
+    "runTokens": "in {{input}} · out {{output}} · {{total}} tok",
+    "runDuration": "耗时 {{seconds}}s",
     "type": {
       "llm": "对话 LLM",
       "vlm": "视觉 VLM",

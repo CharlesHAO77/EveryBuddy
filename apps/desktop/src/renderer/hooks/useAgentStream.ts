@@ -191,6 +191,39 @@ export function useAgentStream(): void {
         case "extension_notify":
           store.pushChatNotice(taskId, event.payload.message, event.payload.level);
           break;
+
+        // 子 Agent 事件（专家团 delegate / workflow 步骤；挂到父工具卡内嵌面板）
+        case "subagent_start":
+          store.startSubagent(taskId, event.payload);
+          break;
+        case "subagent_delta":
+          store.appendSubagentDelta(taskId, event.payload.subagentId, event.payload.delta);
+          break;
+        case "subagent_tool":
+          store.subagentTool(taskId, event.payload.subagentId, event.payload);
+          break;
+        case "subagent_end":
+          store.endSubagent(taskId, event.payload.subagentId, event.payload);
+          break;
+
+        // workflow 骨架事件（步骤结构 + 运行状态）
+        case "workflow_start":
+          // workflow 运行不产生 message_start/agent_end：清掉 pending（「运行中」指示），
+          // 进度改由 WorkflowRunCard 展示
+          useSessionStore.setState((s) => ({
+            tasks: s.tasks.map((t) => (t.id === taskId ? { ...t, pending: false } : t)),
+          }));
+          store.startWorkflow(taskId, event.payload);
+          break;
+        case "workflow_step_start":
+          store.workflowStepStart(taskId, event.payload);
+          break;
+        case "workflow_step_end":
+          store.workflowStepEnd(taskId, event.payload);
+          break;
+        case "workflow_end":
+          store.endWorkflow(taskId, event.payload);
+          break;
       }
     });
     return unsubscribe;

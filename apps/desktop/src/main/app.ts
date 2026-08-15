@@ -6,6 +6,7 @@ import { registerIpcHandlers } from "./ipcRouter";
 import { closeAllMcpClients } from "./mcpTools";
 import { migrateFromLegacyConfig } from "./modelStore";
 import { scheduler } from "./scheduler";
+import { teamRuntime } from "./teamRuntime";
 import { createMainWindow } from "./windowManager";
 
 /**
@@ -54,6 +55,8 @@ app.whenReady().then(async () => {
         isWindowFocused: () =>
           BrowserWindow.getAllWindows().some((w) => !w.isDestroyed() && w.isFocused()),
       });
+      // 注入团队运行时依赖（agentRuntime.getTeamDeps，DI 避免依赖环；见 teamRuntime.ts）
+      teamRuntime.wire(agentRuntime.getTeamDeps());
       return scheduler.init();
     })
     .catch((err) => console.error("[app] AgentRuntime/Scheduler 初始化失败:", err));

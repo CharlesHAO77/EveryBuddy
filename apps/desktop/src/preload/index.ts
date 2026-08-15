@@ -25,6 +25,7 @@ const api: ElectronAPI = {
     extensionCommand: (req) => ipcRenderer.invoke("agent:extension-command", req),
     setMode: (req) => ipcRenderer.invoke("agent:set-mode", req),
     approveTool: (req) => ipcRenderer.invoke("agent:approveTool", req),
+    runWorkflow: (req) => ipcRenderer.invoke("agent:run-workflow", req),
   },
   task: {
     list: () => ipcRenderer.invoke("task:list"),
@@ -88,6 +89,8 @@ const api: ElectronAPI = {
     create: (req) => ipcRenderer.invoke("team:create", req),
     update: (req) => ipcRenderer.invoke("team:update", req),
     delete: (id) => ipcRenderer.invoke("team:delete", { id }),
+    duplicate: (id) => ipcRenderer.invoke("team:duplicate", { id }),
+    getRuns: (taskId) => ipcRenderer.invoke("team:get-runs", { taskId }),
   },
   skill: {
     list: () => ipcRenderer.invoke("skill:list"),

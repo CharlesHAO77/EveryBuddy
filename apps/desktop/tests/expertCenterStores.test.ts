@@ -11,7 +11,7 @@ import type { AgentConfig } from "../src/main/agentConfigStore";
 import { ConnectorStore } from "../src/main/connectorStore";
 import { ExpertStore, expertToAgentConfig } from "../src/main/expertStore";
 import { buildSkillMd, parseSkillFrontmatter, SkillStore } from "../src/main/skillStore";
-import { TeamStore } from "../src/main/teamStore";
+import { BUILTIN_TEAMS, TeamStore } from "../src/main/teamStore";
 
 let dir: string;
 
@@ -40,8 +40,9 @@ describe("ExpertStore", () => {
     expect(e.source).toBe("custom");
     expect(e.icon).toBe("briefcase");
     expect(e.mode).toBe("daily");
-    expect(store.list()).toHaveLength(3);
-    expect(store.list()[2].id).toBe(e.id);
+    // 内置示例 3 个（办公/编码/项目协调员）+ 自定义 1 个
+    expect(store.list()).toHaveLength(4);
+    expect(store.list()[3].id).toBe(e.id);
   });
 
   it("update 合并字段并 bump updatedAt", () => {
@@ -131,15 +132,68 @@ describe("ExpertStore", () => {
 // ── teamStore ──────────────────────────────────
 
 describe("TeamStore", () => {
-  it("create 默认 routingStrategy=manual，update/delete 正常", () => {
+  it("create 默认 routingStrategy=manual source=custom；list 合并内置示例团队", () => {
     const store = new TeamStore(path.join(dir, "teams.json"));
+    // 无自定义时 list 返回 2 个内置示例（auto 调度 + workflow 编排）
+    expect(store.list()).toHaveLength(BUILTIN_TEAMS.length);
     const t = store.create({ name: "研发团", expertIds: ["daily"] });
     expect(t.routingStrategy).toBe("manual");
-    expect(t.icon).toBe("users");
+    expect(t.source).toBe("custom");
+    expect(store.list()).toHaveLength(BUILTIN_TEAMS.length + 1);
+    expect(store.listCustom()).toHaveLength(1);
+  });
+
+  it("内置示例团队只读；update/delete 抛错，可复制为自定义", () => {
+    const store = new TeamStore(path.join(dir, "teams.json"));
+    const builtin = BUILTIN_TEAMS[0];
+    expect(store.isBuiltin(builtin.id)).toBe(true);
+    expect(() => store.update({ id: builtin.id, description: "x" })).toThrow();
+    expect(() => store.delete(builtin.id)).toThrow();
+    const copy = store.duplicateAsCustom(builtin.id);
+    expect(copy.id).not.toBe(builtin.id);
+    expect(copy.source).toBe("custom");
+    expect(copy.routingStrategy).toBe(builtin.routingStrategy);
+  });
+
+  it("内置 workflow 示例团队携带完整 workflow 字面量", () => {
+    const store = new TeamStore(path.join(dir, "teams.json"));
+    const wfTeam = store.get("team-example-workflow");
+    expect(wfTeam?.routingStrategy).toBe("workflow");
+    expect(wfTeam?.workflow?.steps.length).toBeGreaterThan(0);
+  });
+
+  it("自定义团队 update/delete 正常", () => {
+    const store = new TeamStore(path.join(dir, "teams.json"));
+    const t = store.create({ name: "研发团", expertIds: ["daily"] });
     const updated = store.update({ id: t.id, description: "全链路" });
     expect(updated?.description).toBe("全链路");
     store.delete(t.id);
-    expect(store.list()).toHaveLength(0);
+    expect(store.list()).toHaveLength(BUILTIN_TEAMS.length);
+  });
+
+  it("auto 团队 create/update 透传主 agent 与角色", () => {
+    const store = new TeamStore(path.join(dir, "teams.json"));
+    const t = store.create({
+      name: "调度团",
+      routingStrategy: "auto",
+      leadExpertId: "project-coordinator",
+      expertIds: ["daily", "coding"],
+      roles: { "project-coordinator": "协调者", daily: "办公执行", coding: "编码执行" },
+    });
+    expect(t.leadExpertId).toBe("project-coordinator");
+    expect(t.roles?.daily).toBe("办公执行");
+    const updated = store.update({ id: t.id, leadExpertId: null, roles: null });
+    expect(updated?.leadExpertId).toBeUndefined();
+    expect(updated?.roles).toBeUndefined();
+  });
+
+  it("内置 auto 示例团队含主 agent + 角色，计数=成员+主 agent", () => {
+    const store = new TeamStore(path.join(dir, "teams.json"));
+    const dispatcher = store.get("team-example-dispatcher");
+    expect(dispatcher?.leadExpertId).toBe("project-coordinator");
+    expect(dispatcher?.roles?.["project-coordinator"]).toBe("协调者");
+    // 团队人数 = 成员 2 + 主 agent 1 = 3
+    expect((dispatcher?.expertIds.length ?? 0) + (dispatcher?.leadExpertId ? 1 : 0)).toBe(3);
   });
 });
 

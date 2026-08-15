@@ -1,4 +1,4 @@
-import type { AttachmentRef, Expert } from "@everybuddy/ipc-contract";
+import type { AttachmentRef, Expert, ExpertTeam } from "@everybuddy/ipc-contract";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useShallow } from "zustand/react/shallow";
@@ -37,6 +37,7 @@ import { RunningIndicator } from "./RunningIndicator";
 import { SendModeChooser } from "./SendModeChooser";
 import { SlashCommandMenu } from "./SlashCommandMenu";
 import { ToolApprovalBar } from "./ToolApprovalBar";
+import { WorkflowRunCard } from "./WorkflowRunCard";
 
 /* ── Model Selector Helpers ───────────────────── */
 
@@ -353,21 +354,37 @@ function WelcomeView() {
   const { t } = useTranslation();
   const { activeCategory, setActiveCategory } = useUIStore();
   const [text, setText] = useState("");
-  // 欢迎页可选专家：缺省跟随模式内置专家；选中自定义专家后 createTask 带 expertId
+  // 欢迎页可选专家/专家团：缺省跟随模式内置专家；选中自定义专家/团队后 createTask 带 expertId/teamId
   const experts = useExpertCenterStore((s) => s.experts);
+  const teams = useExpertCenterStore((s) => s.teams);
   const [expertId, setExpertId] = useState<string | null>(null);
+  const [teamId, setTeamId] = useState<string | null>(null);
   useEffect(() => {
     if (!useExpertCenterStore.getState().loaded) void useExpertCenterStore.getState().loadAll();
   }, []);
   // 模式切换时回退到该模式内置专家
   const defaultExpert = experts.find((e) => e.source === "builtin" && e.mode === activeCategory);
   const selectedExpert = experts.find((e) => e.id === expertId) ?? defaultExpert ?? null;
+  // 选中的专家团（auto/workflow 运行时按团队调度；与专家互斥）
+  const selectedTeam = teams.find((t) => t.id === teamId) ?? null;
 
-  // 「+」菜单选择专家：内置 → 切 tab 且不显示 chip；自定义 → 记录 expertId 并同步模式
+  // 「+」菜单选择专家：内置 → 切 tab 且不显示 chip；自定义 → 记录 expertId 并同步模式（清除团队）
   const handleSelectExpert = (e: Expert) => {
     setExpertId(e.source === "builtin" ? null : e.id);
+    setTeamId(null);
     if (e.mode !== activeCategory) setActiveCategory(e.mode);
   };
+
+  // 「+」菜单选择团队（auto/workflow）：绑定团队并同步其首成员模式
+  const handleSelectTeam = (t: ExpertTeam) => {
+    setTeamId(t.id);
+    setExpertId(null);
+    const first = experts.find((x) => x.id === t.expertIds[0]);
+    if (first && first.mode !== activeCategory) setActiveCategory(first.mode);
+  };
+
+  // 清除团队选择
+  const handleClearTeam = () => setTeamId(null);
 
   // 「+」菜单选择技能：插入 "/技能名 " 到输入框
   const handleSelectSkill = (name: string) => {
@@ -415,7 +432,8 @@ function WelcomeView() {
             ? {
                 type: "workspace",
                 mode: activeCategory,
-                expertId: selectedExpert?.id,
+                // 团队任务绑定 teamId；否则专家选择生效（custom 专家叠加覆盖）
+                ...(selectedTeam ? { teamId: selectedTeam.id } : { expertId: selectedExpert?.id }),
                 workspaceId: pendingWorkspaceId,
                 title: trimmed.slice(0, 30) || t("welcome.newTaskTitle"),
                 providerId: effectiveProviderId ?? undefined,
@@ -423,7 +441,7 @@ function WelcomeView() {
             : {
                 type: "temp",
                 mode: activeCategory,
-                expertId: selectedExpert?.id,
+                ...(selectedTeam ? { teamId: selectedTeam.id } : { expertId: selectedExpert?.id }),
                 title: trimmed.slice(0, 30) || t("welcome.newTaskTitle"),
                 providerId: effectiveProviderId ?? undefined,
               },
@@ -489,6 +507,7 @@ function WelcomeView() {
                 onClick={() => {
                   setActiveCategory(mode.id);
                   setExpertId(null); // 回退该模式内置专家
+                  setTeamId(null); // 团队选择一并清除
                 }}
                 className={`flex h-[36px] items-center gap-[8px] rounded-full px-[20px] text-[15px] font-semibold transition active:scale-[0.97] ${
                   isActive ? "bg-ink text-card" : "bg-hover text-ink-2 hover:bg-active"
@@ -564,8 +583,11 @@ function WelcomeView() {
                 <PlusMenu
                   mode={activeCategory}
                   expertId={expertId}
+                  teamId={teamId}
                   onSelectExpert={handleSelectExpert}
                   onClearExpert={() => setExpertId(null)}
+                  onSelectTeam={handleSelectTeam}
+                  onClearTeam={handleClearTeam}
                   onAddAttachment={openPicker}
                   onSelectSkill={handleSelectSkill}
                 />
@@ -626,6 +648,8 @@ function ChatView({ taskId }: { taskId: string }) {
       return { task: t, messages: t?.messages ?? [] };
     }),
   );
+  // workflow 运行记录存在时（含重开后恢复），即使无消息也渲染运行卡
+  const workflowRun = useSessionStore((s) => s.workflowRuns[taskId]);
 
   const [text, setText] = useState("");
   const sendMessage = useSessionStore((s) => s.sendMessage);
@@ -779,7 +803,7 @@ function ChatView({ taskId }: { taskId: string }) {
             ))}
           </div>
         )}
-        {messages.length === 0 ? (
+        {messages.length === 0 && !workflowRun ? (
           <div className="flex min-h-full flex-col items-center justify-center">
             <p className="text-sm text-ink-3">
               {hydrating ? t("chat.loadingHistory") : t("chat.emptyStart")}
@@ -800,6 +824,8 @@ function ChatView({ taskId }: { taskId: string }) {
             })}
             {/* 等待首个 assistant 消息的空白期（已发送未首响应）：末尾「运行中」指示 */}
             {task?.pending && !task.isStreaming && <RunningIndicator />}
+            {/* workflow 运行卡（workflow 团队任务；进度随 workflow_* + subagent_* 事件更新） */}
+            <WorkflowRunCard taskId={taskId} />
           </div>
         )}
       </div>

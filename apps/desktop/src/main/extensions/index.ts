@@ -37,12 +37,20 @@ export const DEFAULT_EXTENSIONS: Record<AgentMode, string[]> = {
   coding: ["plan-mode", "todo"],
 };
 
-export function buildExtensionFactories(names: string[], emit: Emit, deps: ExtensionDeps = {}) {
+export function buildExtensionFactories(
+  names: string[],
+  emit: Emit,
+  deps: ExtensionDeps = {},
+  opts: { includePermission?: boolean } = {},
+) {
   const factories: InlineExtension[] = [];
   const controllers: Record<string, unknown> = {};
   const tools: string[] = [];
-  // 权限扩展恒在（不随 agent-*.json extensions 关闭），作为工具调用门禁
-  const effective = Array.from(new Set(["permission", ...names]));
+  // 权限扩展恒在（不随 agent-*.json extensions 关闭），作为工具调用门禁；
+  // headless 子会话传 includePermission:false 跳过（委派已获授权，不再逐工具弹窗）
+  const effective = Array.from(
+    new Set([...(opts.includePermission !== false ? ["permission"] : []), ...names]),
+  );
   for (const name of effective) {
     const handle = EXTENSION_REGISTRY[name]?.(emit, deps);
     if (!handle) continue;

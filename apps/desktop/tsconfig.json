@@ -28,6 +28,8 @@
     "tests/ipcContract.test.ts",
     "tests/historyMapper.test.ts",
     "tests/markdownText.test.tsx",
-    "tests/i18n.test.ts"
+    "tests/i18n.test.ts",
+    "tests/teamRuntime.test.ts",
+    "tests/teamRunStore.test.ts"
   ]
 }

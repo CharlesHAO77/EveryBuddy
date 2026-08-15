@@ -5,24 +5,22 @@
  * 技能 SKILL.md 编辑 + 启停；连接器 per-type 配置 + 测试连接 + 绑定专家。
  */
 
-import type { Connector, Expert, ExpertTeam, SkillEntry } from "@everybuddy/ipc-contract";
+import type {
+  Connector,
+  Expert,
+  ExpertTeam,
+  SkillEntry,
+  TeamWorkflow,
+  WorkflowStep,
+} from "@everybuddy/ipc-contract";
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { translateError } from "../../i18n/translateError";
 import { useExpertCenterStore } from "../../stores/expertCenterStore";
-import {
-  IconBot,
-  IconCheck,
-  IconClipboard,
-  IconClose,
-  IconInfo,
-  IconMonitor,
-  IconPalette,
-  IconPlus,
-  IconWarn,
-} from "./icons";
+import { IconCheck, IconClose, IconInfo, IconPlus, IconWarn } from "./icons";
 import { ExtensionMultiSelect, ToolMultiSelect } from "./PickList";
 import {
+  AgentRoleRows,
   btnDanger,
   btnGhost,
   btnPrimary,
@@ -32,14 +30,17 @@ import {
   IconTile,
   type IconTone,
   Note,
+  Select,
   SourceBadge,
   STATUS_LABEL,
   StatusDot,
   Switch,
   Tag,
+  TeamStrategyBadge,
   TextArea,
   TextInput,
   TypeBadge,
+  teamMemberCount,
 } from "./ui";
 
 type TabId = "expert" | "team" | "skill" | "connector";
@@ -63,11 +64,6 @@ export function DetailModal({
     window.addEventListener("keydown", h);
     return () => window.removeEventListener("keydown", h);
   }, [onClose]);
-
-  // 团队预留能力占位卡（res-bot / res-workflow）
-  if (currentId.startsWith("res-")) {
-    return <ReservedModal kind={currentId.slice(4)} onClose={onClose} />;
-  }
 
   const expert = kind === "expert" ? store.experts.find((e) => e.id === currentId) : undefined;
   const team = kind === "team" ? store.teams.find((t) => t.id === currentId) : undefined;
@@ -408,13 +404,22 @@ function ExpertForm({
 function TeamForm({ team, onClose }: { team: ExpertTeam; onClose: () => void }) {
   const { t } = useTranslation();
   const store = useExpertCenterStore();
+  const builtin = team.source === "builtin";
+  const auto = team.routingStrategy === "auto";
   const [expertIds, setExpertIds] = useState<string[]>(team.expertIds);
+  const [leadExpertId, setLeadExpertId] = useState<string | null>(team.leadExpertId ?? null);
+  const [roles, setRoles] = useState<Record<string, string>>(team.roles ?? {});
   const [busy, setBusy] = useState(false);
 
   const save = async () => {
     setBusy(true);
     try {
-      await store.updateTeam({ id: team.id, expertIds });
+      await store.updateTeam({
+        id: team.id,
+        expertIds,
+        leadExpertId: auto ? leadExpertId : undefined,
+        roles: Object.keys(roles).length > 0 ? roles : undefined,
+      });
       onClose();
     } finally {
       setBusy(false);
@@ -426,6 +431,41 @@ function TeamForm({ team, onClose }: { team: ExpertTeam; onClose: () => void }) 
     onClose();
   };
 
+  const duplicate = async () => {
+    setBusy(true);
+    try {
+      await store.duplicateTeam(team.id);
+      onClose();
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const expertById = (id: string) => store.experts.find((e) => e.id === id);
+  const leadExpert = leadExpertId ? expertById(leadExpertId) : undefined;
+
+  // 选主 agent：若该专家已在成员中则从成员移除（主 agent 与成员互斥）
+  const onChangeLead = (v: string) => {
+    setLeadExpertId(v || null);
+    if (v) setExpertIds((prev) => prev.filter((id) => id !== v));
+  };
+
+  // 角色编辑行：主 agent 在前 + 成员（按选中顺序）
+  const roleAgents: Array<{ id: string; name: string; icon?: string }> = [];
+  if (leadExpertId && leadExpert) roleAgents.push(leadExpert);
+  for (const id of expertIds) {
+    const e = expertById(id);
+    if (e) roleAgents.push(e);
+  }
+
+  const setRole = (id: string, role: string) =>
+    setRoles((prev) => {
+      const next = { ...prev };
+      if (role.trim()) next[id] = role.trim();
+      else delete next[id];
+      return next;
+    });
+
   return (
     <>
       <ModalHead
@@ -434,68 +474,123 @@ function TeamForm({ team, onClose }: { team: ExpertTeam; onClose: () => void }) 
         title={team.name}
         sub={t("expert.team.memberSub", {
           description: team.description,
-          num: team.expertIds.length,
+          num: teamMemberCount(team),
         })}
         onClose={onClose}
       />
       <div className="min-h-0 flex-1 overflow-y-auto px-[24px] py-[22px]">
-        <Field label={t("expert.team.membersLabel")} hint={t("expert.team.membersHint")}>
-          <div className="grid grid-cols-2 gap-[9px]">
-            {store.experts.map((e) => {
-              const on = expertIds.includes(e.id);
-              return (
-                <button
-                  key={e.id}
-                  type="button"
-                  onClick={() =>
-                    setExpertIds((prev) => (on ? prev.filter((x) => x !== e.id) : [...prev, e.id]))
-                  }
-                  className={`flex items-center gap-[10px] rounded-[10px] border p-[10px] px-[12px] text-left transition ${
-                    on ? "border-accent-line bg-accent-tint" : "border-line bg-card hover:bg-hover"
-                  }`}
-                >
-                  <span
-                    className={`flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-[5px] border-[1.5px] transition ${
-                      on ? "border-accent bg-accent text-white" : "border-line-strong"
-                    }`}
-                  >
-                    {on ? <IconCheck size={13} strokeWidth={2.5} /> : null}
-                  </span>
-                  <span className="flex h-[26px] w-[26px] items-center justify-center rounded-[7px] bg-accent-tint text-accent">
-                    {expertIcon(e.icon)}
-                  </span>
-                  <span className="truncate text-[15px] font-medium">{e.name}</span>
-                </button>
-              );
-            })}
-          </div>
+        {/* 运行策略：只读标签（策略在新建时选定） */}
+        <Field label={t("expert.team.strategyLabel")}>
+          <TeamStrategyBadge strategy={team.routingStrategy} />
         </Field>
+
+        {/* 主 agent（auto 团队） */}
+        {auto ? (
+          <div className="mt-[20px]">
+            <Field label={t("expert.team.leadLabel")} hint={t("expert.team.leadHint")}>
+              <Select
+                value={leadExpertId ?? ""}
+                onChange={onChangeLead}
+                disabled={builtin}
+                options={store.experts.map((e) => ({ value: e.id, label: e.name }))}
+              />
+            </Field>
+          </div>
+        ) : null}
+
+        {/* 成员（候选不含主 agent） */}
         <div className="mt-[20px]">
-          <Note
-            tone="warn"
-            icon={<IconWarn size={18} />}
-            title={t("expert.team.advancedNoteTitle")}
-          >
-            {t("expert.team.advancedNoteBody")}
-          </Note>
+          <Field label={t("expert.team.membersLabel")} hint={t("expert.team.membersHint")}>
+            <div className="grid grid-cols-2 gap-[9px]">
+              {store.experts
+                .filter((e) => e.id !== leadExpertId)
+                .map((e) => {
+                  const on = expertIds.includes(e.id);
+                  return (
+                    <button
+                      key={e.id}
+                      type="button"
+                      disabled={builtin}
+                      onClick={() =>
+                        setExpertIds((prev) =>
+                          on ? prev.filter((x) => x !== e.id) : [...prev, e.id],
+                        )
+                      }
+                      className={`flex items-center gap-[10px] rounded-[10px] border p-[10px] px-[12px] text-left transition disabled:cursor-not-allowed ${
+                        on
+                          ? "border-accent-line bg-accent-tint"
+                          : "border-line bg-card hover:bg-hover"
+                      }`}
+                    >
+                      <span
+                        className={`flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-[5px] border-[1.5px] transition ${
+                          on ? "border-accent bg-accent text-white" : "border-line-strong"
+                        }`}
+                      >
+                        {on ? <IconCheck size={13} strokeWidth={2.5} /> : null}
+                      </span>
+                      <span className="flex h-[26px] w-[26px] items-center justify-center rounded-[7px] bg-accent-tint text-accent">
+                        {expertIcon(e.icon)}
+                      </span>
+                      <span className="truncate text-[15px] font-medium">{e.name}</span>
+                    </button>
+                  );
+                })}
+            </div>
+          </Field>
         </div>
-        <div className="mt-[20px] flex items-center justify-center gap-0">
-          <FlowNode icon={<IconBot />} name={t("expert.flow.mainAgent")} lead />
-          <span className="px-[6px] text-[18px] text-ink-3">→</span>
-          <FlowNode icon={<IconClipboard />} name={t("expert.flow.subAgent")} />
-          <span className="px-[6px] text-[18px] text-ink-3">→</span>
-          <FlowNode icon={<IconPalette />} name={t("expert.flow.subAgent")} />
-          <span className="px-[6px] text-[18px] text-ink-3">→</span>
-          <FlowNode icon={<IconBot />} name={t("expert.flow.aggregate")} lead />
-        </div>
+
+        {/* 角色定义 */}
+        {roleAgents.length > 0 ? (
+          <div className="mt-[20px]">
+            <Field label={t("expert.team.rolesLabel")} hint={t("expert.team.rolesHint")}>
+              <AgentRoleRows
+                agents={roleAgents}
+                roles={roles}
+                onChange={setRole}
+                readOnly={builtin}
+              />
+            </Field>
+          </div>
+        ) : null}
+
+        {/* workflow 只读展示 */}
+        {team.workflow ? (
+          <div className="mt-[20px]">
+            <Field
+              label={`${t("expert.team.workflowReadonlyTitle")} · ${team.workflow.name}`}
+              hint={t("expert.team.workflowReadonlyHint")}
+            >
+              <WorkflowStepsView workflow={team.workflow} expertById={expertById} />
+            </Field>
+          </div>
+        ) : null}
       </div>
       <ModalFoot>
-        <button type="button" onClick={() => void save()} disabled={busy} className={btnPrimary}>
-          {t("expert.team.saveMembers")}
-        </button>
-        <button type="button" onClick={() => void remove()} className={btnDanger}>
-          {t("common.delete")}
-        </button>
+        {builtin ? (
+          <button
+            type="button"
+            onClick={() => void duplicate()}
+            disabled={busy}
+            className={btnPrimary}
+          >
+            {t("expert.team.duplicate")}
+          </button>
+        ) : (
+          <>
+            <button
+              type="button"
+              onClick={() => void save()}
+              disabled={busy}
+              className={btnPrimary}
+            >
+              {t("expert.team.saveMembers")}
+            </button>
+            <button type="button" onClick={() => void remove()} className={btnDanger}>
+              {t("common.delete")}
+            </button>
+          </>
+        )}
         <button type="button" onClick={onClose} className={btnGhost}>
           {t("common.close")}
         </button>
@@ -504,25 +599,58 @@ function TeamForm({ team, onClose }: { team: ExpertTeam; onClose: () => void }) 
   );
 }
 
-function FlowNode({
-  icon,
-  name,
-  lead = false,
+/** workflow 步骤只读链式展示（含并行组） */
+function WorkflowStepsView({
+  workflow,
+  expertById,
 }: {
-  icon: React.ReactNode;
-  name: string;
-  lead?: boolean;
+  workflow: TeamWorkflow;
+  expertById: (id: string) => Expert | undefined;
 }) {
   return (
-    <div
-      className={`flex min-w-[92px] flex-col items-center gap-[6px] rounded-[12px] border p-[14px] px-[16px] ${
-        lead ? "border-accent-line bg-accent-tint" : "border-line bg-paper"
-      }`}
-    >
-      <span className={lead ? "text-accent" : "text-ink-2"}>{icon}</span>
-      <span className={`text-[13px] font-semibold ${lead ? "text-accent-strong" : "text-ink-2"}`}>
-        {name}
-      </span>
+    <div className="flex flex-wrap items-center gap-[6px]">
+      {workflow.steps.map((step, i) => (
+        <div key={step.id} className="flex items-center gap-[6px]">
+          {i > 0 ? <span className="text-[14px] text-ink-3">→</span> : null}
+          <StepChip step={step} expertById={expertById} />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function StepChip({
+  step,
+  expertById,
+}: {
+  step: WorkflowStep;
+  expertById: (id: string) => Expert | undefined;
+}) {
+  if (step.kind === "serial") {
+    const e = expertById(step.expertId);
+    return (
+      <div className="flex flex-col items-center gap-[3px] rounded-[9px] border border-line bg-paper px-[10px] py-[7px]">
+        <span className="text-[11px] font-semibold text-ink">{step.id}</span>
+        <span className="text-[10.5px] text-ink-3">{e?.name ?? step.expertId}</span>
+      </div>
+    );
+  }
+  return (
+    <div className="flex flex-col items-center gap-[4px] rounded-[9px] border border-accent-line bg-accent-tint px-[10px] py-[7px]">
+      <span className="text-[11px] font-semibold text-ink">{step.id}</span>
+      <div className="flex gap-[4px]">
+        {step.steps.map((s) => {
+          const e = expertById(s.expertId);
+          return (
+            <span
+              key={s.id}
+              className="rounded-[5px] bg-white px-[5px] py-[1px] text-[10.5px] text-ink-2"
+            >
+              {e?.name ?? s.expertId}
+            </span>
+          );
+        })}
+      </div>
     </div>
   );
 }
@@ -949,53 +1077,6 @@ function McpConfigForm({
           : t("expert.connector.jsonTransportStdio")}
         {t("expert.connector.jsonHintSuffix")}
       </p>
-    </>
-  );
-}
-
-/* ════════════ 预留能力弹层（团队 tab 的占位卡） ════════════ */
-
-function ReservedModal({ kind, onClose }: { kind: string; onClose: () => void }) {
-  const { t } = useTranslation();
-  const isBot = kind === "bot";
-  const title = isBot ? t("expert.reservedSubAgent") : t("expert.reservedWorkflow");
-  const desc = isBot
-    ? t("expert.reservedModal.subAgentDesc")
-    : t("expert.reservedModal.workflowDesc");
-  const icon = isBot ? "bot" : "workflow";
-  return (
-    <>
-      <ModalHead
-        icon={icon}
-        tone="neutral"
-        title={title}
-        sub={desc}
-        badges={
-          <span className="rounded-[6px] bg-active px-[8px] py-[2px] text-[11px] font-semibold text-ink-2">
-            {t("expert.reserved")}
-          </span>
-        }
-        onClose={onClose}
-      />
-      <div className="min-h-0 flex-1 overflow-y-auto px-[24px] py-[22px]">
-        <Note tone="warn" icon={<IconWarn size={18} />} title={t("expert.reservedModal.noteTitle")}>
-          {t("expert.reservedModal.noteBody")}
-        </Note>
-        <div className="mt-[20px] flex items-center justify-center">
-          <FlowNode icon={<IconBot />} name={t("expert.flow.mainAgent")} lead />
-          <span className="px-[6px] text-[18px] text-ink-3">→</span>
-          <FlowNode icon={<IconClipboard />} name={t("expert.flow.subAgent")} />
-          <span className="px-[6px] text-[18px] text-ink-3">→</span>
-          <FlowNode icon={<IconMonitor />} name={t("expert.flow.subAgent")} />
-          <span className="px-[6px] text-[18px] text-ink-3">→</span>
-          <FlowNode icon={<IconBot />} name={t("expert.flow.aggregate")} lead />
-        </div>
-      </div>
-      <ModalFoot>
-        <button type="button" onClick={onClose} className={btnGhost}>
-          {t("common.close")}
-        </button>
-      </ModalFoot>
     </>
   );
 }

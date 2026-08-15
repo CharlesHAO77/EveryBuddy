@@ -325,3 +325,64 @@ export const btnGhost =
   "inline-flex items-center gap-[6px] rounded-[8px] border border-line-strong bg-card px-[16px] h-[38px] text-[15px] font-semibold text-ink-2 transition hover:bg-hover hover:text-ink active:scale-[0.98]";
 export const btnDanger =
   "inline-flex items-center gap-[6px] rounded-[8px] border border-danger/30 bg-card px-[16px] h-[38px] text-[15px] font-semibold text-danger transition hover:bg-danger/10 active:scale-[0.98]";
+
+// ── 专家团共用展示/编辑片段 ─────────────────────
+
+/** 团队人数 = 成员数 + 主 agent（主 agent 计入团队，见产品约定「主 agent 也算在团队内」） */
+export function teamMemberCount(team: { expertIds?: string[]; leadExpertId?: string }): number {
+  return (team.expertIds?.length ?? 0) + (team.leadExpertId ? 1 : 0);
+}
+
+const TEAM_STRATEGY_LABEL: Record<string, string> = {
+  manual: "expert.team.strategy.manual",
+  auto: "expert.team.strategy.auto",
+  workflow: "expert.team.strategy.workflow",
+};
+
+/** 运行策略标签（详情/卡片展示用，替代策略选择器） */
+export function TeamStrategyBadge({ strategy }: { strategy: string }) {
+  const { t } = useTranslation();
+  return (
+    <span className="inline-flex items-center rounded-full border border-accent-line bg-accent-tint px-[8px] py-[2px] text-[11.5px] font-semibold text-accent-strong">
+      {t(TEAM_STRATEGY_LABEL[strategy] ?? "expert.team.strategy.manual")}
+    </span>
+  );
+}
+
+/**
+ * 已选 agent 角色编辑行（主 agent 在前）：每个 agent 一行 icon+名 + 角色输入。
+ * 供 TeamForm / CreateModal 复用，分别定义各 agent 角色。
+ */
+export function AgentRoleRows({
+  agents,
+  roles,
+  onChange,
+  readOnly = false,
+}: {
+  agents: Array<{ id: string; name: string; icon?: string }>;
+  roles: Record<string, string>;
+  onChange: (id: string, role: string) => void;
+  readOnly?: boolean;
+}) {
+  if (agents.length === 0) return null;
+  return (
+    <div className="space-y-[8px]">
+      {agents.map((a) => (
+        <div key={a.id} className="flex items-center gap-[10px]">
+          <span className="flex h-[24px] w-[24px] shrink-0 items-center justify-center rounded-[6px] bg-accent-tint text-accent">
+            {expertIcon(a.icon)}
+          </span>
+          <span className="w-[96px] shrink-0 truncate text-[13px] font-medium text-ink">
+            {a.name}
+          </span>
+          <TextInput
+            value={roles[a.id] ?? ""}
+            onChange={(v) => onChange(a.id, v)}
+            placeholder="角色（如 分析师 / 编码 / 评审）"
+            disabled={readOnly}
+          />
+        </div>
+      ))}
+    </div>
+  );
+}

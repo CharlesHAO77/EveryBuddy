@@ -3,9 +3,9 @@
  * 折叠态单行芯片：工具名 + 状态图标；展开态分节显示参数/输出/结果，各带复制按钮。
  */
 import type { TFunction } from "i18next";
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import type { ToolBlock } from "../stores/sessionStore";
+import { type ToolBlock, useSessionStore } from "../stores/sessionStore";
 import { CopyButton } from "./CopyButton";
 import {
   IconCheck,
@@ -15,9 +15,12 @@ import {
   IconWrench,
   IconX,
 } from "./icons";
+import { SubAgentPanel } from "./SubAgentPanel";
 
 interface ToolCallCardProps {
   block: ToolBlock;
+  /** 父任务 id（按 parentToolCallId 查找内嵌的子 Agent 面板） */
+  taskId: string;
 }
 
 function StatusIcon({ status }: { status: ToolBlock["status"] }) {
@@ -157,9 +160,28 @@ function Section({ label, copyText }: { label: string; copyText: string }) {
   );
 }
 
-export function ToolCallCard({ block }: ToolCallCardProps) {
+export function ToolCallCard({ block, taskId }: ToolCallCardProps) {
   const { t } = useTranslation();
   const [expanded, setExpanded] = useState(false);
+  // 子 Agent 面板：delegate 工具调用绑定的 subagent_* 状态（按 parentToolCallId 关联）。
+  // 注意：选择器只取稳定引用（s.subAgents[taskId]），过滤数组在 useMemo 派生，
+  // 避免内联选择器每次返回新数组触发 useSyncExternalStore 无限重渲染
+  const subagentMap = useSessionStore((s) => s.subAgents[taskId]);
+  const subagentStates = useMemo(
+    () =>
+      subagentMap
+        ? Object.values(subagentMap).filter((sub) => sub.parentToolCallId === block.toolCallId)
+        : [],
+    [subagentMap, block.toolCallId],
+  );
+  // 运行中自动展开：delegate 调用（含内嵌子 agent 运行）进行时自动展开，流式过程可见；结束后保持展开可折叠
+  const anyRunning =
+    block.status === "calling" ||
+    block.status === "running" ||
+    subagentStates.some((s) => s.status === "running");
+  useEffect(() => {
+    if (anyRunning) setExpanded(true);
+  }, [anyRunning]);
   const name = block.toolName || t("tool.defaultName");
   const statusLabel =
     block.status === "calling"
@@ -235,6 +257,11 @@ export function ToolCallCard({ block }: ToolCallCardProps) {
               <div className="mt-0.5 text-[12px] text-danger">{block.error}</div>
             </div>
           )}
+
+          {/* 子 Agent 面板（delegate 工具调用内嵌，类 pi 折叠卡片） */}
+          {subagentStates.map((sub) => (
+            <SubAgentPanel key={sub.subagentId} subagent={sub} />
+          ))}
         </div>
       )}
     </div>

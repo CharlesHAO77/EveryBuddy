@@ -9,6 +9,7 @@ import type {
   HistoryToolBlock,
   MessageUsage,
   TaskMeta,
+  TeamRunRecord,
   Workspace,
 } from "@everybuddy/ipc-contract";
 import { create } from "zustand";
@@ -99,6 +100,56 @@ export interface ChatNotice {
   level: "info" | "warn" | "error";
 }
 
+/** 子 Agent 实时状态（subagent_* 事件驱动；挂到父 delegate 工具块内嵌面板） */
+export interface SubAgentState {
+  subagentId: string;
+  parentToolCallId: string;
+  expertId: string;
+  expertName: string;
+  prompt: string;
+  stepId?: string;
+  status: "running" | "ok" | "error" | "aborted";
+  /** 累积文本（subagent_delta） */
+  delta: string;
+  tools: Array<{
+    toolName: string;
+    toolCallId: string;
+    phase: "start" | "update" | "end";
+    output?: unknown;
+    error?: string;
+  }>;
+  text?: string;
+  usage?: MessageUsage;
+  error?: string;
+}
+
+/** workflow 单步运行状态 */
+export interface WorkflowStepState {
+  stepId: string;
+  expertIds: string[];
+  prompt: string;
+  kind: "serial" | "parallel";
+  status: "pending" | "running" | "ok" | "error";
+  /** 该步骤下所有子 agent 的 subagentId（展开步骤面板用） */
+  subagentIds: string[];
+  output?: string;
+  error?: string;
+}
+
+/** workflow 运行状态（workflow_* + subagent_* 事件驱动；当前任务仅存最新一次运行） */
+export interface WorkflowRunState {
+  runId: string;
+  workflowId: string;
+  name: string;
+  status: "running" | "ok" | "error" | "aborted";
+  steps: WorkflowStepState[];
+  summary?: string;
+  error?: string;
+  usage?: MessageUsage;
+  startedAt: number;
+  finishedAt?: number;
+}
+
 // ────────────────────────────────────────────────
 // Store
 // ────────────────────────────────────────────────
@@ -152,6 +203,67 @@ interface SessionState {
   markSteerTargetRedirected: (taskId: string) => void;
   /** 清除最早一条「转向中」用户消息（steer 的 assistant turn 到达时） */
   clearOldestSteerPending: (taskId: string) => void;
+
+  // 子 Agent / workflow 实时状态（subagent_* / workflow_* 事件驱动）
+  subAgents: Record<string, Record<string, SubAgentState>>;
+  workflowRuns: Record<string, WorkflowRunState>;
+  startSubagent: (
+    taskId: string,
+    payload: {
+      subagentId: string;
+      parentToolCallId: string;
+      expertId: string;
+      expertName: string;
+      prompt: string;
+      stepId?: string;
+    },
+  ) => void;
+  appendSubagentDelta: (taskId: string, subagentId: string, delta: string) => void;
+  subagentTool: (
+    taskId: string,
+    subagentId: string,
+    payload: {
+      toolName: string;
+      toolCallId: string;
+      phase: "start" | "update" | "end";
+      args?: unknown;
+      output?: unknown;
+      error?: string;
+    },
+  ) => void;
+  endSubagent: (
+    taskId: string,
+    subagentId: string,
+    payload: {
+      status: "ok" | "error" | "aborted";
+      text?: string;
+      error?: string;
+      usage?: MessageUsage;
+    },
+  ) => void;
+  startWorkflow: (
+    taskId: string,
+    payload: { workflowId: string; name: string; stepCount: number },
+  ) => void;
+  workflowStepStart: (
+    taskId: string,
+    payload: { stepId: string; expertIds: string[]; prompt: string; kind: "serial" | "parallel" },
+  ) => void;
+  workflowStepEnd: (
+    taskId: string,
+    payload: { stepId: string; ok: boolean; output?: string; error?: string; usage?: MessageUsage },
+  ) => void;
+  endWorkflow: (
+    taskId: string,
+    payload: {
+      status: "ok" | "error" | "aborted";
+      summary?: string;
+      error?: string;
+      usage?: MessageUsage;
+    },
+  ) => void;
+  /** 从持久化的团队运行记录恢复到渲染层（重开后追溯；记录 → SubAgentState/WorkflowRunState） */
+  hydrateTeamRuns: (taskId: string, record: TeamRunRecord) => void;
 
   initFromBackend: (tasks: TaskMeta[], workspaces: Workspace[]) => void;
   upsertTask: (task: Task) => void;
@@ -279,6 +391,8 @@ export const useSessionStore = create<SessionState>((set, get) => ({
   queues: {},
   pendingFollowUps: {},
   clearingQueues: {},
+  subAgents: {},
+  workflowRuns: {},
 
   handleQueueUpdate: (taskId, queue) => {
     const prev = get().queues[taskId]?.followUp ?? [];
@@ -412,6 +526,224 @@ export const useSessionStore = create<SessionState>((set, get) => ({
       }),
     })),
 
+  // ── 子 Agent / workflow 状态（subagent_* / workflow_* 事件驱动） ──
+
+  startSubagent: (taskId, payload) =>
+    set((state) => ({
+      subAgents: {
+        ...state.subAgents,
+        [taskId]: {
+          ...(state.subAgents[taskId] ?? {}),
+          [payload.subagentId]: {
+            subagentId: payload.subagentId,
+            parentToolCallId: payload.parentToolCallId,
+            expertId: payload.expertId,
+            expertName: payload.expertName,
+            prompt: payload.prompt,
+            stepId: payload.stepId,
+            status: "running",
+            delta: "",
+            tools: [],
+          },
+        },
+      },
+    })),
+
+  appendSubagentDelta: (taskId, subagentId, delta) =>
+    set((state) => {
+      const sub = state.subAgents[taskId]?.[subagentId];
+      if (!sub) return state;
+      return {
+        subAgents: {
+          ...state.subAgents,
+          [taskId]: {
+            ...state.subAgents[taskId],
+            [subagentId]: { ...sub, delta: sub.delta + delta },
+          },
+        },
+      };
+    }),
+
+  subagentTool: (taskId, subagentId, payload) =>
+    set((state) => {
+      const sub = state.subAgents[taskId]?.[subagentId];
+      if (!sub) return state;
+      // 按 toolCallId 升位更新（同一工具多次 phase 事件合并为一条），避免数组膨胀 + 数组索引 key
+      const entry = {
+        toolName: payload.toolName,
+        toolCallId: payload.toolCallId,
+        phase: payload.phase,
+        output: payload.output,
+        error: payload.error,
+      };
+      const existing = sub.tools.some((tool) => tool.toolCallId === payload.toolCallId);
+      const tools = existing
+        ? sub.tools.map((tool) =>
+            tool.toolCallId === payload.toolCallId ? { ...tool, ...entry } : tool,
+          )
+        : [...sub.tools, entry];
+      return {
+        subAgents: {
+          ...state.subAgents,
+          [taskId]: {
+            ...state.subAgents[taskId],
+            [subagentId]: { ...sub, tools },
+          },
+        },
+      };
+    }),
+
+  endSubagent: (taskId, subagentId, payload) =>
+    set((state) => {
+      const sub = state.subAgents[taskId]?.[subagentId];
+      if (!sub) return state;
+      return {
+        subAgents: {
+          ...state.subAgents,
+          [taskId]: {
+            ...state.subAgents[taskId],
+            [subagentId]: {
+              ...sub,
+              status: payload.status,
+              text: payload.text,
+              error: payload.error,
+              usage: payload.usage,
+            },
+          },
+        },
+      };
+    }),
+
+  startWorkflow: (taskId, payload) =>
+    set((state) => ({
+      workflowRuns: {
+        ...state.workflowRuns,
+        [taskId]: {
+          runId: taskId,
+          workflowId: payload.workflowId,
+          name: payload.name,
+          status: "running",
+          steps: [],
+          startedAt: Date.now(),
+        },
+      },
+    })),
+
+  workflowStepStart: (taskId, payload) =>
+    set((state) => {
+      const run = state.workflowRuns[taskId];
+      if (!run) return state;
+      const step: WorkflowStepState = {
+        stepId: payload.stepId,
+        expertIds: payload.expertIds,
+        prompt: payload.prompt,
+        kind: payload.kind,
+        status: "running",
+        subagentIds: [],
+      };
+      return {
+        workflowRuns: {
+          ...state.workflowRuns,
+          [taskId]: { ...run, steps: [...run.steps, step] },
+        },
+      };
+    }),
+
+  workflowStepEnd: (taskId, payload) =>
+    set((state) => {
+      const run = state.workflowRuns[taskId];
+      if (!run) return state;
+      return {
+        workflowRuns: {
+          ...state.workflowRuns,
+          [taskId]: {
+            ...run,
+            steps: run.steps.map((s) =>
+              s.stepId === payload.stepId
+                ? {
+                    ...s,
+                    status: payload.ok ? "ok" : "error",
+                    output: payload.output,
+                    error: payload.error,
+                  }
+                : s,
+            ),
+          },
+        },
+      };
+    }),
+
+  endWorkflow: (taskId, payload) =>
+    set((state) => {
+      const run = state.workflowRuns[taskId];
+      if (!run) return state;
+      return {
+        workflowRuns: {
+          ...state.workflowRuns,
+          [taskId]: {
+            ...run,
+            status: payload.status,
+            summary: payload.summary,
+            error: payload.error,
+            usage: payload.usage,
+            finishedAt: Date.now(),
+          },
+        },
+      };
+    }),
+
+  // 从持久化记录恢复：记录已存最终状态（delta 置空、text 用全文、status 用完成态）
+  hydrateTeamRuns: (taskId, record) =>
+    set((state) => {
+      const subAgents: Record<string, SubAgentState> = {};
+      for (const sub of record.subAgents) {
+        subAgents[sub.subagentId] = {
+          subagentId: sub.subagentId,
+          parentToolCallId: sub.parentToolCallId,
+          expertId: sub.expertId,
+          expertName: sub.expertName,
+          prompt: sub.prompt,
+          stepId: sub.stepId,
+          status: sub.status,
+          delta: "",
+          tools: sub.tools ?? [],
+          text: sub.text,
+          usage: sub.usage,
+          error: sub.error,
+        };
+      }
+      const workflowRun = record.workflowRun
+        ? {
+            runId: record.workflowRun.runId,
+            workflowId: record.workflowRun.workflowId,
+            name: record.workflowRun.name,
+            status: record.workflowRun.status,
+            steps: record.workflowRun.steps.map((s) => ({
+              stepId: s.stepId,
+              expertIds: s.expertIds,
+              kind: s.kind,
+              status: s.status,
+              prompt: "",
+              subagentIds: [],
+              output: s.output,
+              error: s.error,
+            })),
+            summary: record.workflowRun.summary,
+            error: record.workflowRun.error,
+            usage: record.workflowRun.usage,
+            startedAt: record.workflowRun.startedAt,
+            finishedAt: record.workflowRun.finishedAt,
+          }
+        : undefined;
+      return {
+        subAgents: { ...state.subAgents, [taskId]: subAgents },
+        workflowRuns: {
+          ...state.workflowRuns,
+          ...(workflowRun ? { [taskId]: workflowRun } : {}),
+        },
+      };
+    }),
+
   initFromBackend: (tasks, workspaces) =>
     set({
       // 按 updatedAt 倒序加载（最新优先）；updatedAt 相同时保持稳定顺序
@@ -445,6 +777,9 @@ export const useSessionStore = create<SessionState>((set, get) => ({
       id: meta.id,
       title: meta.title,
       type: meta.type,
+      mode: meta.mode,
+      expertId: meta.expertId,
+      teamId: meta.teamId,
       workspaceId: meta.workspaceId,
       workspacePath: meta.workspacePath,
       workDir: meta.workDir,
@@ -464,6 +799,9 @@ export const useSessionStore = create<SessionState>((set, get) => ({
       id: meta.id,
       title: meta.title,
       type: meta.type,
+      mode: meta.mode,
+      expertId: meta.expertId,
+      teamId: meta.teamId,
       workspaceId: meta.workspaceId,
       workspacePath: meta.workspacePath,
       workDir: meta.workDir,
@@ -507,6 +845,36 @@ export const useSessionStore = create<SessionState>((set, get) => ({
         ),
         hydratingIds: state.hydratingIds.filter((x) => x !== id),
       }));
+      // 恢复团队运行记录（子 agent / workflow 过程追溯）
+      try {
+        const runs = await window.electronAPI.team.getRuns(id);
+        if (runs) get().hydrateTeamRuns(id, runs);
+        // workflow 任务无会话 JSONL：用记录里的触发 prompt 重建用户消息，保证对话历史可见
+        const prompt = runs?.workflowRun?.prompt;
+        if (prompt) {
+          set((state) => ({
+            tasks: state.tasks.map((t) =>
+              t.id === id && t.messages.length === 0
+                ? {
+                    ...t,
+                    messages: [
+                      {
+                        id: `wf-prompt-${id}`,
+                        role: "user",
+                        blocks: [
+                          { id: `wf-prompt-${id}-b`, kind: "text", content: prompt, done: true },
+                        ],
+                        timestamp: runs.workflowRun?.startedAt ?? Date.now(),
+                      },
+                    ],
+                  }
+                : t,
+            ),
+          }));
+        }
+      } catch (err) {
+        console.warn("[hydrateTask] 团队运行记录恢复失败:", err);
+      }
     } catch (err) {
       console.error("[hydrateTask] 加载历史失败:", err);
       set((state) => ({ hydratingIds: state.hydratingIds.filter((x) => x !== id) }));
@@ -525,6 +893,8 @@ export const useSessionStore = create<SessionState>((set, get) => ({
       const { [id]: _q, ...queues } = state.queues;
       const { [id]: _pf, ...pendingFollowUps } = state.pendingFollowUps;
       const { [id]: _cq, ...clearingQueues } = state.clearingQueues;
+      const { [id]: _sa, ...subAgents } = state.subAgents;
+      const { [id]: _wr, ...workflowRuns } = state.workflowRuns;
       return {
         tasks: state.tasks.filter((t) => t.id !== id),
         currentTaskId: state.currentTaskId === id ? null : state.currentTaskId,
@@ -538,6 +908,8 @@ export const useSessionStore = create<SessionState>((set, get) => ({
         queues,
         pendingFollowUps,
         clearingQueues,
+        subAgents,
+        workflowRuns,
       };
     });
   },

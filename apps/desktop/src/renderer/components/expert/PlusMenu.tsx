@@ -15,7 +15,7 @@ import { useTranslation } from "react-i18next";
 import { useExpertCenterStore } from "../../stores/expertCenterStore";
 import { IconChevronRight, IconFile, IconPlus, IconSearch, IconSparkles, IconX } from "../icons";
 import { IconUsers } from "./icons";
-import { expertIcon } from "./ui";
+import { expertIcon, teamMemberCount } from "./ui";
 
 type Submenu = "experts" | "teams" | "skills" | null;
 
@@ -28,15 +28,22 @@ const SUB_LABEL: Record<Exclude<Submenu, null>, string> = {
 export function PlusMenu({
   mode,
   expertId,
+  teamId,
   onSelectExpert,
   onClearExpert,
+  onSelectTeam,
+  onClearTeam,
   onAddAttachment,
   onSelectSkill,
 }: {
   mode: "daily" | "coding";
   expertId: string | null;
+  /** 已选团队（auto/workflow；与 expertId 互斥） */
+  teamId: string | null;
   onSelectExpert: (e: Expert) => void;
   onClearExpert: () => void;
+  onSelectTeam: (t: ExpertTeam) => void;
+  onClearTeam: () => void;
   onAddAttachment: () => void;
   onSelectSkill: (name: string) => void;
 }) {
@@ -95,6 +102,7 @@ export function PlusMenu({
   const toggleOpen = () => setOpen((v) => !v);
 
   const selected = experts.find((e) => e.id === expertId) ?? null;
+  const selectedTeam = teams.find((t) => t.id === teamId) ?? null;
   const orderedExperts = [
     ...experts.filter((e) => e.mode === mode),
     ...experts.filter((e) => e.mode !== mode),
@@ -128,8 +136,14 @@ export function PlusMenu({
   };
 
   const handleSelectTeam = (t: ExpertTeam) => {
-    const first = experts.find((x) => x.id === t.expertIds[0]);
-    if (first) onSelectExpert(first);
+    if (t.routingStrategy === "manual") {
+      // manual：维持现状，取其首位成员为当前助手
+      const first = experts.find((x) => x.id === t.expertIds[0]);
+      if (first) onSelectExpert(first);
+    } else {
+      // auto / workflow：绑定团队（新建任务带 teamId，运行时按策略调度）
+      onSelectTeam(t);
+    }
     close();
   };
 
@@ -154,7 +168,29 @@ export function PlusMenu({
         <IconPlus />
       </button>
 
-      {selected ? (
+      {selectedTeam ? (
+        <div className="flex h-[26px] items-center overflow-hidden rounded-full border border-accent-line bg-accent-tint text-[12.5px] font-semibold text-accent-strong">
+          <button
+            type="button"
+            onClick={toggleOpen}
+            title={t("plusMenu.switchTeam")}
+            className="flex h-full items-center gap-[6px] pl-[6px] pr-[2px] transition hover:bg-accent-line/40"
+          >
+            <span className="flex h-[16px] w-[16px] items-center justify-center rounded-[5px] bg-white text-accent">
+              <IconUsers size={11} />
+            </span>
+            {selectedTeam.name}
+          </button>
+          <button
+            type="button"
+            onClick={onClearTeam}
+            title={t("plusMenu.clearTeam")}
+            className="flex h-full items-center px-[5px] text-accent opacity-60 transition hover:opacity-100"
+          >
+            <IconX size={12} />
+          </button>
+        </div>
+      ) : selected ? (
         <div className="flex h-[26px] items-center overflow-hidden rounded-full border border-accent-line bg-accent-tint text-[12.5px] font-semibold text-accent-strong">
           <button
             type="button"
@@ -331,7 +367,7 @@ export function PlusMenu({
                         </span>
                         <span className="flex-1 truncate">{team.name}</span>
                         <span className="text-[11px] font-medium text-ink-3">
-                          {t("expert.memberCount", { num: team.expertIds.length })}
+                          {t("expert.memberCount", { num: teamMemberCount(team) })}
                         </span>
                       </button>
                     ))}

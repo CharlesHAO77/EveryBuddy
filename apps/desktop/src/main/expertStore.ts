@@ -43,6 +43,17 @@ export const BUILTIN_EXPERTS: Expert[] = [
     createdAt: BUILTIN_AT,
     updatedAt: BUILTIN_AT,
   },
+  {
+    id: "project-coordinator",
+    name: "项目协调员",
+    icon: "users",
+    description: "统筹团队协作，分派子任务给成员并汇总结果",
+    mode: "daily",
+    tags: ["domain:coordination", "capability:dispatch"],
+    source: "builtin",
+    createdAt: BUILTIN_AT,
+    updatedAt: BUILTIN_AT,
+  },
 ];
 
 export function getBuiltinExpert(id: string): Expert | undefined {

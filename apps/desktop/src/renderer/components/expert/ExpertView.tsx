@@ -11,7 +11,16 @@ import { useExpertCenterStore } from "../../stores/expertCenterStore";
 import { CreateModal } from "./CreateModal";
 import { DetailModal } from "./DetailModal";
 import { IconPlug, IconPlus, IconSearch, IconSparkles, IconUser, IconUsers } from "./icons";
-import { expertIcon, SourceBadge, STATUS_LABEL, StatusDot, Tag, TypeBadge } from "./ui";
+import {
+  expertIcon,
+  SourceBadge,
+  STATUS_LABEL,
+  StatusDot,
+  Tag,
+  TeamStrategyBadge,
+  TypeBadge,
+  teamMemberCount,
+} from "./ui";
 
 type TabId = "expert" | "team" | "skill" | "connector";
 
@@ -38,7 +47,11 @@ const FILTERS: Record<TabId, Array<{ id: string; labelKey: string }>> = {
     { id: "builtin", labelKey: "expert.filter.builtin" },
     { id: "custom", labelKey: "expert.filter.custom" },
   ],
-  team: [{ id: "all", labelKey: "expert.filter.all" }],
+  team: [
+    { id: "all", labelKey: "expert.filter.all" },
+    { id: "builtin", labelKey: "expert.filter.builtin" },
+    { id: "custom", labelKey: "expert.filter.custom" },
+  ],
   skill: [
     { id: "all", labelKey: "expert.filter.all" },
     { id: "installed", labelKey: "expert.filter.installed" },
@@ -52,10 +65,9 @@ const FILTERS: Record<TabId, Array<{ id: string; labelKey: string }>> = {
   ],
 };
 
-/** 卡片统一形状（覆盖四实体 + 团队预留占位卡） */
+/** 卡片统一形状（覆盖四实体） */
 interface CardItem {
   id?: string;
-  __reserved?: string;
   name?: string;
   description?: string;
   icon?: string;
@@ -64,6 +76,7 @@ interface CardItem {
   type?: string;
   tags?: string[];
   expertIds?: string[];
+  routingStrategy?: string;
 }
 
 function matchesSearch(q: string, ...fields: Array<string | undefined>): boolean {
@@ -104,25 +117,12 @@ export function ExpertView() {
     const filtered = source.filter((it) => {
       if (!matchesSearch(q, it.name, it.description, ...(it.tags ?? []))) return false;
       if (filter === "all") return true;
-      if (tab === "expert" || tab === "skill") return it.source === filter;
+      if (tab === "expert" || tab === "team" || tab === "skill") return it.source === filter;
       if (tab === "connector") return it.type === filter;
       return true;
     });
-    // 专家团：追加预留能力卡（仅全部筛选时展示）
-    if (tab === "team" && filter === "all") {
-      filtered.push({
-        __reserved: "bot",
-        name: t("expert.reservedSubAgent"),
-        description: t("expert.reservedSubAgentDesc"),
-      });
-      filtered.push({
-        __reserved: "workflow",
-        name: t("expert.reservedWorkflow"),
-        description: t("expert.reservedWorkflowDesc"),
-      });
-    }
     return filtered;
-  }, [store, tab, search, filter, t]);
+  }, [store, tab, search, filter]);
 
   const counts: Record<TabId, number> = {
     expert: store.experts.length,
@@ -219,12 +219,7 @@ export function ExpertView() {
         ) : (
           <div className="grid grid-cols-[repeat(auto-fill,minmax(258px,1fr))] gap-[16px] p-[20px_24px_32px]">
             {items.map((it) => (
-              <Card
-                key={it.__reserved ? `res-${it.__reserved}` : it.id}
-                item={it}
-                tab={tab}
-                onOpen={(id) => setDetail({ kind: tab, id })}
-              />
+              <Card key={it.id} item={it} tab={tab} onOpen={(id) => setDetail({ kind: tab, id })} />
             ))}
           </div>
         )}
@@ -242,12 +237,12 @@ export function ExpertView() {
 /** 单张卡片（按实体分发徽章/状态/色调） */
 function Card({ item, tab, onOpen }: { item: CardItem; tab: TabId; onOpen: (id: string) => void }) {
   const { t } = useTranslation();
-  const reserved = item.__reserved;
-  const id = reserved ? `res-${reserved}` : (item.id ?? "");
+  const id = item.id ?? "";
   const tags = (item.tags ?? []).slice(0, 4);
   const isExpert = tab === "expert";
   const isSkill = tab === "skill";
   const isConnector = tab === "connector";
+  const isTeam = tab === "team";
 
   const toneCls = isSkill
     ? "bg-warn-tint text-warn"
@@ -261,33 +256,22 @@ function Card({ item, tab, onOpen }: { item: CardItem; tab: TabId; onOpen: (id: 
   if (isConnector) {
     const status = item.status ?? "reserved";
     topRight = <StatusDot status={status} label={STATUS_LABEL[status] ?? status} />;
-  } else if (isExpert || isSkill) {
+  } else if (isExpert || isSkill || isTeam) {
+    // 专家/技能/团队：恒显示来源类型徽章（内置/自定义）
     topRight = <SourceBadge source={item.source ?? "custom"} />;
-  } else {
-    topRight = reserved ? (
-      <span className="rounded-[6px] bg-active px-[8px] py-[2px] text-[11px] font-semibold text-ink-2">
-        {t("expert.reserved")}
-      </span>
-    ) : (
-      <span className="rounded-full border border-accent-line bg-accent-tint px-[7px] py-[1px] text-[11px] font-semibold text-accent-strong">
-        {t("expert.memberCount", { num: item.expertIds?.length ?? 0 })}
-      </span>
-    );
   }
 
   return (
     <button
       type="button"
       onClick={() => onOpen(id)}
-      className={`group flex min-h-[188px] flex-col gap-[9px] rounded-[14px] border border-line bg-card p-[18px] text-left shadow-card transition hover:-translate-y-[2px] hover:border-accent-line hover:shadow-pop ${
-        reserved ? "opacity-80" : ""
-      }`}
+      className="group flex min-h-[188px] flex-col gap-[9px] rounded-[14px] border border-line bg-card p-[18px] text-left shadow-card transition hover:-translate-y-[2px] hover:border-accent-line hover:shadow-pop"
     >
       <div className="flex items-start justify-between gap-[8px]">
         <div
           className={`flex h-[46px] w-[46px] shrink-0 items-center justify-center rounded-[12px] ${toneCls}`}
         >
-          {expertIcon(reserved ?? item.icon)}
+          {expertIcon(item.icon)}
         </div>
         {topRight}
       </div>
@@ -295,6 +279,15 @@ function Card({ item, tab, onOpen }: { item: CardItem; tab: TabId; onOpen: (id: 
         {item.name}
         {isConnector ? <TypeBadge label={(item.type ?? "").toUpperCase()} /> : null}
       </div>
+      {/* 团队 meta：人数（含主 agent）+ 运行策略标签 */}
+      {isTeam ? (
+        <div className="flex items-center gap-[6px]">
+          <span className="text-[12px] font-medium text-ink-3">
+            {t("expert.memberCount", { num: teamMemberCount(item) })}
+          </span>
+          <TeamStrategyBadge strategy={item.routingStrategy ?? "manual"} />
+        </div>
+      ) : null}
       <div className="flex-1 text-[13.5px] leading-[1.55] text-ink-3">{item.description}</div>
       {tags.length > 0 ? (
         <div className="mt-auto flex flex-wrap gap-[5px] pt-[4px]">

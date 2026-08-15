@@ -32,6 +32,7 @@ import {
   promptRequestSchema,
   readDirRequestSchema,
   renameTaskRequestSchema,
+  runWorkflowRequestSchema,
   saveModelRequestSchema,
   scheduleIdRequestSchema,
   setApiKeyRequestSchema,
@@ -43,6 +44,7 @@ import {
   skillInstallRequestSchema,
   skillUpdateRequestSchema,
   teamCreateRequestSchema,
+  teamGetRunsRequestSchema,
   teamIdRequestSchema,
   teamUpdateRequestSchema,
   updateScheduleTaskRequestSchema,
@@ -59,6 +61,8 @@ import { expertStore } from "./expertStore";
 import * as modelStore from "./modelStore";
 import { scheduler } from "./scheduler";
 import { skillStore } from "./skillStore";
+import { teamRunStore } from "./teamRunStore";
+import { teamRuntime } from "./teamRuntime";
 import { teamStore } from "./teamStore";
 import {
   createNamedWorkspace,
@@ -92,6 +96,8 @@ function validate<T>(schema: { parse: (v: unknown) => T }, value: unknown): T {
 async function deleteTaskCompletely(id: string): Promise<void> {
   const task = configStore.getTask(id); // 先取 meta，removeTask 后就拿不到了
   await agentRuntime.disposeSession(id);
+  // 清理任务级团队运行记录（子 agent / workflow 过程追溯）
+  teamRunStore.remove(id);
   configStore.removeTask(id);
   await rmIfDirectChild(task?.sessionDir, SESSIONS_DIR, "会话目录");
   if (task?.type === "temp") {
@@ -186,6 +192,12 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
     agentRuntime.resolveToolApproval(req.taskId, req.requestId, req.approved);
   });
 
+  // 运行团队工作流（workflow 团队任务；进度经 agent:event 推送 workflow_* + subagent_*）
+  ipcMain.handle("agent:run-workflow", async (_evt, raw) => {
+    const req = validate(runWorkflowRequestSchema, raw);
+    await teamRuntime.runWorkflow(req.taskId, req.teamId, req.prompt, req.providerId);
+  });
+
   // ── task:* ────────────────────────────────
   ipcMain.handle("task:list", () => configStore.listTasks());
 
@@ -206,6 +218,8 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
       title: req.title?.trim() || "新任务",
       type: req.type,
       mode: req.mode,
+      expertId: req.expertId,
+      teamId: req.teamId,
       workspaceId: workspace?.id,
       workspacePath: workspace?.path,
       workDir,
@@ -455,6 +469,18 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
   ipcMain.handle("team:delete", (_evt, raw) => {
     const { id } = validate(teamIdRequestSchema, raw);
     teamStore.delete(id);
+  });
+
+  // 复制为自定义（内置示例团队只读，先复制再编辑）
+  ipcMain.handle("team:duplicate", (_evt, raw) => {
+    const { id } = validate(teamIdRequestSchema, raw);
+    return teamStore.duplicateAsCustom(id);
+  });
+
+  // 任务级团队运行记录（子 agent / workflow 过程追溯）
+  ipcMain.handle("team:get-runs", (_evt, raw) => {
+    const { taskId } = validate(teamGetRunsRequestSchema, raw);
+    return teamRunStore.get(taskId);
   });
 
   // ── skill:*（技能） ─────────────────────────

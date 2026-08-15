@@ -1,0 +1,212 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>EveryBuddy · 专家团流式输出演示</title>
+<style>
+  :root{
+    --paper:#faf7f2; --card:#ffffff; --line:#e8e2d8; --line-2:#d8d0c2;
+    --ink:#2a2724; --ink-2:#6f6a63; --ink-3:#9a948b;
+    --accent:#3e8a63; --accent-strong:#2f6b4d; --accent-tint:#e7f2ec; --accent-line:#b9dcc9;
+    --terminal:#1f2421; --terminal-text:#d7e4d9; --danger:#c05b4f; --warn:#c08a3e;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--paper);color:var(--ink);font-family:-apple-system,"PingFang SC","Microsoft YaHei",system-ui,sans-serif;padding:32px 20px 80px}
+  .wrap{max-width:760px;margin:0 auto}
+  h1{font-size:22px;margin-bottom:6px}
+  .sub{color:var(--ink-2);font-size:13px;margin-bottom:22px}
+  .seg{font-size:13px;font-weight:700;color:var(--accent-strong);margin:26px 0 12px;display:flex;align-items:center;gap:8px}
+  .seg::after{content:"";flex:1;height:1px;background:var(--line)}
+  .msg{display:flex;gap:10px;margin-bottom:14px}
+  .msg .ava{width:30px;height:30px;border-radius:9px;background:var(--accent-tint);color:var(--accent);display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0;font-weight:700}
+  .bubble{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px 14px;max-width:88%;box-shadow:0 1px 2px rgba(0,0,0,.04)}
+  .bubble .txt{font-size:14px;line-height:1.7}
+  .toolcard{border:1px solid var(--line);border-radius:10px;background:var(--card);margin-top:8px;overflow:hidden}
+  .toolcard .hdr{display:flex;align-items:center;gap:7px;padding:7px 10px;font-size:12px;color:var(--ink-2);border-bottom:1px dashed var(--line)}
+  .toolcard .hdr b{color:var(--ink)}
+  .dot{width:8px;height:8px;border-radius:50%;background:var(--accent);flex-shrink:0}
+  .dot.done{background:var(--accent-strong)}
+  .toolcard .body{padding:8px 10px}
+  .sub{border:1px solid var(--accent-line);border-radius:9px;background:var(--accent-tint);margin-bottom:7px;overflow:hidden}
+  .sub:last-child{margin-bottom:0}
+  .sub .shdr{display:flex;align-items:center;gap:6px;padding:6px 10px;font-size:12px}
+  .sub .shdr .ic{width:16px;height:16px;border-radius:5px;background:#fff;color:var(--accent);display:flex;align-items:center;justify-content:center;font-size:11px;flex-shrink:0}
+  .spin{width:10px;height:10px;border:2px solid var(--accent-line);border-top-color:var(--accent);border-radius:50%;animation:rot 0.7s linear infinite;flex-shrink:0}
+  @keyframes rot{to{transform:rotate(360deg)}}
+  .sub .sbody{padding:4px 10px 9px;border-top:1px solid rgba(185,220,201,.5)}
+  .sbody .prompt{font-size:11.5px;color:var(--ink-3);line-height:1.5;margin-bottom:6px}
+  .stream{font-size:12px;line-height:1.7;color:var(--ink-2);background:var(--card);border-radius:6px;padding:6px 8px;white-space:pre-wrap;min-height:20px;margin-bottom:6px}
+  .chips{display:flex;flex-wrap:wrap;gap:5px}
+  .chip{font-size:11px;display:flex;align-items:center;gap:5px;background:var(--card);border:1px solid var(--line);border-radius:5px;padding:2px 7px;color:var(--ink-2)}
+  .chip .s{width:7px;height:7px;border-radius:50%}
+  .chip.ok .s{background:var(--accent-strong)} .chip.run .s{background:var(--accent)}
+  .meta{font-size:10.5px;color:var(--ink-3);margin-top:5px}
+  .wf{border:1px solid var(--accent-line);border-radius:12px;background:var(--card);overflow:hidden}
+  .wf .hdr{display:flex;align-items:center;gap:8px;padding:9px 14px;border-bottom:1px solid var(--line);font-size:13px;font-weight:600}
+  .wf .chain{display:flex;align-items:stretch;gap:6px;padding:12px 14px;flex-wrap:wrap}
+  .step{display:flex;flex-direction:column;gap:6px;min-width:120px;border:2px solid var(--line);border-radius:12px;padding:10px 14px;font-size:11px;color:var(--ink-3);background:var(--paper);transition:.3s;text-align:left}
+  .step .top{display:flex;align-items:center;justify-content:space-between}
+  .step .num{width:18px;height:18px;border-radius:50%;background:var(--hover);color:var(--ink-3);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700}
+  .step.running{border-color:var(--accent);background:var(--accent-tint);color:var(--accent-strong);box-shadow:0 1px 3px rgba(0,0,0,.08)}
+  .step.running .num{background:var(--accent);color:#fff}
+  .step.done{border-color:var(--accent-line);background:var(--card);color:var(--accent-strong)}
+  .step.done .num{background:var(--accent-tint);color:var(--accent-strong)}
+  .step .t{font-size:12px;font-weight:600;color:var(--ink)}
+  .step .ex{font-size:11px;color:var(--ink-3)}
+  .step .dotp{width:12px;height:12px;border-radius:50%;border:1px solid var(--line-2);display:flex;align-items:center;justify-content:center;font-size:9px}
+  .step.running .dotp{border:none} .step.done .dotp{border:none;background:var(--accent-strong);color:#fff}
+  .arrow{font-size:16px;color:var(--accent-line);display:flex;align-items:center}
+  .wf .live{padding:0 14px 12px;border-top:1px solid var(--line)}
+  .wf .sum{padding:10px 14px;border-top:1px solid var(--line);font-size:13px;line-height:1.7;color:var(--ink-2)}
+  .btn{display:inline-flex;align-items:center;gap:6px;margin:20px 0 8px;border:1px solid var(--line-2);background:#fff;color:var(--ink);font-size:13px;padding:8px 18px;border-radius:8px;cursor:pointer}
+  .btn:hover{background:var(--accent-tint);border-color:var(--accent-line)}
+  .blink::after{content:"▌";color:var(--accent);animation:blink 0.9s steps(1) infinite}
+  @keyframes blink{50%{opacity:0}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>EveryBuddy · 专家团流式输出演示</h1>
+  <div class="sub">模拟「子 Agent 调度」与「Workflow 编排」的运行中流式展示（运行中自动展开）· 点击下方按钮重播</div>
+
+  <!-- ═════════ 场景一：子 Agent 调度 ═════════ -->
+  <div class="seg">① 子 Agent 调度（delegate 运行中自动展开）</div>
+  <div class="msg"><div class="ava">协</div>
+    <div class="bubble">
+      <div class="txt">我把这个需求分派给两位专家并行处理，稍等汇总。</div>
+      <div class="toolcard">
+        <div class="hdr"><span class="dot" id="tcDot"></span><b>delegate</b> · 委派给团队成员 · <span id="tcSt">运行中</span></div>
+        <div class="body">
+          <div class="sub">
+            <div class="shdr"><span class="ic">办</span>办公助理 <span class="spin"></span><span style="color:var(--ink-3)">· 运行中</span></div>
+            <div class="sbody">
+              <div class="prompt">解析上传的 Excel，整理为结构化报告并给出要点。</div>
+              <div class="stream" id="s1"></div>
+              <div class="chips" id="s1c"></div>
+              <div class="meta" id="s1m"></div>
+            </div>
+          </div>
+          <div class="sub">
+            <div class="shdr"><span class="ic">码</span>编码助手 <span class="spin"></span><span style="color:var(--ink-3)">· 运行中</span></div>
+            <div class="sbody">
+              <div class="prompt">评估并实现该需求的脚本方案，直接产出代码。</div>
+              <div class="stream" id="s2"></div>
+              <div class="chips" id="s2c"></div>
+              <div class="meta" id="s2m"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="bubble" id="coordSummary" style="display:none;max-width:88%">
+    <div class="txt" id="coordText"></div>
+  </div>
+
+  <!-- ═════════ 场景二：Workflow 编排 ═════════ -->
+  <div class="seg">② Workflow 编排（步骤链 + 当前步骤自动展开）</div>
+  <div class="wf">
+    <div class="hdr">◎ 软件研发 · <span id="wfSt">运行中</span></div>
+    <div class="chain" id="chain"></div>
+    <div class="live" id="live"></div>
+    <div class="sum" id="sum" style="display:none"></div>
+  </div>
+
+  <button class="btn" id="replay">↻ 重新播放</button>
+</div>
+
+<script>
+const TYPE = (txt, el, done, speed=18) => {
+  let i=0; const id = setInterval(()=>{ el.innerHTML = txt.slice(0,++i) + '<span class="blink"></span>';
+    if(i>=txt.length){ clearInterval(id); done&&done(); } }, speed);
+  return id;
+};
+const chainDefs = [
+  {id:'需求分析', expert:'办公助理', txt:'澄清需求并输出要点：实现一个 TODO 命令行工具，含增删改查与持久化。'},
+  {id:'方案设计', expert:'编码助手', txt:'基于需求拆解技术方案：Node.js CLI + JSON 文件持久化，模块划分：命令解析/存储/渲染。'},
+  {id:'编码实现', expert:'编码助手', txt:'按方案实现：新建 todo.js，实现 add/list/done/rm 四个子命令，并写入 README。'},
+  {id:'质量评审', expert:'办公助理', txt:'审查实现：确认命令可用、边界处理完整，给出 2 条改进建议。'},
+];
+const chainEl = document.getElementById('chain');
+const liveWrap = document.getElementById('live');
+let running = false;
+
+function renderChain(curIdx){
+  chainEl.innerHTML = chainDefs.map((s,i)=>{
+    const st = i<curIdx?'done': i===curIdx?'running':'';
+    const dot = st==='done'?'✓': st==='running'?'<span class="spin" style="width:12px;height:12px"></span>':'';
+    return `<div class="step ${st}"><div class="top"><span class="num">${i+1}</span><span class="dotp">${dot}</span></div><span class="t">${s.id}</span><span class="ex">${s.expert}</span></div>` + (i<chainDefs.length-1?'<span class="arrow">→</span>':'');
+  }).join('');
+}
+
+function subPanelHTML(def){
+  return `<div class="sub">
+    <div class="shdr"><span class="ic">${def.expert==='办公助理'?'办':'码'}</span>${def.expert} <span class="spin"></span><span style="color:var(--ink-3)">· 执行中</span></div>
+    <div class="sbody">
+      <div class="prompt">${def.txt}</div>
+      <div class="stream"></div>
+      <div class="chips"></div>
+      <div class="meta"></div>
+    </div></div>`;
+}
+
+async function runWorkflow(){
+  renderChain(0);
+  for(let idx=0; idx<chainDefs.length; idx++){
+    liveWrap.innerHTML = subPanelHTML(chainDefs[idx]);
+    renderChain(idx);
+    const s = liveWrap.querySelector('.stream');
+    const c = liveWrap.querySelector('.chips');
+    const m = liveWrap.querySelector('.meta');
+    const tools = idx%2===0 ? [['read','ok'],['bash','run'],['grep','ok']] : [['read','run'],['bash','ok']];
+    const t = chainDefs[idx].txt;
+    await new Promise(r=>{
+      TYPE(t, s, r, 14);
+      let ti=0;
+      const ti2=setInterval(()=>{
+        if(ti>=tools.length){ clearInterval(ti2); return; }
+        c.innerHTML += `<span class="chip ${tools[ti][1]==='run'?'run':'ok'}"><span class="s"></span>${tools[ti][0]}${tools[ti][1]==='run'?' …':' ✓'}</span>`;
+        ti++;
+      }, Math.min(400, t.length*20));
+    });
+    m.textContent = `token ${Math.round(500+Math.random()*900)}`;
+    await new Promise(r=>setTimeout(r,350));
+  }
+  liveWrap.innerHTML = '';
+  renderChain(4);
+  document.getElementById('wfSt').textContent = '已完成';
+  document.getElementById('sum').style.display = 'block';
+  document.getElementById('sum').textContent = '汇总：TODO 命令行工具已完成实现并通过评审，命令用法见 README，含 2 条可选的后续优化建议。';
+}
+
+async function runDispatch(){
+  document.getElementById('coordSummary').style.display='none';
+  document.getElementById('tcDot').className='dot';
+  document.getElementById('tcSt').textContent='运行中';
+  const s1=document.getElementById('s1'), s1c=document.getElementById('s1c'), s1m=document.getElementById('s1m');
+  const s2=document.getElementById('s2'), s2c=document.getElementById('s2c'), s2m=document.getElementById('s2m');
+  s1.innerHTML=s1c.innerHTML=s1m.textContent=''; s2.innerHTML=s2c.innerHTML=s2m.textContent='';
+  const t1='已解析 12 行表格数据，发现 3 个口径差异，已整理为结构化报告：销售额按月份汇总如下…';
+  const t2='已完成方案评估：建议用 Python 脚本实现，写入 report.py，正在产出并自测…';
+  const c1=[['parse_attachment','run'],['read','ok'],['grep','ok']];
+  const c2=[['read','run'],['bash','run'],['write','ok']];
+  TYPE(t1, s1, null, 16); TYPE(t2, s2, null, 16);
+  let i1=0,i2=0;
+  const iv1=setInterval(()=>{ if(i1<c1.length){ s1c.innerHTML+=`<span class="chip ${c1[i1][1]==='run'?'run':'ok'}"><span class="s"></span>${c1[i1][0]}${c1[i1][1]==='run'?' …':' ✓'}</span>`; i1++; } }, 320);
+  const iv2=setInterval(()=>{ if(i2<c2.length){ s2c.innerHTML+=`<span class="chip ${c2[i2][1]==='run'?'run':'ok'}"><span class="s"></span>${c2[i2][0]}${c2[i2][1]==='run'?' …':' ✓'}</span>`; i2++; } }, 300);
+  await new Promise(r=>setTimeout(r, Math.max(t1.length,t2.length)*16 + 1600));
+  clearInterval(iv1); clearInterval(iv2);
+  s1m.textContent='token 1260'; s2m.textContent='token 1980';
+  document.getElementById('tcDot').className='dot done';
+  document.getElementById('tcSt').textContent='完成';
+  const sum=document.getElementById('coordSummary');
+  sum.style.display='block';
+  TYPE('两位专家已完成：办公助理产出结构化报告（含口径差异说明），编码助手交付实现脚本并自测通过。', document.getElementById('coordText'), null, 14);
+}
+
+document.getElementById('replay').onclick = ()=>{ if(running)return; running=true; Promise.all([runDispatch(), runWorkflow()]).then(()=>{running=false;}); };
+document.getElementById('replay').click();
+</script>
+</body>
+</html>

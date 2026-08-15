@@ -14,56 +14,48 @@ import { randomUUID } from "node:crypto";
 import { existsSync, mkdirSync, readdirSync, renameSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import type { ResourceDiagnostic, Skill, ToolDefinition } from "@earendil-works/pi-coding-agent";
+import type { ToolDefinition } from "@earendil-works/pi-coding-agent";
 import type {
   AgentEvent,
   AttachmentRef,
   ExecutionMode,
+  Expert,
   HistoryMessage,
   TaskMeta,
 } from "@everybuddy/ipc-contract";
 import { getAgentConfig } from "./agentConfigStore";
 import { configStore } from "./configStore";
-import { connectorStore } from "./connectorStore";
 import { uiError } from "./errors";
-import { expertStore, expertToAgentConfig, findExpert } from "./expertStore";
-import { buildExtensionFactories, DEFAULT_EXTENSIONS } from "./extensions";
+import { findExpert } from "./expertStore";
 import {
   buildImageDescriptionBlock,
   buildManifestText,
   parseFileContent,
-  resolveInUploads,
   stageAttachments,
 } from "./fileParser";
 import { buildFullPath, entriesToHistory } from "./historyMapper";
-import { buildMcpTools } from "./mcpTools";
 import {
   AUTH_PATH,
-  getApiKey,
-  getImageGenModel,
   getProvider,
   getVisionModel,
   isChatModelProviderId,
   MODELS_JSON_PATH,
 } from "./modelStore";
-import { getModeSystemPrompt } from "./prompts";
-import { skillStore } from "./skillStore";
-import { createFindOperations } from "./tools/findTool";
-import { createGenerateImageToolDefinition } from "./tools/generateImageTool";
-import { createGrepToolDefinition } from "./tools/grepTool";
-import { buildToolAllowlist } from "./tools/toolAllowlist";
 import {
-  buildToolPlan,
-  detectToolAvailability,
-  type ToolAvailability,
-} from "./tools/toolAvailability";
-import { createUnderstandImageToolDefinition } from "./tools/understandImageTool";
+  buildSessionConfig,
+  type CodingAgentSDK,
+  type ModelRuntime,
+  type PiModel,
+  type SessionManagerInstance,
+  type WithoutStreamId,
+} from "./sessionBuilder";
+import { type TeamRuntimeDeps, teamRuntime } from "./teamRuntime";
+import { teamStore } from "./teamStore";
+import { detectToolAvailability, type ToolAvailability } from "./tools/toolAvailability";
 import { type DescribeImageRuntime, describeImage } from "./vision";
 import { getTaskCwd, resolveSessionLocation } from "./workspaceManager";
 
-// 类型导入（编译期擦除）；运行时通过动态 import() 加载 ESM 包
-type CodingAgentSDK = typeof import("@earendil-works/pi-coding-agent");
-
+/** 本地扩展的 SDK AgentSession 类型（运行时通过动态 import() 加载 ESM 包，见 load()） */
 type AgentSession = (CodingAgentSDK["AgentSession"] extends new (
   ...args: never[]
 ) => infer T
@@ -72,12 +64,6 @@ type AgentSession = (CodingAgentSDK["AgentSession"] extends new (
   /** SDK AgentSession 支持运行时切换模型 */
   setModel?: (model: PiModel) => Promise<void> | void;
 };
-type ModelRuntime = Awaited<ReturnType<CodingAgentSDK["ModelRuntime"]["create"]>>;
-type SessionManagerInstance = ReturnType<CodingAgentSDK["SessionManager"]["create"]>;
-type PiModel = NonNullable<ReturnType<ModelRuntime["getModel"]>>;
-
-/** 分布式 Omit，保留判别联合各成员的形状 */
-type WithoutStreamId<T> = T extends { streamId: string } ? Omit<T, "streamId"> : T;
 
 /** models-store.json 缓存重定向到系统临时目录，避免远程目录缓存落入 ~/EveryBuddy */
 const MODELS_STORE_TMP_PATH = path.join(tmpdir(), "everybuddy-models-store.json");
@@ -122,6 +108,37 @@ class AgentRuntime {
     return () => {
       this.listeners.delete(fn);
     };
+  }
+
+  /** 向指定 streamId 推送归一化事件（teamRuntime 等外部生产者经此写入同一监听器集） */
+  emitTo(streamId: string, evt: WithoutStreamId<AgentEvent>): void {
+    this.emit(streamId, evt);
+  }
+
+  /** 供 teamRuntime.wire 注入的依赖（DI，避免 value-import 依赖环；见 teamRuntime.ts） */
+  getTeamDeps(): TeamRuntimeDeps {
+    return {
+      emitTo: (sid, evt) => this.emit(sid, evt),
+      loadSdk: () => this.load(),
+      ensureModelRuntime: () => this.init(),
+      getModelRuntime: () => this.modelRuntime,
+      getAvailability: () => this.getAvailability(),
+      resolveModel: (pid) => this.resolveModel(pid),
+      getTaskCwd: (taskId) => {
+        const t = configStore.getTask(taskId);
+        return t ? getTaskCwd(t) : "";
+      },
+      getTask: (taskId) => configStore.getTask(taskId),
+      getTeam: (id) => teamStore.get(id),
+      findExpert: (id) => findExpert(id),
+    };
+  }
+
+  /** 任务是否绑定 workflow 团队（此类任务不建 AgentSession，运行走 agent:run-workflow） */
+  private isWorkflowTask(taskId: string): boolean {
+    const task = configStore.getTask(taskId);
+    if (!task?.teamId) return false;
+    return teamStore.get(task.teamId)?.routingStrategy === "workflow";
   }
 
   /** 向渲染进程推送错误事件（供 ipcRouter 在会话初始化失败时调用） */
@@ -173,22 +190,39 @@ class AgentRuntime {
       | undefined;
   }
 
-  /** 为任务创建/恢复 AgentSession */
+  /** 为任务创建/恢复 AgentSession（会话配置装配见 sessionBuilder.buildSessionConfig） */
   async createTaskSession(task: TaskMeta, providerId?: string): Promise<void> {
     const sdk = await this.load();
     if (!this.modelRuntime) await this.init();
+    // init 后 modelRuntime 必就绪（await 后 TS 窄化失效，此处显式断言一次）
+    const modelRuntime = this.modelRuntime as ModelRuntime;
 
     const cwd = getTaskCwd(task);
     const sessionDir = task.sessionDir;
     if (!existsSync(sessionDir)) mkdirSync(sessionDir, { recursive: true });
 
-    // 按任务模式读取办公/编码 agent 配置（旧任务缺省 daily，行为不回归）；
-    // 任务选用了专家时，在其基础上叠加 Expert 覆盖字段（builtin 专家无覆盖 → 等价于基础配置，零行为变更）
-    const mode = task.mode ?? "daily";
-    let cfg = getAgentConfig(mode);
-    if (task.expertId) {
-      const expert = findExpert(task.expertId);
-      if (expert) cfg = expertToAgentConfig(expert, cfg);
+    // 团队绑定：auto 团队 → 主 agent 人格 + 委派指令 + delegate 工具；workflow 团队 → 不建会话（运行走 agent:run-workflow）
+    let extraTools: ToolDefinition[] = [];
+    let extraToolNames: string[] = [];
+    let appendPromptOverride: string[] | undefined;
+    let expert: Expert | undefined = task.expertId ? findExpert(task.expertId) : undefined;
+    if (task.teamId) {
+      const team = teamStore.get(task.teamId);
+      if (team?.routingStrategy === "auto") {
+        // 协调者 = 主 agent（leadExpertId ?? 首成员）；成员为可委派对象（不含主 agent）
+        const coordinatorId = teamRuntime.coordinatorExpertId(team);
+        const coordinator = coordinatorId ? findExpert(coordinatorId) : undefined;
+        const members = team.expertIds
+          .filter((id) => id !== coordinatorId)
+          .map((id) => findExpert(id))
+          .filter((e): e is Expert => !!e);
+        extraTools = await teamRuntime.buildDelegateTools(team, { parentTaskId: task.id, cwd });
+        extraToolNames = extraTools.map((t) => t.name);
+        expert = coordinator; // 主 agent 人格（无则回退 undefined → 模式默认）
+        appendPromptOverride = teamRuntime.buildCoordinatorInstructions(team, members);
+      } else if (team?.routingStrategy === "workflow") {
+        return;
+      }
     }
 
     // 恢复已有会话或新建（SDK 声明了 findMostRecentSession 但运行时未导出，自行按 mtime 取最近 .jsonl）
@@ -204,150 +238,30 @@ class AgentRuntime {
       sessionManager = sdk.SessionManager.create(cwd, sessionDir) as SessionManagerInstance;
     }
 
-    // 解析模型：调用方指定 → 模式配置默认 → 第一个可用（与旧逻辑一致）；
-    // 每处都过滤 image 专用 provider（SDK 把无 input 的模型默认按 text 处理，会误选生图模型做对话）
-    let model: PiModel | undefined;
-    if (providerId && isChatModelProviderId(providerId)) model = this.resolveModel(providerId);
-    if (!model && cfg.defaultModelProviderId && isChatModelProviderId(cfg.defaultModelProviderId))
-      model = this.resolveModel(cfg.defaultModelProviderId);
-    if (!model) {
-      // 回退：取第一个可对话的可用模型
-      const available = await this.modelRuntime?.getAvailable();
-      model = available?.find((m) => isChatModelProviderId(m.provider)) as PiModel | undefined;
-    }
-    if (!model) {
-      throw uiError("errors.noModelConfigured");
-    }
-
-    // 视觉/生图 provider 实时解析：专家覆盖后的 agent 配置优先，其次能力标签；
-    // 每次调用重新解析，新打标签的模型无需重建会话即可生效
-    const resolveVisionProviderId = (): string | undefined =>
-      cfg.visionModelProviderId ?? getVisionModel();
-    const resolveImageGenProviderId = (): string | undefined =>
-      cfg.imageGenModelProviderId ?? getImageGenModel();
-
-    // 平台化工具配置：bash 在 Windows 上覆盖为真实 Git Bash（SDK 会误选 WSL stub），
-    // grep/find 在缺 rg/fd 时降级为纯 Node 实现（见 tools/toolAvailability.ts）
-    const plan = buildToolPlan(this.getAvailability());
-    const customTools: ToolDefinition[] = [await this.buildParseAttachmentTool(cwd)];
-    if (plan.bashShellPath) {
-      // 同名 "bash" 定义经 customTools 覆盖内置 bash（agent-session 注册表按名覆盖），
-      // 让其用我们解析的真实 Git Bash，而非 SDK where 命中的 WSL stub
-      customTools.push(
-        sdk.createBashToolDefinition(cwd, { shellPath: plan.bashShellPath }) as ToolDefinition,
-      );
-    }
-    if (plan.useNodeFind) {
-      // fd 缺失：纯 Node glob 兜底覆盖内置 find
-      customTools.push(
-        sdk.createFindToolDefinition(cwd, { operations: createFindOperations() }) as ToolDefinition,
-      );
-    }
-    if (plan.useNodeGrep) {
-      // rg 缺失：纯 Node 搜索兜底覆盖内置 grep
-      customTools.push(await createGrepToolDefinition(cwd));
-    }
-
-    // 视觉理解 / 生图自定义工具（办公模式能力；工具内部按需解析视觉/生图模型）
-    customTools.push(
-      await createUnderstandImageToolDefinition(cwd, {
-        resolveVisionModel: () => {
-          const pid = resolveVisionProviderId();
-          return pid ? this.resolveModel(pid) : undefined;
-        },
-        describeImage: (model, image, question, signal) =>
-          describeImage(
-            this.modelRuntime as unknown as DescribeImageRuntime,
-            model,
-            image,
-            question,
-            signal,
-          ),
-        visionProviderId: resolveVisionProviderId,
-      }),
-    );
-    customTools.push(
-      await createGenerateImageToolDefinition(cwd, {
-        resolveImageGenProvider: () => {
-          const pid = resolveImageGenProviderId();
-          if (!pid) return undefined;
-          const provider = getProvider(pid);
-          if (!provider) return undefined;
-          return {
-            providerId: pid,
-            baseUrl: provider.baseUrl,
-            model: provider.models[0]?.id ?? "",
-          };
-        },
-        getApiKey,
-      }),
-    );
-
-    // 连接器注入：status=connected + enabled 的 MCP 连接器 → 其工具并入 customTools
-    // （reserved/disconnected 不进 loader；连接失败静默返回空数组，不影响会话建立）
-    const mcpConnectors = connectorStore
-      .list()
-      .filter((c) => c.type === "mcp" && c.enabled && c.status === "connected");
-    for (const mcp of mcpConnectors) {
-      customTools.push(...(await buildMcpTools(mcp)));
-    }
-
-    // 扩展：构建工厂 + 控制器 + 贡献的工具名（并入 allowlist）。emit 闭包绑定本 task，
-    // 扩展内 emit(extension_status/notify) 会经 this.emit 推送到对应渲染进程
-    const extensions = cfg.extensions ?? DEFAULT_EXTENSIONS[mode];
-    const extEmit = (evt: WithoutStreamId<AgentEvent>) => this.emit(task.id, evt);
-    const {
-      factories,
-      controllers,
-      tools: extTools,
-    } = buildExtensionFactories(extensions, extEmit, {
-      getMode: () => this.getTaskMode(task.id),
-    });
-
-    // tools allowlist 会过滤所有工具（含 customTools / 扩展注册工具，见 SDK agent-session _refreshToolRegistry），
-    // 视觉理解/生图/扩展工具必须显式并入（buildToolAllowlist），否则注册了也不会暴露给模型
-    const toolAllowlist = buildToolAllowlist(plan.tools, [...(cfg.tools ?? []), ...extTools]);
-
-    // 模式级 system prompt：cfg.systemPrompt 覆盖默认；默认 builder 按当前激活工具动态拼出清单。
-    // customPrompt 分支下 SDK 不再注入内置工具列表/guidelines，但会追加 appendSystemPrompt + project_context + skills + cwd
-    const systemPrompt =
-      cfg.systemPrompt ?? getModeSystemPrompt(mode, { activeTools: toolAllowlist });
-
-    // 技能注入：把启用的 EveryBuddy 技能并入 SDK 自动发现的技能（skillsOverride 单一注入点，
-    // 见 §7；enabled=false 的技能已由 skillStore.listEnabled() 过滤，不进 override）
-    const managedSkills = skillStore.listEnabled();
-    const resourceLoader = new sdk.DefaultResourceLoader({
+    const built = await buildSessionConfig({
+      sdk,
+      modelRuntime,
+      availability: this.getAvailability(),
       cwd,
-      agentDir: sdk.getAgentDir(),
-      systemPrompt,
-      appendSystemPrompt: cfg.appendSystemPrompt ?? undefined,
-      extensionFactories: factories,
-      ...(managedSkills.length > 0
-        ? {
-            skillsOverride: (base: { skills: Skill[]; diagnostics: ResourceDiagnostic[] }) => {
-              const mine: Skill[] = managedSkills.map((s) => ({
-                name: s.id,
-                description: s.description,
-                filePath: s.filePath,
-                baseDir: s.baseDir,
-                sourceInfo: sdk.createSyntheticSourceInfo(s.filePath, { source: "everybuddy" }),
-                disableModelInvocation: false,
-              }));
-              return { skills: [...base.skills, ...mine], diagnostics: base.diagnostics };
-            },
-          }
-        : {}),
+      mode: task.mode ?? "daily",
+      expert,
+      providerId,
+      emit: (evt) => this.emit(task.id, evt),
+      getMode: () => this.getTaskMode(task.id),
+      resolveModel: (pid) => this.resolveModel(pid),
+      extraTools,
+      extraToolNames,
+      appendPromptOverride,
     });
-    await resourceLoader.reload();
 
     const { session } = await sdk.createAgentSession({
       cwd,
-      model,
-      modelRuntime: this.modelRuntime ?? undefined,
+      model: built.model,
+      modelRuntime,
       sessionManager,
-      tools: toolAllowlist,
-      customTools,
-      resourceLoader,
+      tools: built.toolAllowlist,
+      customTools: built.customTools,
+      resourceLoader: built.resourceLoader,
     });
 
     // 多次转向合并：steeringMode "all" 把同一时刻排队的多条转向消息一起注入、
@@ -358,39 +272,7 @@ class AgentRuntime {
       this.translateAndEmit(task.id, event);
     });
 
-    this.sessions.set(task.id, { session, unsubscribe, controllers });
-  }
-
-  /**
-   * 构造 parse_attachment 自定义工具：让 Agent 按需解析 uploads/ 下的附件
-   * （PDF/DOCX/XLSX/PPTX 等 read 工具读不了的二进制文档）。闭包捕获任务 cwd，
-   * 路径经 resolveInUploads 严格限定在 uploads/ 内。
-   */
-  private async buildParseAttachmentTool(
-    cwd: string,
-  ): Promise<ReturnType<CodingAgentSDK["defineTool"]>> {
-    const sdk = await this.load();
-    const { Type } = await import("typebox");
-    return sdk.defineTool({
-      name: "parse_attachment",
-      label: "解析附件",
-      description:
-        "解析上传的附件文件为文本或图片内容。文本/图片文件直接用内置 read 工具即可；本工具用于 PDF/Word/Excel/PPT 等办公文档。参数 file 为 uploads/ 目录下的文件名（如 report.pdf 或 uploads/report.pdf）。",
-      parameters: Type.Object({
-        file: Type.String({ description: "uploads/ 下的文件名或相对路径" }),
-      }),
-      execute: async (_toolCallId: string, params: { file: string }) => {
-        const filePath = resolveInUploads(path.join(cwd, "uploads"), params.file);
-        if (!filePath) {
-          return {
-            content: [{ type: "text", text: "[无效路径：文件必须位于 uploads/ 目录下]" }],
-            details: {},
-          };
-        }
-        const { content } = await parseFileContent(filePath);
-        return { content, details: {} };
-      },
-    });
+    this.sessions.set(task.id, { session, unsubscribe, controllers: built.controllers });
   }
 
   /** 仅当目标是可对话模型时切换会话模型；失败经事件流报错并返回 false */
@@ -513,6 +395,16 @@ class AgentRuntime {
     providerId?: string,
     attachments?: AttachmentRef[],
   ): Promise<void> {
+    // workflow 团队任务不建 AgentSession：首条（及后续）消息直接运行工作流
+    if (this.isWorkflowTask(taskId)) {
+      const task = configStore.getTask(taskId);
+      if (task?.teamId) {
+        await teamRuntime.runWorkflow(taskId, task.teamId, text, providerId ?? task.providerId);
+      } else {
+        this.emitError(taskId, "该任务绑定工作流团队，请运行工作流");
+      }
+      return;
+    }
     const state = this.sessions.get(taskId);
     if (!state) {
       // 会话未就绪（竞态或初始化失败）：经事件流报错，避免 IPC reject 变成未处理异常
@@ -550,6 +442,11 @@ class AgentRuntime {
     providerId?: string,
     attachments?: AttachmentRef[],
   ): Promise<void> {
+    // workflow 团队任务不建 AgentSession，运行走 agent:run-workflow
+    if (this.isWorkflowTask(taskId)) {
+      this.emitError(taskId, "该任务绑定工作流团队，请运行工作流");
+      return;
+    }
     const state = this.sessions.get(taskId);
     if (!state) {
       this.emitError(taskId, "errors.sessionNotReady");
@@ -589,6 +486,8 @@ class AgentRuntime {
 
   /** 中止当前流（置 abortRequested 标志；若 abort 落在工具执行期，agent_end 时合成 aborted message_end） */
   async abort(taskId: string): Promise<void> {
+    // 团队在途子代理 / workflow 运行级联中止（父会话 abort 的 signal 会自行触发在途 delegate）
+    teamRuntime.abortForTask(taskId);
     const state = this.sessions.get(taskId);
     if (!state) return;
     this.abortRequested.add(taskId);
@@ -609,7 +508,7 @@ class AgentRuntime {
   resolveToolApproval(taskId: string, requestId: string, approved: boolean): void {
     const state = this.sessions.get(taskId);
     if (!state) return;
-    const ctrl = state.controllers["permission"] as
+    const ctrl = state.controllers.permission as
       | { resolve?: (r: string, a: boolean) => void }
       | undefined;
     ctrl?.resolve?.(requestId, approved);
@@ -653,6 +552,8 @@ class AgentRuntime {
       title: `${task.title} · 分支`,
       type: task.type,
       mode: task.mode,
+      expertId: task.expertId,
+      teamId: task.teamId,
       workspaceId: task.workspaceId,
       workspacePath: task.workspacePath,
       workDir,
@@ -712,12 +613,14 @@ class AgentRuntime {
 
   /** 关闭并清理任务会话（先中止在途流，再退订） */
   async disposeSession(taskId: string): Promise<void> {
+    // 团队在途子代理 / workflow 运行一并清理（兜底）
+    teamRuntime.disposeForTask(taskId);
     const state = this.sessions.get(taskId);
     if (!state) return;
     // 先摘出，阻断后续 prompt 命中
     this.sessions.delete(taskId);
     // 未应答的工具权限按拒绝处理，避免工具永久阻塞
-    (state.controllers["permission"] as { dispose?: () => void } | undefined)?.dispose?.();
+    (state.controllers.permission as { dispose?: () => void } | undefined)?.dispose?.();
     try {
       await state.session.abort();
     } catch {

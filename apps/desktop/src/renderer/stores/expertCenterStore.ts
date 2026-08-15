@@ -50,6 +50,8 @@ interface ExpertCenterState {
   createTeam: (req: CreateTeamRequest) => Promise<ExpertTeam>;
   updateTeam: (req: UpdateTeamRequest) => Promise<ExpertTeam>;
   deleteTeam: (id: string) => Promise<void>;
+  /** 复制为自定义（内置示例团队只读，先复制再编辑） */
+  duplicateTeam: (id: string) => Promise<ExpertTeam>;
 
   // 技能
   createSkill: (req: CreateSkillRequest) => Promise<SkillEntry>;
@@ -117,6 +119,11 @@ export const useExpertCenterStore = create<ExpertCenterState>((set) => ({
   deleteTeam: async (id) => {
     await window.electronAPI.team.delete(id);
     set((s) => ({ teams: s.teams.filter((t) => t.id !== id) }));
+  },
+  duplicateTeam: async (id) => {
+    const team = await window.electronAPI.team.duplicate(id);
+    set((s) => ({ teams: upsert(s.teams, team) }));
+    return team;
   },
 
   createSkill: async (req) => {

@@ -207,11 +207,28 @@
     },
     "team": {
       "memberSub": "{{description}} · {{num}} members",
-      "membersLabel": "Team members (switch experts manually)",
-      "membersHint": "Within a task you can switch personas between these experts with one click.",
-      "advancedNoteTitle": "Advanced team capabilities are reserved.",
-      "advancedNoteBody": "Planned: Agent team form orchestrating sub-agents (main agent assigns tasks to sub-agents and aggregates), and Agent Workflow orchestration (visual node orchestration of multi-agent flows). For now we ship experts and skills; advanced team capabilities come later, with fields already reserved.",
-      "saveMembers": "Save members"
+      "membersLabel": "Team members",
+      "membersHint": "Within a task, members collaborate or switch according to the routing strategy.",
+      "saveMembers": "Save members",
+      "strategyLabel": "Routing strategy",
+      "strategyHint": "How the team collaborates inside a conversation.",
+      "leadLabel": "Lead agent",
+      "leadHint": "In dispatch mode this expert acts as the coordinator, assigns tasks to members and aggregates (counted in the team size).",
+      "rolesLabel": "Roles",
+      "rolesHint": "Define a role for each expert (including the lead); used when dispatching/aggregating.",
+      "strategy": {
+        "manual": "Manual switch",
+        "manualDesc": "Manually switch member personas within a task",
+        "auto": "Sub-agent dispatch",
+        "autoDesc": "Main agent auto-delegates to members in parallel and aggregates",
+        "workflow": "Workflow",
+        "workflowDesc": "Code-defined pipeline executed step by step (analyze → implement → review)"
+      },
+      "workflowReadonlyTitle": "Pipeline (code-defined, display only)",
+      "workflowReadonlyHint": "The pipeline is generated in code; visual editing is not available yet.",
+      "builtinReadonlyHint": "Built-in example teams are read-only. Duplicate to customize.",
+      "duplicate": "Duplicate as custom",
+      "builtinBadge": "Built-in example"
     },
     "flow": {
       "mainAgent": "Main agent",
@@ -266,6 +283,8 @@
     "triggerTitle": "Select expert / team / skill, or add attachment",
     "switchExpert": "Click to switch expert",
     "clearExpert": "Clear, back to the current tab's built-in assistant",
+    "switchTeam": "Click to switch team",
+    "clearTeam": "Clear team",
     "add": "Add",
     "attachment": "Attachment",
     "itemCount": "{{num}} item(s)",
@@ -571,6 +590,8 @@
     "modelCalls_one": "{{num}} model call",
     "modelCalls_other": "{{num}} model calls",
     "sessionTotal": "Session total",
+    "runTokens": "in {{input}} · out {{output}} · {{total}} tok",
+    "runDuration": "{{seconds}}s",
     "type": {
       "llm": "Chat LLM",
       "vlm": "Vision VLM",
