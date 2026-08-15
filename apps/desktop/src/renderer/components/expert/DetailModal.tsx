@@ -294,14 +294,6 @@ function ExpertForm({
         onClose={onClose}
       />
       <div className="min-h-0 flex-1 overflow-y-auto px-[24px] py-[22px]">
-        {builtin ? (
-          <div className="mb-[4px]">
-            <Note tone="info" icon={<IconInfo size={18} />} title="内置专家：可自定义">
-              提示词 / 工具 / 扩展 / 标签可编辑，保存即覆盖并即时生效；「重置为默认」恢复出厂（回到
-              main/prompts 默认）。
-            </Note>
-          </div>
-        ) : null}
         <Field label="名称">
           <TextInput value={name} onChange={setName} disabled={builtin} />
         </Field>
