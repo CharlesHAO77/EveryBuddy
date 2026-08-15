@@ -159,7 +159,8 @@ export function PlusMenu({
       ) : null}
 
       {open ? (
-        <div className="absolute bottom-full left-0 z-30 mb-[6px] flex items-start">
+        // items-end：子菜单出现时根菜单锚定底部不移动（bottom-full 已固定底部）
+        <div className="absolute bottom-full left-0 z-30 mb-[6px] flex items-end">
           {/* 根菜单：分类 */}
           <div className="w-[150px] overflow-hidden rounded-[12px] border border-line bg-card py-[6px] shadow-pop">
             <div className="px-[14px] pb-[4px] pt-[2px] text-[11px] font-semibold tracking-[0.05em] text-ink-3">
