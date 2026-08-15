@@ -45,6 +45,7 @@ export function PlusMenu({
   const [open, setOpen] = useState(false);
   const [submenu, setSubmenu] = useState<Submenu>(null);
   const [search, setSearch] = useState("");
+  const [maxH, setMaxH] = useState(280);
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -72,6 +73,16 @@ export function PlusMenu({
     setOpen(false);
     setSubmenu(null);
     setSearch("");
+  };
+
+  /** 打开菜单时按按钮上方可用空间计算子菜单最大高度（bottom-full 向上生长） */
+  const toggleOpen = () => {
+    if (!open) {
+      const top = ref.current?.getBoundingClientRect().top ?? 0;
+      // 菜单 bottom 在按钮上方 6px（mb-[6px]），可用高度 = 按钮到视口顶部
+      setMaxH(Math.max(120, Math.floor(top) - 8));
+    }
+    setOpen((v) => !v);
   };
 
   const selected = experts.find((e) => e.id === expertId) ?? null;
@@ -127,7 +138,7 @@ export function PlusMenu({
     <div ref={ref} className="relative flex items-center gap-[8px]">
       <button
         type="button"
-        onClick={() => setOpen((v) => !v)}
+        onClick={toggleOpen}
         title="选择专家 / 专家团 / 技能，或添加附件"
         className="flex h-[28px] w-[28px] items-center justify-center rounded-s text-accent transition hover:bg-hover hover:text-accent-strong"
       >
@@ -138,7 +149,7 @@ export function PlusMenu({
         <div className="flex h-[26px] items-center overflow-hidden rounded-full border border-accent-line bg-accent-tint text-[12.5px] font-semibold text-accent-strong">
           <button
             type="button"
-            onClick={() => setOpen((v) => !v)}
+            onClick={toggleOpen}
             title="点击更换专家"
             className="flex h-full items-center gap-[6px] pl-[6px] pr-[2px] transition hover:bg-accent-line/40"
           >
@@ -159,8 +170,9 @@ export function PlusMenu({
       ) : null}
 
       {open ? (
-        // items-end：子菜单出现时根菜单锚定底部不移动（bottom-full 已固定底部）
-        <div className="absolute bottom-full left-0 z-30 mb-[6px] flex items-end">
+        // items-start：子菜单与根菜单顶部对齐；子菜单高度受 maxH 约束（按上方可用空间），
+        // 不会溢出屏幕也不会因变高而顶动根菜单
+        <div className="absolute bottom-full left-0 z-30 mb-[6px] flex items-start">
           {/* 根菜单：分类 */}
           <div className="w-[150px] overflow-hidden rounded-[12px] border border-line bg-card py-[6px] shadow-pop">
             <div className="px-[14px] pb-[4px] pt-[2px] text-[11px] font-semibold tracking-[0.05em] text-ink-3">
@@ -243,7 +255,7 @@ export function PlusMenu({
                   </div>
                 </div>
               ) : null}
-              <div className="max-h-[280px] overflow-y-auto py-[4px]">
+              <div className="overflow-y-auto py-[4px]" style={{ maxHeight: maxH }}>
                 {emptyBase ? (
                   <div className="px-[14px] py-[10px] text-[13px] text-ink-3">
                     {submenu === "teams" ? "暂无专家团" : "暂无可用技能"}
