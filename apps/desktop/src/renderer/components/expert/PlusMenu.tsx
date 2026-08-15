@@ -10,7 +10,7 @@
  */
 
 import type { Expert, ExpertTeam } from "@everybuddy/ipc-contract";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useExpertCenterStore } from "../../stores/expertCenterStore";
 import { IconChevronRight, IconFile, IconPlus, IconSearch, IconSparkles, IconX } from "../icons";
 import { IconUsers } from "./icons";
@@ -45,8 +45,15 @@ export function PlusMenu({
   const [open, setOpen] = useState(false);
   const [submenu, setSubmenu] = useState<Submenu>(null);
   const [search, setSearch] = useState("");
-  const [maxH, setMaxH] = useState(280);
+  /** 容器高度 = 根菜单高度：一级菜单位置不因子菜单变高而移动 */
+  const [menuH, setMenuH] = useState(220);
   const ref = useRef<HTMLDivElement>(null);
+  const rootRef = useRef<HTMLDivElement>(null);
+
+  // 打开后测量根菜单高度，子菜单按此高度滚动（顶部对齐、一级菜单不动）
+  useLayoutEffect(() => {
+    if (open && rootRef.current) setMenuH(rootRef.current.offsetHeight);
+  }, [open]);
 
   useEffect(() => {
     if (!open) return;
@@ -75,15 +82,7 @@ export function PlusMenu({
     setSearch("");
   };
 
-  /** 打开菜单时按按钮上方可用空间计算子菜单最大高度（bottom-full 向上生长） */
-  const toggleOpen = () => {
-    if (!open) {
-      const top = ref.current?.getBoundingClientRect().top ?? 0;
-      // 菜单 bottom 在按钮上方 6px（mb-[6px]），可用高度 = 按钮到视口顶部
-      setMaxH(Math.max(120, Math.floor(top) - 8));
-    }
-    setOpen((v) => !v);
-  };
+  const toggleOpen = () => setOpen((v) => !v);
 
   const selected = experts.find((e) => e.id === expertId) ?? null;
   const orderedExperts = [
@@ -170,11 +169,17 @@ export function PlusMenu({
       ) : null}
 
       {open ? (
-        // items-start：子菜单与根菜单顶部对齐；子菜单高度受 maxH 约束（按上方可用空间），
-        // 不会溢出屏幕也不会因变高而顶动根菜单
-        <div className="absolute bottom-full left-0 z-30 mb-[6px] flex items-start">
+        // items-start：子菜单与根菜单顶部对齐；容器高度固定为根菜单高度（menuH），
+        // 子菜单在其内滚动 → 一级菜单位置恒不动，子菜单超出部分减少显示条数
+        <div
+          className="absolute bottom-full left-0 z-30 mb-[6px] flex items-start"
+          style={{ height: menuH }}
+        >
           {/* 根菜单：分类 */}
-          <div className="w-[150px] overflow-hidden rounded-[12px] border border-line bg-card py-[6px] shadow-pop">
+          <div
+            ref={rootRef}
+            className="w-[150px] shrink-0 overflow-hidden rounded-[12px] border border-line bg-card py-[6px] shadow-pop"
+          >
             <div className="px-[14px] pb-[4px] pt-[2px] text-[11px] font-semibold tracking-[0.05em] text-ink-3">
               添加
             </div>
@@ -228,8 +233,11 @@ export function PlusMenu({
 
           {/* 二级菜单：搜索 + 数量 + 滚动（内联渲染，避免嵌套组件导致搜索框失焦） */}
           {submenu ? (
-            <div className="ml-[4px] flex w-[236px] flex-col overflow-hidden rounded-[12px] border border-line bg-card shadow-pop">
-              <div className="flex items-center justify-between border-b border-line px-[12px] py-[7px]">
+            <div
+              className="ml-[4px] flex min-h-0 w-[236px] flex-col overflow-hidden rounded-[12px] border border-line bg-card shadow-pop"
+              style={{ maxHeight: menuH }}
+            >
+              <div className="flex shrink-0 items-center justify-between border-b border-line px-[12px] py-[7px]">
                 <span className="text-[11px] font-semibold tracking-[0.05em] text-ink-3">
                   {SUB_LABEL[submenu]}
                 </span>
@@ -243,7 +251,7 @@ export function PlusMenu({
                 </span>
               </div>
               {!emptyBase ? (
-                <div className="border-b border-line px-[10px] py-[6px]">
+                <div className="shrink-0 border-b border-line px-[10px] py-[6px]">
                   <div className="flex items-center gap-[6px] rounded-[7px] border border-line bg-paper px-[9px] py-[5px]">
                     <IconSearch size={12} className="shrink-0 text-ink-3" />
                     <input
@@ -255,7 +263,7 @@ export function PlusMenu({
                   </div>
                 </div>
               ) : null}
-              <div className="overflow-y-auto py-[4px]" style={{ maxHeight: maxH }}>
+              <div className="min-h-0 flex-1 overflow-y-auto py-[4px]">
                 {emptyBase ? (
                   <div className="px-[14px] py-[10px] text-[13px] text-ink-3">
                     {submenu === "teams" ? "暂无专家团" : "暂无可用技能"}
