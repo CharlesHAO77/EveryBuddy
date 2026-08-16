@@ -185,6 +185,8 @@ everyBuddy/
 
 ## 5. 核心组件设计
 
+> **主进程分层**：`src/main/` 按架构职责分层——根目录仅保留入口 / 生命周期 / IPC 路由（`index.ts`、`app.ts`、`ipcRouter.ts`）；`stores/` 为 JSON 持久化数据存取；`runtime/` 为会话运行引擎（agentRuntime / teamRuntime / sessionBuilder / scheduler / workflowCondition）；`services/` 为能力服务与工具原语（fileParser、vision、imageGeneration、mcpTools、workspaceManager、errors 等）；`windows/` 为窗口管理；`tools/`（平台工具）、`prompts/`（提示词构建）、`extensions/`（会话扩展）为独立子目录。
+
 ### 5.1 AgentRuntime 主进程集成
 
 AgentRuntime 是对 `@earendil-works/pi-coding-agent` SDK 的封装层，职责：
@@ -244,7 +246,7 @@ export class AgentRuntime {
 
 **工具可用性探测（平台化工具配置）：**
 
-`main/tools/` 目录实现平台化的 Agent 工具配置（见 `toolAvailability.ts`）：
+`src/main/tools/` 目录实现平台化的 Agent 工具配置（见 `toolAvailability.ts`）：
 
 - **bash（Windows 关键修复）**：SDK 的 `getShellConfig` 在 Windows 上只查
   `%ProgramFiles%\Git\bin\bash.exe`（新版 Git 的 bash 在 `usr\bin\`，会漏），随后
@@ -387,16 +389,16 @@ contextBridge.exposeInMainWorld("electronAPI", api);
 
 | 文件 | 所有权 | 内容 | 可编辑性 |
 | ---- | ------ | ---- | -------- |
-| `config.json`（0600） | 应用（`configStore.ts`） | 仅 `workspaces` + `tasks`，**无模型、无密钥** | 应用真源，可手改 |
-| `models.json` | 应用（`modelStore.ts`）→ pi SDK `ModelConfig` 消费 | provider 配置（SDK `ProviderConfigSchema` 原生格式） | 应用直写，勿手改 |
-| `auth.json`（0600） | 应用（`modelStore.ts`）→ pi SDK `AuthStorage` 消费 | 凭证（SDK `AuthCredential` 格式 `{ providerId: { type:"api_key", key } }`） | 应用直写，勿手改 |
+| `config.json`（0600） | 应用（`stores/configStore.ts`） | 仅 `workspaces` + `tasks`，**无模型、无密钥** | 应用真源，可手改 |
+| `models.json` | 应用（`stores/modelStore.ts`）→ pi SDK `ModelConfig` 消费 | provider 配置（SDK `ProviderConfigSchema` 原生格式） | 应用直写，勿手改 |
+| `auth.json`（0600） | 应用（`stores/modelStore.ts`）→ pi SDK `AuthStorage` 消费 | 凭证（SDK `AuthCredential` 格式 `{ providerId: { type:"api_key", key } }`） | 应用直写，勿手改 |
 | `models-store.json` | pi SDK 内部（远程目录缓存） | **已移除**；`allowModelNetwork:false` 时 SDK 只读缓存、永不写，`modelsStorePath` 重定向到系统临时目录兜底 | 不落盘 |
 
-- **模型配置**：`modelStore.ts` 是 models.json + auth.json 唯一读写入口，按 SDK 原生格式直写；`ModelRuntime.create({ modelsPath, authPath })` 直接消费，**无派生/同步步骤**（旧 `configStore.models[]` 平行注册表与 `syncModelsJson` 已移除）。
+- **模型配置**：`stores/modelStore.ts` 是 models.json + auth.json 唯一读写入口，按 SDK 原生格式直写；`ModelRuntime.create({ modelsPath, authPath })` 直接消费，**无派生/同步步骤**（旧 `configStore.models[]` 平行注册表与 `syncModelsJson` 已移除）。
 - **凭证**：密钥只写 `auth.json`（0600，原子写），SDK `RuntimeCredentials`→`AuthStorage` 自动读取（解析优先级：运行时覆盖 → auth.json → 环境变量 → models.json 兜底）。`config.json` 不存任何明文密钥。
 - **API Key 输入流程**：用户点击"配置 API Key" → `config:setApiKey` IPC → 主进程 `modelStore.setApiKey()` 写 auth.json → 重建 ModelRuntime。渲染进程全程不接触原始密钥字符串，仅见 `hasApiKey` 布尔。
 - **SDK 版本说明**：pi-mono master 的公共 `AuthStorage` 类尚未随 `@earendil-works/pi-coding-agent` 发布（0.83.0/0.84.1 均只导出只读的 `readStoredCredential`），故应用按 SDK `AuthCredential` 格式直写 auth.json；待 SDK 发布 `AuthStorage` 后，`modelStore.writeAuth` 内部可换为 `AuthStorage.set()`，一处改动即可升级。
-- 主进程不再维护独立的 `credentialService.ts`，凭证写入收口于 `modelStore.ts`。
+- 主进程不再维护独立的 `credentialService.ts`，凭证写入收口于 `stores/modelStore.ts`。
 
 ### 7.4 工具执行安全
 

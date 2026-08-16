@@ -20,7 +20,15 @@ EveryBuddy/
 └── apps/
     └── desktop/        # Electron + React 桌面应用（MVP）
         └── src/
-            ├── main/       # 主进程：窗口/IPC/AgentRuntime/凭证/对话框
+            ├── main/       # 主进程（按职责分层组织）
+            │   ├── index.ts / app.ts / ipcRouter.ts   # 入口 / 应用生命周期 / IPC 路由与校验
+            │   ├── stores/     # JSON 持久化数据存取（configStore / modelStore / expertStore / ...）
+            │   ├── runtime/    # 会话运行引擎（agentRuntime / teamRuntime / sessionBuilder / scheduler）
+            │   ├── services/   # 能力服务（fileParser / vision / mcpTools / workspaceManager / ...）
+            │   ├── windows/    # BrowserWindow 管理（windowManager）
+            │   ├── tools/      # 平台化工具配置（find / grep / generate_image / understand_image）
+            │   ├── prompts/    # 系统提示词构建
+            │   └── extensions/ # 会话扩展（permission / todo / plan-mode）
             ├── preload/    # contextBridge 最小 API
             ├── renderer/   # React UI（纯展示，不持密钥）
             └── shared/     # 跨进程共享的类型声明
@@ -73,7 +81,7 @@ EveryBuddy/
 3. **通道名常量化**：IPC 通道名集中定义为常量，`ipcMain.handle` / `ipcRenderer.invoke` / 事件名统一引用，不写裸字符串。
 4. **逻辑下沉共享层**：会被多端复用的逻辑实现在 `api-gateway` handler 或共享模块；`ipcRouter.ts` 只做「校验 → 转发 → 回包」。同一段逻辑不得在主进程与渲染进程各写一遍。
 5. **三处引用规则（Rule of Three）**：首次出现写到归属处；第二次复用抽到共享处；严禁出现第三份拷贝。
-6. **复用优先于重写**：新代码先查 `ipc-contract` / `api-gateway` / `configStore` / `workspaceManager` / `agentRuntime`，有现成能力则 import，不重复实现。
+6. **复用优先于重写**：新代码先查 `ipc-contract` / `api-gateway` / `src/main/stores/configStore` / `src/main/services/workspaceManager` / `src/main/runtime/agentRuntime`，有现成能力则 import，不重复实现。
 7. **新服务接入走 Gateway**：未来 IM Bot / WebUI 必须 import `api-gateway` + `ipc-contract` 接入，禁止各自维护路由 / 校验 / 类型层。
 8. **依赖方向不倒退**：任何 import 不得违反 §3 包边界表；若共享需跨错误方向，把逻辑下沉到共享包，而非让边界让步。
 9. **契约变更同 PR 收敛**：修改共享类型 / schema / 通道时，其全部消费方在同一改动内完成更新，以 `npm run build` 类型检查为漂移门禁。
