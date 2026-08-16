@@ -33,6 +33,11 @@ describe("filterSlashCommands", () => {
     expect(all.map((c) => c.id)).toContain("plan");
     expect(all.map((c) => c.id)).toContain("steer");
     expect(all.map((c) => c.id)).toContain("follow-up");
+    expect(all.map((c) => c.id)).toContain("compact");
+  });
+
+  it("compact 按关键字命中", () => {
+    expect(filterSlashCommands("compact", ctx)[0]?.id).toBe("compact");
   });
 
   it("steer/follow-up 为扩展命令（insertPrefix）", () => {
@@ -48,9 +53,10 @@ describe("filterSlashCommands", () => {
     expect(filterSlashCommands("zzz", ctx)).toHaveLength(0);
   });
 
-  it("欢迎页无任务时 plan 仍可用（切换 pendingMode）", () => {
+  it("欢迎页无任务时 plan/compact 仍可用（plan 切 pendingMode，compact 提示先进入对话）", () => {
     const items = filterSlashCommands("", { taskId: null, mode: null });
     expect(items.map((c) => c.id)).toContain("plan");
+    expect(items.map((c) => c.id)).toContain("compact");
   });
 });
 

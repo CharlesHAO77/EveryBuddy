@@ -19,6 +19,7 @@ import { PlusMenu } from "./expert/PlusMenu";
 import { expertIcon } from "./expert/ui";
 import { FileMentionMenu } from "./FileMentionMenu";
 import {
+  IconAlertTriangle,
   IconArrowUp,
   IconCheck,
   IconChevronDown,
@@ -354,6 +355,20 @@ function WelcomeView() {
   const { t } = useTranslation();
   const { activeCategory, setActiveCategory } = useUIStore();
   const [text, setText] = useState("");
+  // @ 文件识别（cwd 跟随待选工作空间路径；未选空间时无目录可列，@ 不触发）
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const workspaces = useSessionStore((s) => s.workspaces);
+  const pendingWorkspaceId = useSessionStore((s) => s.pendingWorkspaceId);
+  const pendingWs = workspaces.find((w) => w.id === pendingWorkspaceId);
+  const mention = useFileMentions({ cwd: pendingWs?.path, text, setText, textareaRef });
+  // 欢迎页命令提示（如 /compact 无任务时「先进入对话」）：短暂内联显示后自动清除
+  const welcomeHint = useSessionStore((s) => s.welcomeHint);
+  const setWelcomeHint = useSessionStore((s) => s.setWelcomeHint);
+  useEffect(() => {
+    if (!welcomeHint) return;
+    const timer = window.setTimeout(() => setWelcomeHint(null), 2600);
+    return () => window.clearTimeout(timer);
+  }, [welcomeHint, setWelcomeHint]);
   // 欢迎页可选专家/专家团：缺省跟随模式内置专家；选中自定义专家/团队后 createTask 带 expertId/teamId
   const experts = useExpertCenterStore((s) => s.experts);
   const teams = useExpertCenterStore((s) => s.teams);
@@ -401,6 +416,7 @@ function WelcomeView() {
     openPicker,
     removeAttachment,
     clear,
+    handlePaste,
     fileInputProps,
     onContainerDragOver,
     onContainerDrop,
@@ -478,6 +494,18 @@ function WelcomeView() {
     setText,
     onSend: () => void handleSend(),
   });
+
+  /** 键盘：@ 菜单 > / 命令，逐级消费（Enter 选中文件时不发送） */
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (mention.handleKeyDown(e)) return;
+    slash.handleKeyDown(e);
+  };
+
+  /** 输入变化：/ 命令开合 + @ 文件识别开合 */
+  const handleChange = (value: string) => {
+    slash.handleChange(value);
+    mention.onTextChange(value);
+  };
 
   return (
     <div className="flex min-h-full flex-col items-center">
@@ -560,6 +588,18 @@ function WelcomeView() {
                 if (cmd) slash.selectCommand(cmd);
               }}
             />
+            {/* @ 文件识别下拉（选定工作空间后可列目录） */}
+            <FileMentionMenu
+              open={mention.open}
+              loading={mention.loading}
+              entries={mention.entries}
+              path={mention.path}
+              highlightIndex={mention.highlightIndex}
+              onNavigate={mention.navigate}
+              onGoRoot={mention.goRoot}
+              onGoCrumb={mention.goCrumb}
+              onSelect={mention.insertMention}
+            />
             {/* 占位提示：主句 + 提示同行排列（输入非空时隐藏） */}
             {!text ? (
               <div className="pointer-events-none absolute left-[20px] top-[20px] flex items-baseline gap-[8px]">
@@ -568,9 +608,11 @@ function WelcomeView() {
               </div>
             ) : null}
             <textarea
+              ref={textareaRef}
               value={text}
-              onChange={(e) => slash.handleChange(e.target.value)}
-              onKeyDown={slash.handleKeyDown}
+              onChange={(e) => handleChange(e.target.value)}
+              onKeyDown={handleKeyDown}
+              onPaste={(e) => void handlePaste(e)}
               onCompositionStart={() => (slash.composingRef.current = true)}
               onCompositionEnd={() => (slash.composingRef.current = false)}
               rows={3}
@@ -630,7 +672,13 @@ function WelcomeView() {
         </div>
 
         {/* Bottom bar */}
-        <div className="mt-[14px] flex w-[700px] items-center justify-between">
+        <div className="mt-[14px] flex w-[700px] flex-col items-start gap-[8px]">
+          {welcomeHint ? (
+            <div className="flex items-center gap-[6px] text-[12.5px] font-medium text-warn">
+              <IconAlertTriangle size={13} />
+              {welcomeHint}
+            </div>
+          ) : null}
           <WorkspaceSelector />
         </div>
       </div>
@@ -662,6 +710,7 @@ function ChatView({ taskId }: { taskId: string }) {
     openPicker,
     removeAttachment,
     clear,
+    handlePaste,
     fileInputProps,
     onContainerDragOver,
     onContainerDrop,
@@ -778,17 +827,16 @@ function ChatView({ taskId }: { taskId: string }) {
   };
 
   return (
-    <div className="flex h-full flex-col">
-      {/* Messages */}
-      <div ref={scrollRef} onScroll={handleScroll} className="flex-1 overflow-y-auto px-6 py-6">
-        {/* 对话内居中提示条（计划模式切换等 extension_notify，4s 自动消失） */}
-        {notices.length > 0 && (
-          <div className="mx-auto mb-3 flex w-full max-w-3xl flex-col items-center gap-2">
+    <div className="relative flex h-full flex-col">
+      {/* 通知条：固定于对话窗口顶部居中，不随消息滚动（压缩提示/extension_notify 等，4s 自动消失） */}
+      {notices.length > 0 && (
+        <div className="pointer-events-none absolute left-1/2 top-[12px] z-40 w-full max-w-3xl -translate-x-1/2 px-6">
+          <div className="flex flex-col items-center gap-2">
             {notices.map((n) => (
               <div
                 key={n.id}
                 role="status"
-                className="flex items-center gap-2 rounded-full border border-line bg-card px-4 py-1.5 text-[12px] text-ink-2 shadow-card"
+                className="pointer-events-auto flex items-center gap-2 rounded-full border border-line bg-card px-4 py-1.5 text-[12px] text-ink-2 shadow-pop"
               >
                 <span className="whitespace-pre-wrap">{n.message}</span>
                 <button
@@ -802,7 +850,11 @@ function ChatView({ taskId }: { taskId: string }) {
               </div>
             ))}
           </div>
-        )}
+        </div>
+      )}
+
+      {/* Messages */}
+      <div ref={scrollRef} onScroll={handleScroll} className="flex-1 overflow-y-auto px-6 py-6">
         {messages.length === 0 && !workflowRun ? (
           <div className="flex min-h-full flex-col items-center justify-center">
             <p className="text-sm text-ink-3">
@@ -880,6 +932,7 @@ function ChatView({ taskId }: { taskId: string }) {
               value={text}
               onChange={(e) => handleChange(e.target.value)}
               onKeyDown={handleKeyDown}
+              onPaste={(e) => void handlePaste(e)}
               onCompositionStart={() => (slash.composingRef.current = true)}
               onCompositionEnd={() => (slash.composingRef.current = false)}
               placeholder={t("chat.inputPlaceholder")}

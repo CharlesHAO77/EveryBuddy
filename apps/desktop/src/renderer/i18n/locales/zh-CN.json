@@ -578,7 +578,12 @@
     "steer": "转向（打断当前）",
     "queue": "排队（完成后处理）",
     "running": "运行中",
-    "compacted": "上下文已压缩"
+    "compacted": "上下文已压缩",
+    "compacting": "正在压缩上下文…",
+    "compactNothing": "对话太短，无需压缩",
+    "compactAlready": "上下文已压缩过，无需重复压缩",
+    "compactUnavailable": "当前任务会话未就绪，无法压缩",
+    "compactFailed": "压缩失败：{{message}}"
   },
   "welcome": {
     "mode": {
@@ -600,10 +605,11 @@
     "newWorkspace": "新建空间",
     "noWorkspace": "无工作空间",
     "steerHint": "请输入要发送的内容，如：/steer 换个思路",
+    "compactHint": "先开始一段对话，再使用 /compact 压缩上下文",
     "newTaskTitle": "新任务",
     "tagline": "EveryBuddy, 我帮你",
     "placeholder": "今天帮你做些什么？",
-    "hint": "· @引用对话文件，/调用技能与指令"
+    "hint": "· @引用对话文件，/调用指令"
   },
   "billing": {
     "noData": "暂无计费数据",

@@ -23,6 +23,7 @@ const api: ElectronAPI = {
       return () => ipcRenderer.off("agent:event", handler);
     },
     extensionCommand: (req) => ipcRenderer.invoke("agent:extension-command", req),
+    compact: (req) => ipcRenderer.invoke("agent:compact", req),
     setMode: (req) => ipcRenderer.invoke("agent:set-mode", req),
     approveTool: (req) => ipcRenderer.invoke("agent:approveTool", req),
     runWorkflow: (req) => ipcRenderer.invoke("agent:run-workflow", req),
@@ -62,6 +63,8 @@ const api: ElectronAPI = {
     getPathForFile: (file) => webUtils.getPathForFile(file),
     // 用系统默认浏览器打开外链（markdown 链接用；主进程仅放行 http/https）
     openExternal: (url) => ipcRenderer.invoke("system:openExternal", { url }),
+    // 粘贴的剪贴板文件（无真实路径）base64 暂存为临时文件，返回可读路径
+    stagePastedFile: (req) => ipcRenderer.invoke("system:stage-pasted-file", req),
   },
   schedule: {
     listTasks: () => ipcRenderer.invoke("schedule:list-tasks"),

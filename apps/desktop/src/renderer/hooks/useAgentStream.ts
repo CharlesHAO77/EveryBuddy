@@ -192,6 +192,11 @@ export function useAgentStream(): void {
           store.pushChatNotice(taskId, event.payload.message, event.payload.level);
           break;
 
+        // 非视觉模型收到图片：主进程隐藏调了视觉模型分析 → 缓冲，随下一 assistant 消息附「视觉理解」卡
+        case "image_analysis":
+          store.setPendingVisionAnalyses(taskId, event.payload.images);
+          break;
+
         // 子 Agent 事件（专家团 delegate / workflow 步骤；挂到父工具卡内嵌面板）
         case "subagent_start":
           store.startSubagent(taskId, event.payload);

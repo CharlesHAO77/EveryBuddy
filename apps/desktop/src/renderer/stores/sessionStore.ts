@@ -182,8 +182,12 @@ interface SessionState {
   alwaysAllowedTools: Record<string, string[]>;
   /** 对话内居中提示条：taskId -> 通知队列（extension_notify，4s 自动消失） */
   chatNotices: Record<string, ChatNotice[]>;
-  pushChatNotice: (taskId: string, message: string, level?: ChatNotice["level"]) => void;
+  /** 返回 notice id，供调用方在完成后 dismiss（如 /compact 的「正在压缩」提示随结果移除） */
+  pushChatNotice: (taskId: string, message: string, level?: ChatNotice["level"]) => string;
   dismissChatNotice: (taskId: string, id: string) => void;
+  /** 欢迎页提示（无任务时的命令反馈，如 /compact 需先进入对话；短暂内联显示后清除） */
+  welcomeHint: string | null;
+  setWelcomeHint: (msg: string | null) => void;
   /** SDK 排队状态：taskId -> steer/followUp 队列（queue_update 事件；steer 供状态参考，队列区只渲染 followUp） */
   queues: Record<string, { steering: string[]; followUp: string[] }>;
   /** 渲染层自持排队记录：taskId -> FIFO 排队项（显示 + 交付插入 + 单项取消） */
@@ -278,6 +282,8 @@ interface SessionState {
   branchTask: (taskId: string, entryId: string) => Promise<Task>;
   selectTask: (id: string) => void;
   hydrateTask: (id: string) => Promise<void>;
+  /** 重载某任务历史并整体替换消息（/compact 压缩后刷新，呈现压缩边界摘要卡） */
+  reloadHistory: (id: string) => Promise<void>;
   deleteTask: (id: string) => Promise<void>;
   renameTask: (id: string, title: string) => void;
   openTaskDir: (id: string) => Promise<void>;
@@ -297,6 +303,12 @@ interface SessionState {
 
   // 流式块操作
   startAssistantMessage: (taskId: string, sdkTimestamp?: number) => void;
+  /** 待附到下一 assistant 消息的「视觉理解」分析（非视觉模型收到图片时主进程直连视觉模型，image_analysis 事件缓冲于此） */
+  pendingVisionAnalyses: Record<string, Array<{ name: string; description: string }> | null>;
+  setPendingVisionAnalyses: (
+    taskId: string,
+    images: Array<{ name: string; description: string }>,
+  ) => void;
   startBlock: (
     taskId: string,
     contentIndex: number,
@@ -393,6 +405,8 @@ export const useSessionStore = create<SessionState>((set, get) => ({
   pendingApprovals: {},
   alwaysAllowedTools: {},
   chatNotices: {},
+  welcomeHint: null,
+  pendingVisionAnalyses: {},
   queues: {},
   pendingFollowUps: {},
   clearingQueues: {},
@@ -886,6 +900,24 @@ export const useSessionStore = create<SessionState>((set, get) => ({
     }
   },
 
+  reloadHistory: async (id) => {
+    const history = await window.electronAPI.task.loadHistory(id);
+    set((state) => ({
+      tasks: state.tasks.map((t) =>
+        t.id === id
+          ? // 整体替换（压缩后旧上下文已收敛），统一回填 entryId 供分支锚点
+            {
+              ...t,
+              messages: history.map((m) => ({ ...m, entryId: m.id })),
+              isStreaming: false,
+              pending: false,
+              streamMessageId: null,
+            }
+          : t,
+      ),
+    }));
+  },
+
   deleteTask: async (id) => {
     await window.electronAPI.task.delete(id);
     set((state) => {
@@ -1032,7 +1064,24 @@ export const useSessionStore = create<SessionState>((set, get) => ({
 
   // ── 流式块操作 ────────────────────────────
 
-  startAssistantMessage: (taskId, sdkTimestamp) =>
+  startAssistantMessage: (taskId, sdkTimestamp) => {
+    // 主进程直连视觉模型做的隐藏分析 → 作为「视觉理解」工具卡附到本条消息开头（一次性，附后清除缓冲）
+    const pending = get().pendingVisionAnalyses[taskId] ?? null;
+    const visionBlocks: ToolBlock[] =
+      pending && pending.length > 0
+        ? pending.map((v) => ({
+            id: `vision-${genId()}`,
+            kind: "tool" as const,
+            toolCallId: `vision-${genId()}`,
+            toolName: "视觉理解",
+            args: { file: v.name },
+            argDelta: "",
+            status: "success" as const,
+            output: { content: [{ type: "text" as const, text: v.description }] },
+            outputDelta: "",
+            done: true,
+          }))
+        : [];
     set((state) => ({
       tasks: state.tasks.map((t) => {
         if (t.id !== taskId) return t;
@@ -1040,7 +1089,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
         const msg: ChatMessage = {
           id: msgId,
           role: "assistant",
-          blocks: [],
+          blocks: [...visionBlocks],
           timestamp: Date.now(),
           isStreaming: true,
           sdkTimestamp,
@@ -1054,6 +1103,15 @@ export const useSessionStore = create<SessionState>((set, get) => ({
           pending: false,
         };
       }),
+      pendingVisionAnalyses: pending
+        ? { ...state.pendingVisionAnalyses, [taskId]: null }
+        : state.pendingVisionAnalyses,
+    }));
+  },
+
+  setPendingVisionAnalyses: (taskId, images) =>
+    set((state) => ({
+      pendingVisionAnalyses: { ...state.pendingVisionAnalyses, [taskId]: images },
     })),
 
   startBlock: (taskId, contentIndex, kind, toolCallId) =>
@@ -1477,6 +1535,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
         }));
       }
     }, 4000);
+    return id;
   },
 
   dismissChatNotice: (taskId, id) =>
@@ -1486,4 +1545,6 @@ export const useSessionStore = create<SessionState>((set, get) => ({
         [taskId]: (s.chatNotices[taskId] ?? []).filter((n) => n.id !== id),
       },
     })),
+
+  setWelcomeHint: (msg) => set({ welcomeHint: msg }),
 }));

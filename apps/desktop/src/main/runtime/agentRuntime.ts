@@ -18,15 +18,13 @@ import type { ToolDefinition } from "@earendil-works/pi-coding-agent";
 import type {
   AgentEvent,
   AttachmentRef,
+  CompactResult,
   ExecutionMode,
   Expert,
   HistoryMessage,
   TaskMeta,
 } from "@everybuddy/ipc-contract";
-import { getAgentConfig } from "../stores/agentConfigStore";
-import { configStore } from "../stores/configStore";
 import { uiError } from "../services/errors";
-import { findExpert } from "../stores/expertStore";
 import {
   buildImageDescriptionBlock,
   buildManifestText,
@@ -34,6 +32,11 @@ import {
   stageAttachments,
 } from "../services/fileParser";
 import { buildFullPath, entriesToHistory } from "../services/historyMapper";
+import { type DescribeImageRuntime, describeImage } from "../services/vision";
+import { getTaskCwd, resolveSessionLocation } from "../services/workspaceManager";
+import { getAgentConfig } from "../stores/agentConfigStore";
+import { configStore } from "../stores/configStore";
+import { findExpert } from "../stores/expertStore";
 import {
   AUTH_PATH,
   getProvider,
@@ -41,6 +44,8 @@ import {
   isChatModelProviderId,
   MODELS_JSON_PATH,
 } from "../stores/modelStore";
+import { teamStore } from "../stores/teamStore";
+import { detectToolAvailability, type ToolAvailability } from "../tools/toolAvailability";
 import {
   buildSessionConfig,
   type CodingAgentSDK,
@@ -50,10 +55,6 @@ import {
   type WithoutStreamId,
 } from "./sessionBuilder";
 import { type TeamRuntimeDeps, teamRuntime } from "./teamRuntime";
-import { teamStore } from "../stores/teamStore";
-import { detectToolAvailability, type ToolAvailability } from "../tools/toolAvailability";
-import { type DescribeImageRuntime, describeImage } from "../services/vision";
-import { getTaskCwd, resolveSessionLocation } from "../services/workspaceManager";
 
 /** 本地扩展的 SDK AgentSession 类型（运行时通过动态 import() 加载 ESM 包，见 load()） */
 type AgentSession = (CodingAgentSDK["AgentSession"] extends new (
@@ -370,6 +371,11 @@ class AgentRuntime {
             "图片已由视觉理解模型自动分析，内容见下方 <image-description> 块（如需针对图片追问，可用 understand_image 工具）",
         });
         descBlock = buildImageDescriptionBlock(descs);
+        // 把这次隐藏的视觉分析暴露给渲染层：紧随的 assistant 消息将附一张「视觉理解」工具卡
+        this.emit(taskId, {
+          type: "image_analysis",
+          payload: { images: descs },
+        });
       } else {
         manifest = buildManifestText(staged);
       }
@@ -492,6 +498,23 @@ class AgentRuntime {
     if (!state) return;
     this.abortRequested.add(taskId);
     await state.session.abort();
+  }
+
+  /**
+   * 手动压缩会话上下文（/compact，SDK session.compact）。
+   * 阻塞至摘要生成完成（期间先中止当前 agent 操作）；错误以 { ok: false, error } 返回
+   * （会话过小 / 已压缩过 / 无会话），由渲染层提示，不抛异常。
+   * 压缩条目已写入会话 JSONL，渲染层压缩成功后应重载历史以呈现压缩边界摘要卡。
+   */
+  async compact(taskId: string, customInstructions?: string): Promise<CompactResult> {
+    const state = this.sessions.get(taskId);
+    if (!state) return { ok: false, error: "errors.sessionNotReady" };
+    try {
+      const result = await state.session.compact(customInstructions);
+      return { ok: true, summary: result.summary };
+    } catch (err) {
+      return { ok: false, error: err instanceof Error ? err.message : String(err) };
+    }
   }
 
   /** 触发扩展控制器方法（ipcRouter:agent:extension-command -> 控制器侧信道） */

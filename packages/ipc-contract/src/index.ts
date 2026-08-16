@@ -43,6 +43,22 @@ export interface PromptResponse {
   streamId: string;
 }
 
+/** agent:compact 请求：手动压缩某任务的会话上下文（/compact） */
+export interface CompactRequest {
+  taskId: string;
+  /** 压缩摘要的自定义指示（SDK 用于指导摘要生成，可选） */
+  customInstructions?: string;
+}
+
+/** agent:compact 返回：成功时携带摘要；失败时 error 为可展示消息 */
+export interface CompactResult {
+  ok: boolean;
+  /** 压缩摘要（成功时返回，渲染层可结合重载历史展示） */
+  summary?: string;
+  /** 失败原因（ok=false 时） */
+  error?: string;
+}
+
 /**
  * 单条 assistant 消息的 token 用量与费用（来自 SDK AssistantMessage.usage，JSONL 已持久化）。
  * cost 单位为元（SDK 按模型定价计算）；>0 即展示，无则不显示。
@@ -189,6 +205,15 @@ export type AgentEvent =
       streamId: string;
       type: "extension_notify";
       payload: { message: string; level?: "info" | "warn" | "error" };
+    }
+  // 非视觉模型收到图片时，主进程 buildPromptText 直连视觉模型做了隐藏分析——
+  // 渲染层收到后把结果作为「视觉理解」工具卡附到紧随的 assistant 消息上（否则分析过程不可见）
+  | {
+      streamId: string;
+      type: "image_analysis";
+      payload: {
+        images: Array<{ name: string; description: string }>;
+      };
     }
   // 子 Agent 事件（专家团 auto 调度的 delegate 工具 / workflow 步骤触发；streamId = 父任务 taskId）
   | {
@@ -977,6 +1002,13 @@ export const abortRequestSchema = z.object({
   streamId: z.string().min(1),
 });
 
+/** agent:compact 请求（手动压缩会话上下文；customInstructions 可选） */
+export const compactRequestSchema = z.object({
+  taskId: z.string().min(1, "errors.paramMissing"),
+  customInstructions: z.string().optional(),
+});
+export type CompactRequestZ = z.infer<typeof compactRequestSchema>;
+
 export const createTaskRequestSchema = z.object({
   title: z.string().optional(),
   type: z.enum(["temp", "workspace"]),
@@ -1053,6 +1085,23 @@ export const extensionCommandRequestSchema = z.object({
   command: z.string().min(1, "errors.paramMissing"),
 });
 export type ExtensionCommandRequest = z.infer<typeof extensionCommandRequestSchema>;
+
+/** 粘贴的剪贴板文件（无真实路径，如截图/复制的图片）base64 暂存请求：主进程写临时文件，返回可读路径 */
+export interface StagePastedFileRequest {
+  /** 展示用文件名（粘贴时取 file.name，缺失则按 MIME 推断） */
+  name: string;
+  /** base64 内容（data URL 中逗号之后的部分） */
+  data: string;
+  /** MIME（如 image/png），用于推断扩展名 */
+  mimeType?: string;
+}
+
+export const stagePastedFileRequestSchema = z.object({
+  name: z.string().min(1, "errors.paramMissing"),
+  data: z.string().min(1, "errors.paramMissing"),
+  mimeType: z.string().optional(),
+});
+export type StagePastedFileRequestZ = z.infer<typeof stagePastedFileRequestSchema>;
 
 /** 执行模式：auto 自动执行 / manual 手动确认 / plan 计划模式 */
 export const executionModeSchema = z.enum(["auto", "manual", "plan"]);
@@ -1355,6 +1404,8 @@ export interface ElectronAPI {
     clearQueue: (streamId: string) => Promise<{ steering: string[]; followUp: string[] }>;
     onEvent: (cb: (event: AgentEvent) => void) => () => void;
     extensionCommand: (req: ExtensionCommandRequest) => Promise<void>;
+    /** 手动压缩会话上下文（/compact；返回成功/失败与摘要） */
+    compact: (req: CompactRequest) => Promise<CompactResult>;
     /** 切换任务执行模式（auto/manual/plan） */
     setMode: (req: SetModeRequest) => Promise<void>;
     /** 应答工具权限确认 */
@@ -1401,6 +1452,8 @@ export interface ElectronAPI {
     getPathForFile: (file: File) => string;
     /** 用系统默认浏览器打开外链（markdown 链接用，主进程仅放行 http/https） */
     openExternal: (url: string) => Promise<void>;
+    /** 粘贴的剪贴板文件（无真实路径）base64 写入临时目录，返回可读路径（发送时由 stageAttachments 复制） */
+    stagePastedFile: (req: StagePastedFileRequest) => Promise<string>;
   };
   schedule: {
     listTasks: () => Promise<ScheduledTask[]>;

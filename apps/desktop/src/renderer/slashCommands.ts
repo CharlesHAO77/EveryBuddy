@@ -2,6 +2,7 @@
  * / 命令注册表与匹配/过滤纯函数（无 React 依赖，可单测）。
  */
 
+import i18n from "./i18n";
 import { useSessionStore } from "./stores/sessionStore";
 
 export interface SlashCommandCtx {
@@ -63,6 +64,52 @@ export const SLASH_COMMANDS: SlashCommand[] = [
       store.setMode(ctx.taskId, planOn ? "auto" : "plan");
     },
   },
+  {
+    id: "compact",
+    label: "压缩上下文",
+    description: "压缩当前对话上下文，释放 token 空间",
+    run: (ctx) => {
+      const store = useSessionStore.getState();
+      // 欢迎页无任务：无可压缩的会话 → 提示先进入对话，不建任务不发送
+      if (!ctx.taskId) {
+        store.setWelcomeHint(i18n.t("welcome.compactHint"));
+        return;
+      }
+      const taskId = ctx.taskId;
+      // 压缩会先中止在途生成，SDK 生成摘要可能耗时数秒 → 先给即时反馈；
+      // 结束时按 id 移除该临时提示，不残留于对话列表顶部
+      const compactingId = store.pushChatNotice(taskId, i18n.t("chat.compacting"), "info");
+      void (async () => {
+        try {
+          const result = await window.electronAPI.agent.compact({ taskId });
+          store.dismissChatNotice(taskId, compactingId);
+          if (!result.ok) {
+            const msg =
+              result.error === "errors.sessionNotReady"
+                ? i18n.t("chat.compactUnavailable")
+                : /nothing to compact/i.test(result.error ?? "")
+                  ? i18n.t("chat.compactNothing")
+                  : /already compacted/i.test(result.error ?? "")
+                    ? i18n.t("chat.compactAlready")
+                    : i18n.t("chat.compactFailed", { message: result.error ?? "" });
+            store.pushChatNotice(taskId, msg, "warn");
+            return;
+          }
+          // 压缩完成：重载历史，呈现压缩边界摘要卡（旧消息收敛 + notice 卡）
+          await store.reloadHistory(taskId);
+        } catch (err) {
+          store.dismissChatNotice(taskId, compactingId);
+          store.pushChatNotice(
+            taskId,
+            i18n.t("chat.compactFailed", {
+              message: err instanceof Error ? err.message : String(err),
+            }),
+            "warn",
+          );
+        }
+      })();
+    },
+  },
 ];
 
 /** 整个输入恰好是 `/keyword`（keyword 可空，`/` 即全量）时返回 keyword，否则 null */
@@ -82,7 +129,9 @@ export function filterSlashCommands(keyword: string, ctx: SlashCommandCtx): Slas
 }
 
 /** 解析扩展命令输入：`/steer 内容` / `/follow-up 内容` → { channel, rest }；裸命令或普通文本返回 null */
-export function parseCommandChannel(text: string): { channel: "steer" | "followUp"; rest: string } | null {
+export function parseCommandChannel(
+  text: string,
+): { channel: "steer" | "followUp"; rest: string } | null {
   const m = /^\/(steer|follow-up)\s+(.+)$/s.exec(text.trim());
   if (!m) return null;
   const cmd = m[1];

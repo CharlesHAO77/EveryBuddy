@@ -73,15 +73,18 @@ export function AutomationView() {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col bg-paper">
-      {/* ── 页面顶栏（兼作窗口拖动区）：
-       *  标题/数量/新建按钮都顶到最上；mac 按钮在右上角，win 按钮在系统图标左侧（pr 让位） ── */}
+      {/* ── 页面顶栏（兼作窗口拖动区，对齐 ExpertView 高度/字号）：
+       *  图标徽标 + 标题 + 数量 + 新建按钮顶到最上；mac 按钮在右上角，win 按钮在系统图标左侧（pr 让位） ── */}
       <div
-        className={`flex shrink-0 items-center gap-[10px] border-b border-line py-[10px] pl-[16px] ${
-          isWin ? "pr-[160px]" : "pr-[16px]"
+        className={`flex h-[60px] shrink-0 items-center gap-[10px] border-b border-line px-[20px] ${
+          isWin ? "pr-[160px]" : ""
         } ${isWin || isMac ? "titlebar-drag" : ""}`}
       >
-        <h1 className="text-[20px] font-bold text-ink">{t("automation.title")}</h1>
-        <span className="rounded-full border border-accent-line bg-accent-tint px-[8px] py-[1px] text-[11px] font-semibold text-accent-strong">
+        <div className="flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-[9px] bg-accent-tint text-accent">
+          <IconZap size={18} />
+        </div>
+        <h1 className="text-[16px] font-semibold text-ink">{t("automation.title")}</h1>
+        <span className="flex h-[21px] items-center rounded-full border border-accent-line bg-accent-tint px-[9px] text-[12px] font-semibold leading-none text-accent-strong">
           {tasks.length}
         </span>
         <div className="flex-1" />

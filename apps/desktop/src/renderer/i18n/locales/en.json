@@ -587,7 +587,12 @@
     "steer": "Steer (interrupt)",
     "queue": "Queue (handle after)",
     "running": "Running",
-    "compacted": "Context was compacted"
+    "compacted": "Context was compacted",
+    "compacting": "Compacting context…",
+    "compactNothing": "Conversation is too short to compact",
+    "compactAlready": "Context already compacted",
+    "compactUnavailable": "Cannot compact (session not ready)",
+    "compactFailed": "Compaction failed: {{message}}"
   },
   "welcome": {
     "mode": {
@@ -609,10 +614,11 @@
     "newWorkspace": "New workspace",
     "noWorkspace": "No workspace",
     "steerHint": "Enter something to send, e.g. /steer try a different approach",
+    "compactHint": "Start a conversation first, then use /compact to compress the context",
     "newTaskTitle": "New Task",
     "tagline": "EveryBuddy, I'll help you",
     "placeholder": "What can I help you with today?",
-    "hint": "· @ to mention files, / to invoke skills and commands"
+    "hint": "· @ to mention files, / to invoke commands"
   },
   "billing": {
     "noData": "No billing data",

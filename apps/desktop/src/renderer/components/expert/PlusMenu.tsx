@@ -107,6 +107,8 @@ export function PlusMenu({
     ...experts.filter((e) => e.mode === mode),
     ...experts.filter((e) => e.mode !== mode),
   ];
+  // 无显式选择时的默认助手 = 当前模式首个内置专家（与 WelcomeView 的 selectedExpert 回退一致）
+  const defaultExpert = experts.find((e) => e.source === "builtin" && e.mode === mode) ?? null;
   const enabledSkills = skills.filter((s) => s.enabled);
 
   // 搜索过滤（内容多时收敛）
@@ -328,8 +330,7 @@ export function PlusMenu({
                 ) : submenu === "experts" ? (
                   filteredExperts.map((e) => {
                     const isActive =
-                      e.id === expertId ||
-                      (expertId === null && e.source === "builtin" && e.mode === mode);
+                      e.id === expertId || (expertId === null && e.id === defaultExpert?.id);
                     return (
                       <button
                         key={e.id}

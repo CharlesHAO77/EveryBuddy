@@ -13,6 +13,7 @@ import {
   abortRequestSchema,
   approveToolRequestSchema,
   branchRequestSchema,
+  compactRequestSchema,
   connectorCreateRequestSchema,
   connectorIdRequestSchema,
   connectorTestRequestSchema,
@@ -43,6 +44,7 @@ import {
   skillIdRequestSchema,
   skillInstallRequestSchema,
   skillUpdateRequestSchema,
+  stagePastedFileRequestSchema,
   teamCreateRequestSchema,
   teamGetRunsRequestSchema,
   teamIdRequestSchema,
@@ -52,18 +54,12 @@ import {
 import { type BrowserWindow, ipcMain, shell } from "electron";
 import { ZodError } from "zod";
 import { agentRuntime } from "./runtime/agentRuntime";
-import { configStore, SESSIONS_DIR, WORK_SPACES_DIR } from "./stores/configStore";
-import { connectorStore } from "./stores/connectorStore";
+import { scheduler } from "./runtime/scheduler";
+import { teamRuntime } from "./runtime/teamRuntime";
 import { rmIfDirectChild } from "./services/dirCleanup";
 import { uiError } from "./services/errors";
 import { buildExpertCatalog } from "./services/expertCatalog";
-import { expertStore } from "./stores/expertStore";
-import * as modelStore from "./stores/modelStore";
-import { scheduler } from "./runtime/scheduler";
-import { skillStore } from "./stores/skillStore";
-import { teamRunStore } from "./stores/teamRunStore";
-import { teamRuntime } from "./runtime/teamRuntime";
-import { teamStore } from "./stores/teamStore";
+import { stagePastedFile } from "./services/pasteStaging";
 import {
   createNamedWorkspace,
   createWorkspace,
@@ -74,6 +70,13 @@ import {
   revealInFolder,
   selectDirectory,
 } from "./services/workspaceManager";
+import { configStore, SESSIONS_DIR, WORK_SPACES_DIR } from "./stores/configStore";
+import { connectorStore } from "./stores/connectorStore";
+import { expertStore } from "./stores/expertStore";
+import * as modelStore from "./stores/modelStore";
+import { skillStore } from "./stores/skillStore";
+import { teamRunStore } from "./stores/teamRunStore";
+import { teamStore } from "./stores/teamStore";
 
 /** 校验入参，失败抛错；Zod 拒绝时归一化为首条 issue 的 message（即 i18n key），渲染层经 translateError 翻译 */
 function validate<T>(schema: { parse: (v: unknown) => T }, value: unknown): T {
@@ -178,6 +181,12 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
   ipcMain.handle("agent:extension-command", async (_evt, raw) => {
     const req = validate(extensionCommandRequestSchema, raw);
     agentRuntime.runExtensionCommand(req.taskId, req.extension, req.command);
+  });
+
+  // 手动压缩会话上下文（/compact）-> SDK session.compact（阻塞至摘要生成完成）
+  ipcMain.handle("agent:compact", async (_evt, raw) => {
+    const req = validate(compactRequestSchema, raw);
+    return agentRuntime.compact(req.taskId, req.customInstructions);
   });
 
   // 切换任务执行模式（auto/manual/plan）
@@ -394,6 +403,12 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
     const { url } = validate(openExternalRequestSchema, raw);
     if (!/^https?:\/\//i.test(url)) throw uiError("errors.httpOnly");
     await shell.openExternal(url);
+  });
+
+  // 粘贴的剪贴板文件（无真实路径）base64 暂存为临时文件，返回可读路径
+  ipcMain.handle("system:stage-pasted-file", (_evt, raw) => {
+    const req = validate(stagePastedFileRequestSchema, raw);
+    return stagePastedFile(req);
   });
 
   // ── schedule:*（自动化 / 定时任务） ─────────
