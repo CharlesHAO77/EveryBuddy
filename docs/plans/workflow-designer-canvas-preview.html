@@ -1,0 +1,369 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Workflow 设计器 v3 · 画布效果图</title>
+<style>
+  :root {
+    --paper: #faf8f4; --paper-deep: #f4f0e9; --card: #ffffff;
+    --hover: #f1ede4; --active: #eae4d8;
+    --ink: #1f1c18; --ink-2: #57534b; --ink-3: #a39e93;
+    --line: #e9e4da; --line-strong: #dcd5c7;
+    --accent: #0d7a5f; --accent-strong: #0a6450; --accent-tint: #e7f2ee; --accent-line: #bcddd2;
+    --danger: #b4453a;
+    --warn: #b8862f; --warn-tint: #fbf3e2; --warn-line: #ecd9b6;
+    --info: #3a6b8a; --info-tint: #eaf1f6;
+    --purple: #6d5b8a; --purple-tint: #f0edf5; --purple-line: #d8cfe3;
+    --shadow-modal: 0 12px 40px rgb(31 28 24 / .16), 0 2px 8px rgb(31 28 24 / .08);
+    --shadow-card: 0 1px 2px rgb(31 28 24 / .06), 0 2px 8px rgb(31 28 24 / .05);
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue",
+    Arial, "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif; font-size: 15px;
+    font-weight: 500; line-height: 1.5; color: var(--ink); background: var(--paper);
+    -webkit-font-smoothing: antialiased; }
+  .mono { font-family: ui-monospace, "SF Mono", "Cascadia Code", Consolas, monospace; }
+
+  .pagebar { max-width: 1360px; margin: 20px auto 12px; padding: 10px 16px;
+    border: 1px solid var(--warn); background: var(--warn-tint); color: #7a5d16;
+    border-radius: 10px; font-size: 12.5px; line-height: 1.65; }
+  .pagebar b { color: #6b4f10; }
+
+  .frame { max-width: 1360px; margin: 0 auto 30px; padding: 0 14px; }
+  .app { display: flex; height: 780px; background: var(--card); border-radius: 16px;
+    box-shadow: var(--shadow-modal); overflow: hidden; border: 1px solid var(--line); }
+
+  /* ── 左工具条 ── */
+  .rail { width: 150px; flex-shrink: 0; border-right: 1px solid var(--line);
+    background: var(--paper-deep); padding: 14px 10px; }
+  .rail-title { font-size: 11px; font-weight: 700; letter-spacing: .05em; color: var(--ink-3);
+    margin: 0 2px 10px; }
+  .rail-item { display: flex; align-items: center; gap: 9px; padding: 9px 10px; border-radius: 10px;
+    cursor: grab; border: 1px solid var(--line); background: var(--card); margin-bottom: 8px;
+    transition: border-color .15s, box-shadow .15s; }
+  .rail-item:hover { border-color: var(--accent-line); box-shadow: var(--shadow-card); }
+  .rail-ico { width: 26px; height: 26px; border-radius: 8px; display: flex; align-items: center;
+    justify-content: center; font-size: 13px; }
+  .ico-task { background: var(--active); color: var(--ink-2); }
+  .ico-parallel { background: var(--accent-tint); color: var(--accent-strong); }
+  .ico-conditional { background: var(--purple-tint); color: var(--purple); }
+  .rail-item .name { font-size: 12.5px; font-weight: 600; }
+  .rail-note { margin-top: 12px; font-size: 10.5px; color: var(--ink-3); line-height: 1.5; padding: 0 2px; }
+
+  /* ── 画布区 ── */
+  .stage { flex: 1; min-width: 0; display: flex; flex-direction: column; background: var(--paper); }
+  .toolbar { display: flex; align-items: center; gap: 8px; padding: 10px 14px; border-bottom: 1px solid var(--line);
+    background: var(--card); }
+  .toolbar .wf-name { font-weight: 700; font-size: 14px; }
+  .toolbar .spacer { flex: 1; }
+  .btn { border-radius: 8px; padding: 6px 12px; font-size: 12.5px; font-weight: 600; cursor: pointer;
+    border: 1px solid var(--line); background: var(--card); color: var(--ink-2); }
+  .btn:hover { background: var(--hover); color: var(--ink); }
+  .btn-primary { border: none; background: var(--accent); color: #fff; }
+  .btn-primary:hover { background: var(--accent-strong); }
+  .zbtn { width: 30px; height: 30px; padding: 0; display: inline-flex; align-items: center;
+    justify-content: center; font-size: 15px; }
+
+  .viewport { flex: 1; min-height: 0; overflow: auto; position: relative;
+    background: radial-gradient(circle, #e5e0d6 1px, transparent 1px) 0 0 / 22px 22px, var(--paper); }
+  .canvas { position: relative; width: 1080px; height: 980px; transform-origin: 0 0; }
+  svg.edges { position: absolute; left: 0; top: 0; width: 1080px; height: 980px; pointer-events: none; z-index: 1; }
+  .port { fill: #fff; stroke: var(--accent); stroke-width: 2; }
+  .edge { fill: none; stroke: var(--ink-3); stroke-width: 2; }
+  .edge.active { stroke: var(--accent); stroke-width: 2.2; }
+  .edge.then { stroke: var(--accent); stroke-width: 2.4; }
+  .edge.else { stroke: var(--warn); stroke-width: 2.4; stroke-dasharray: 6 4; }
+  .edge-label { font-size: 11px; font-weight: 700; }
+
+  /* 节点 */
+  .node { position: absolute; z-index: 2; background: var(--card); border: 1px solid var(--line);
+    border-radius: 12px; box-shadow: var(--shadow-card); padding: 10px 12px; cursor: grab; }
+  .node.selected { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-tint); }
+  .node .n-head { display: flex; align-items: center; gap: 7px; }
+  .node .n-badge { font-size: 10px; font-weight: 700; border-radius: 6px; padding: 2px 8px; letter-spacing: .03em; }
+  .b-task { background: var(--active); color: var(--ink-2); }
+  .b-parallel { background: var(--accent-tint); color: var(--accent-strong); }
+  .b-conditional { background: var(--purple-tint); color: var(--purple); }
+  .b-summary { background: var(--warn-tint); color: var(--warn); }
+  .node .n-id { font-family: ui-monospace, Consolas, monospace; font-size: 11px; font-weight: 700; color: var(--ink-3); }
+  .node .n-title { font-size: 12.5px; font-weight: 600; margin-top: 6px; }
+  .node .n-sub { font-size: 10.5px; color: var(--ink-3); margin-top: 2px; line-height: 1.4; }
+
+  /* 并行 / 条件 分组容器 */
+  .group { position: absolute; z-index: 0; border-radius: 14px; border: 1.5px dashed var(--accent-line);
+    background: var(--accent-tint); }
+  .group.cond { border-color: var(--purple-line); background: var(--purple-tint); }
+  .group .g-tag { position: absolute; top: -11px; left: 16px; font-size: 10px; font-weight: 700;
+    background: var(--card); padding: 1px 9px; border-radius: 999px; border: 1px solid var(--line); color: var(--ink-2); }
+  .group.cond .g-tag { color: var(--purple); border-color: var(--purple-line); }
+  .cond-bar { position: absolute; top: 12px; left: 16px; right: 16px; display: flex; align-items: center;
+    gap: 8px; font-size: 11.5px; color: var(--purple); font-weight: 600; }
+  .cond-bar .rule { background: #fff; border: 1px solid var(--purple-line); border-radius: 8px;
+    padding: 3px 10px; font-family: ui-monospace, Consolas, monospace; font-size: 11px; }
+  .branch-tag { position: absolute; font-size: 10px; font-weight: 700; color: var(--ink-3); }
+
+  /* minimap */
+  .minimap { position: absolute; right: 16px; bottom: 14px; width: 150px; height: 96px; z-index: 5;
+    background: #fff; border: 1px solid var(--line); border-radius: 9px; box-shadow: var(--shadow-card);
+    padding: 7px; }
+  .minimap .mm-title { font-size: 9px; color: var(--ink-3); font-weight: 700; letter-spacing: .05em; margin-bottom: 5px; }
+  .minimap .mm-box { position: relative; width: 100%; height: 72px; }
+  .mm-rect { position: absolute; border-radius: 2px; border: 1px solid var(--ink-3); background: var(--active); }
+  .mm-rect.cond { border-color: var(--purple); background: var(--purple-tint); }
+  .mm-view { position: absolute; border: 1.5px solid var(--accent); border-radius: 3px; }
+
+  /* 右侧编辑面板 */
+  .panel { width: 320px; flex-shrink: 0; border-left: 1px solid var(--line); background: var(--card);
+    display: flex; flex-direction: column; }
+  .panel-head { padding: 14px 16px; border-bottom: 1px solid var(--line); }
+  .panel-head .t { font-size: 14px; font-weight: 700; display: flex; align-items: center; gap: 8px; }
+  .panel-head .s { font-size: 11px; color: var(--ink-3); margin-top: 3px; }
+  .panel-body { flex: 1; min-height: 0; overflow-y: auto; padding: 14px 16px; }
+  .field { margin-bottom: 14px; }
+  .field-label { display: block; font-size: 11px; font-weight: 700; letter-spacing: .04em;
+    color: var(--ink-2); margin-bottom: 6px; }
+  .input, .select, .textarea { width: 100%; border: 1px solid var(--line); background: var(--card);
+    border-radius: 8px; padding: 7px 11px; font-size: 12.5px; color: var(--ink); outline: none; }
+  .input:focus, .select:focus, .textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-tint); }
+  .textarea { resize: vertical; line-height: 1.55; }
+  .rule-row { display: flex; gap: 6px; align-items: center; background: var(--paper); border: 1px solid var(--line);
+    border-radius: 8px; padding: 6px 8px; margin-bottom: 7px; }
+  .rule-row .mono { font-size: 11px; }
+  .rule-row .op { max-width: 110px; }
+  .logic { display: flex; gap: 6px; margin-top: 6px; }
+  .logic-chip { border-radius: 999px; padding: 2px 12px; font-size: 11px; font-weight: 700; cursor: pointer;
+    border: 1px solid var(--line); background: var(--card); color: var(--ink-3); }
+  .logic-chip.on { border-color: var(--accent); background: var(--accent-tint); color: var(--accent-strong); }
+  .hint { font-size: 10.5px; color: var(--ink-3); line-height: 1.5; margin-top: 6px; }
+  .branch-list { display: flex; flex-direction: column; gap: 6px; }
+  .branch-item { display: flex; align-items: center; gap: 7px; border: 1px solid var(--line);
+    border-radius: 9px; padding: 7px 10px; font-size: 12px; background: var(--paper); }
+  .branch-item.then { border-color: var(--accent-line); background: var(--accent-tint); }
+  .branch-item.else { border-color: var(--warn-line); background: var(--warn-tint); }
+  .branch-item .dot { width: 16px; height: 16px; border-radius: 5px; display: inline-flex; align-items: center;
+    justify-content: center; font-size: 10px; color: #fff; }
+  .dot.then { background: var(--accent); }
+  .dot.else { background: var(--warn); }
+  .branch-item .meta { flex: 1; }
+  .branch-item .meta b { font-size: 12px; }
+  .branch-item .meta span { display: block; font-size: 10.5px; color: var(--ink-3); }
+  .branch-item .expert { font-size: 10.5px; color: var(--accent-strong); font-weight: 600; }
+  .panel-foot { padding: 12px 16px; border-top: 1px solid var(--line); background: var(--paper);
+    display: flex; justify-content: flex-end; gap: 8px; }
+  .chip { border: 1px solid var(--line); background: var(--card); color: var(--ink-2);
+    border-radius: 999px; padding: 1px 8px; font-family: ui-monospace, Consolas, monospace; font-size: 10px; }
+</style>
+</head>
+<body>
+
+<div class="pagebar">
+  <b>Workflow 设计器 v3 · 画布效果图（静态 mockup）</b>
+  形态参考 n8n/Dify 画布：左侧节点栏、中央可缩放画布（虚线网格）、SVG 连线、条件/并行分组容器、右下 minimap、右侧节点编辑面板。
+  <b>此页为静态效果图</b>，仅右下角「＋/－」模拟缩放。若观感通过，再评估是否上 <span class="mono">@xyflow/react</span> 实现真拖动/连线。
+</div>
+
+<div class="frame">
+  <div class="app">
+    <!-- 左工具条 -->
+    <aside class="rail">
+      <div class="rail-title">节点库</div>
+      <div class="rail-item"><span class="rail-ico ico-task">→</span><span class="name">任务</span></div>
+      <div class="rail-item"><span class="rail-ico ico-parallel">⇶</span><span class="name">并行</span></div>
+      <div class="rail-item"><span class="rail-ico ico-conditional">◈</span><span class="name">条件</span></div>
+      <div class="rail-note">拖入画布添加节点（mockup 静态）。</div>
+    </aside>
+
+    <!-- 画布区 -->
+    <section class="stage">
+      <div class="toolbar">
+        <span class="wf-name">软件研发 · 需求 → 开发 → 质量门禁 → 发布</span>
+        <span class="spacer"></span>
+        <button class="btn">＋ 任务</button>
+        <button class="btn">＋ 并行</button>
+        <button class="btn">＋ 条件</button>
+        <span style="width:6px"></span>
+        <button class="btn zbtn" onclick="zoom(-.2)">−</button>
+        <button class="btn zbtn" onclick="zoom(0)">⛶</button>
+        <button class="btn zbtn" onclick="zoom(.2)">＋</button>
+      </div>
+
+      <div class="viewport" id="viewport">
+        <div class="canvas" id="canvas">
+          <svg class="edges" viewBox="0 0 1080 980" preserveAspectRatio="none">
+            <defs>
+              <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+                <path d="M0,0 L10,5 L0,10 z" fill="#a39e93"/>
+              </marker>
+              <marker id="arrA" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+                <path d="M0,0 L10,5 L0,10 z" fill="#0d7a5f"/>
+              </marker>
+              <marker id="arrW" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+                <path d="M0,0 L10,5 L0,10 z" fill="#b8862f"/>
+              </marker>
+            </defs>
+
+            <!-- 串行链边 -->
+            <path class="edge" d="M540,120 C540,155 540,155 540,190" marker-end="url(#arr)"/>
+            <path class="edge" d="M540,340 C540,375 540,375 540,410" marker-end="url(#arr)"/>
+            <path class="edge" d="M540,506 C540,541 540,541 540,576" marker-end="url(#arr)"/>
+            <path class="edge" d="M540,816 C540,848 540,848 540,880" marker-end="url(#arr)"/>
+
+            <!-- 并行组：成员无互相连线（同属一组，并发） -->
+            <!-- 条件分支 -->
+            <path class="edge then" d="M360,640 C360,650 360,650 360,660" marker-end="url(#arrA)"/>
+            <path class="edge else" d="M770,640 C770,650 770,650 770,660" marker-end="url(#arrW)"/>
+            <text class="edge-label" x="376" y="652" fill="#0d7a5f">✓ 满足</text>
+            <text class="edge-label" x="786" y="652" fill="#b8862f">✗ 否则</text>
+            <!-- 分支汇合到汇总 -->
+            <path class="edge" d="M360,748 C430,790 470,816 540,816" marker-end="url(#arr)"/>
+            <path class="edge" d="M770,748 C700,790 610,816 540,816" marker-end="url(#arr)"/>
+
+            <!-- 端口 -->
+            <circle class="port" cx="540" cy="24"  r="4.5"/>
+            <circle class="port" cx="540" cy="120" r="4.5"/>
+            <circle class="port" cx="540" cy="190" r="4.5"/>
+            <circle class="port" cx="540" cy="340" r="4.5"/>
+            <circle class="port" cx="540" cy="410" r="4.5"/>
+            <circle class="port" cx="540" cy="506" r="4.5"/>
+            <circle class="port" cx="540" cy="576" r="4.5"/>
+            <circle class="port" cx="540" cy="816" r="4.5"/>
+            <circle class="port" cx="540" cy="880" r="4.5"/>
+            <circle class="port" cx="360" cy="660" r="4.5"/>
+            <circle class="port" cx="770" cy="660" r="4.5"/>
+            <circle class="port" cx="360" cy="748" r="4.5"/>
+            <circle class="port" cx="770" cy="748" r="4.5"/>
+          </svg>
+
+          <!-- 节点：analysis -->
+          <div class="node" style="left:400px;top:24px;width:280px;">
+            <div class="n-head"><span class="n-badge b-task">任务</span><span class="n-id">analysis</span></div>
+            <div class="n-title">需求分析</div>
+            <div class="n-sub">办公助理 · 针对「{user}」澄清需求与验收标准</div>
+          </div>
+
+          <!-- 并行组 -->
+          <div class="group" style="left:200px;top:190px;width:680px;height:150px;">
+            <span class="g-tag">并行组 · dev</span>
+            <div class="node" style="left:40px;top:54px;width:280px;">
+              <div class="n-head"><span class="n-badge b-parallel">成员</span><span class="n-id">design</span></div>
+              <div class="n-title">方案设计</div>
+              <div class="n-sub">编码助手 · 基于 {{analysis.result}} 出技术方案</div>
+            </div>
+            <div class="node" style="left:360px;top:54px;width:280px;">
+              <div class="n-head"><span class="n-badge b-parallel">成员</span><span class="n-id">doc</span></div>
+              <div class="n-title">用户文档</div>
+              <div class="n-sub">文档专家 · 基于 {{analysis.result}} 出使用说明</div>
+            </div>
+          </div>
+
+          <!-- 节点：review -->
+          <div class="node" style="left:400px;top:410px;width:280px;">
+            <div class="n-head"><span class="n-badge b-task">任务</span><span class="n-id">review</span></div>
+            <div class="n-title">质量评审</div>
+            <div class="n-sub">办公助理 · 审查 {{dev.result}}，末尾明确是否「通过」</div>
+          </div>
+
+          <!-- 条件组 -->
+          <div class="group cond" style="left:150px;top:576px;width:780px;height:240px;">
+            <span class="g-tag">条件 · gate</span>
+            <div class="cond-bar">
+              <span>分支条件：</span><span class="rule mono">{{review.result}} 包含「通过」</span>
+              <span style="color:#a39e93;font-weight:500;">（本地判断，零 token）</span>
+            </div>
+            <div class="node" style="left:50px;top:84px;width:320px;">
+              <div class="n-head"><span class="n-badge b-conditional">✓ 分支</span><span class="n-id">publish</span></div>
+              <div class="n-title">发布</div>
+              <div class="n-sub">发布专家 · 按 {{review.result}} 执行发布</div>
+            </div>
+            <div class="node" style="left:460px;top:84px;width:320px;">
+              <div class="n-head"><span class="n-badge b-conditional">✗ 分支</span><span class="n-id">fix</span></div>
+              <div class="n-title">修复</div>
+              <div class="n-sub">编码助手 · 按 {{review.result}} 问题清单修复</div>
+            </div>
+          </div>
+
+          <!-- 汇总/结束 -->
+          <div class="node" style="left:400px;top:880px;width:280px;">
+            <div class="n-head"><span class="n-badge b-summary">汇总</span><span class="n-id">final</span></div>
+            <div class="n-title">结案 · 汇总</div>
+            <div class="n-sub">办公助理 · 输出最终结构化总结</div>
+          </div>
+
+          <!-- minimap -->
+          <div class="minimap">
+            <div class="mm-title">缩略图</div>
+            <div class="mm-box">
+              <div class="mm-rect" style="left:6px;  top:2px;  width:14px; height:6px;"></div>
+              <div class="mm-rect" style="left:3px;  top:11px; width:28px; height:5px;"></div>
+              <div class="mm-rect" style="left:6px;  top:19px; width:14px; height:6px;"></div>
+              <div class="mm-rect cond" style="left:2px; top:28px; width:34px; height:5px;"></div>
+              <div class="mm-rect" style="left:6px;  top:36px; width:14px; height:6px;"></div>
+              <div class="mm-view" style="left:0; top:0; width:42px; height:22px;"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 右侧编辑面板（选中 gate 条件节点） -->
+    <aside class="panel">
+      <div class="panel-head">
+        <div class="t"><span class="n-badge b-conditional">条件</span> gate 分支门禁</div>
+        <div class="s">点击任一节点，此处编辑其配置（专家/提示词/规则）</div>
+      </div>
+      <div class="panel-body">
+        <div class="field">
+          <label class="field-label">分支条件（满足即走 ✓ 分支）</label>
+          <div class="rule-row">
+            <input class="input mono" style="flex:1;min-width:0;" value="{{review.result}}" />
+            <select class="select op"><option>包含</option></select>
+            <input class="input mono" style="width:70px;" value="通过" />
+          </div>
+          <div class="logic">
+            <span class="logic-chip on">全部满足（与）</span>
+            <span class="logic-chip">任一满足（或）</span>
+          </div>
+          <div class="hint">运算符支持：包含 / 不包含 / 为空 / 不为空 / 等于 / 不等于 / 以…开头 / 以…结尾 / 长度&gt; / 长度&lt;。可添加多条规则。</div>
+        </div>
+        <div class="field">
+          <label class="field-label">分支结构</label>
+          <div class="branch-list">
+            <div class="branch-item then">
+              <span class="dot then">✓</span>
+              <div class="meta"><b>满足条件</b><span>1 个节点</span></div>
+              <span class="expert">发布专家</span>
+            </div>
+            <div class="branch-item else">
+              <span class="dot else">✗</span>
+              <div class="meta"><b>否则</b><span>1 个节点</span></div>
+              <span class="expert">编码助手</span>
+            </div>
+          </div>
+          <div class="hint">在分支内继续添加 任务 / 并行 / 条件，实现嵌套分支。</div>
+        </div>
+        <div class="field">
+          <label class="field-label">流程校验</label>
+          <div class="hint">✓ 4 个节点、1 个并行组、1 个条件节点 · 步骤 ID 唯一 · 无环（DAG）</div>
+        </div>
+      </div>
+      <div class="panel-foot">
+        <button class="btn">取消</button>
+        <button class="btn btn-primary">保存流程</button>
+      </div>
+    </aside>
+  </div>
+</div>
+
+<script>
+  let z = 1;
+  const canvas = document.getElementById("canvas");
+  const viewport = document.getElementById("viewport");
+  function zoom(d) {
+    if (d === 0) z = 1; else z = Math.min(1.6, Math.max(0.5, z + d));
+    canvas.style.transform = "scale(" + z + ")";
+    // 视觉：viewport 高度随缩放微调（mockup 简单处理）
+  }
+</script>
+</body>
+</html>

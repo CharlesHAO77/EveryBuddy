@@ -41,6 +41,8 @@ export interface AgentConfig {
   visionModelProviderId?: string;
   /** 该模式的生图模型 provider id（缺省用能力标签） */
   imageGenModelProviderId?: string;
+  /** 自定义专家显式选定工具集：tools 即权威集合（空 = 仅保留基础附件解析），不再并入平台全量工具 */
+  restrictTools?: boolean;
 }
 
 function pathForMode(mode: AgentMode, paths: AgentConfigPaths): string {

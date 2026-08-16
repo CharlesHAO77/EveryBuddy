@@ -37,6 +37,7 @@ import {
 } from "./sessionBuilder";
 import { teamRunStore } from "./teamRunStore";
 import type { ToolAvailability } from "./tools/toolAvailability";
+import { evalWorkflowCondition } from "./workflowCondition";
 
 // ────────────────────────────────────────────────
 // 类型
@@ -105,6 +106,13 @@ interface SubagentCtx {
 // ────────────────────────────────────────────────
 // TeamRuntime
 // ────────────────────────────────────────────────
+
+/** 收集步骤涉及的全部专家 id（条件节点取两分支并集，供 step_start/record 展示） */
+function collectStepExpertIds(step: WorkflowStep): string[] {
+  if (step.kind === "serial") return [step.expertId];
+  if (step.kind === "parallel") return step.steps.map((s) => s.expertId);
+  return [...step.thenSteps, ...(step.elseSteps ?? [])].flatMap(collectStepExpertIds);
+}
 
 export class TeamRuntime {
   private deps: TeamRuntimeDeps | null = null;
@@ -458,11 +466,21 @@ export class TeamRuntime {
 
     try {
       for (const step of workflow.steps) {
-        const expertIds =
-          step.kind === "serial" ? [step.expertId] : step.steps.map((s) => s.expertId);
+        const expertIds = collectStepExpertIds(step);
+        // 条件节点：进入前先求值（规则只引用前序步骤，结果确定）
+        const conditionalPass =
+          step.kind === "conditional"
+            ? evalWorkflowCondition(step.rules, step.logic, results)
+            : undefined;
         this.emit(deps, taskId, {
           type: "workflow_step_start",
-          payload: { stepId: step.id, expertIds, prompt: prompt, kind: step.kind },
+          payload: {
+            stepId: step.id,
+            expertIds,
+            prompt: prompt,
+            kind: step.kind,
+            ...(conditionalPass !== undefined ? { pass: conditionalPass } : {}),
+          },
         });
         const children = await this.runStep(
           taskId,
@@ -495,6 +513,7 @@ export class TeamRuntime {
             output,
             error: children.find((c) => c.error)?.error,
             usage: aggregate ?? undefined,
+            ...(conditionalPass !== undefined ? { pass: conditionalPass } : {}),
           },
         });
       }
@@ -557,7 +576,10 @@ export class TeamRuntime {
     }
   }
 
-  /** 执行单个步骤（serial → 1 个子 agent；parallel → 并发多个） */
+  /**
+   * 执行单个步骤（serial → 1 个子 agent；parallel → 并发多个；conditional → 求值后递归跑分支子链）。
+   * 每执行完即把该步骤输出写入 results（分支步骤也写入，供后续 {{id.result}} 引用）。
+   */
   private async runStep(
     taskId: string,
     cwd: string,
@@ -569,7 +591,7 @@ export class TeamRuntime {
   ): Promise<SubagentResult[]> {
     if (step.kind === "serial") {
       const prompt = this.templatePrompt(step.prompt, userPrompt, results);
-      return [
+      const children = [
         await this.runSubagent({
           parentTaskId: taskId,
           parentToolCallId: `wf:${step.id}`,
@@ -581,21 +603,38 @@ export class TeamRuntime {
           providerId,
         }),
       ];
+      results.set(step.id, children.map((c) => c.text).join("\n\n"));
+      return children;
     }
-    return Promise.all(
-      step.steps.map((s) =>
-        this.runSubagent({
-          parentTaskId: taskId,
-          parentToolCallId: `wf:${s.id}`,
-          expertId: s.expertId,
-          prompt: this.templatePrompt(s.prompt, userPrompt, results),
-          signal,
-          cwd,
-          stepId: step.id,
-          providerId,
-        }),
-      ),
-    );
+    if (step.kind === "parallel") {
+      const children = await Promise.all(
+        step.steps.map((s) =>
+          this.runSubagent({
+            parentTaskId: taskId,
+            parentToolCallId: `wf:${s.id}`,
+            expertId: s.expertId,
+            prompt: this.templatePrompt(s.prompt, userPrompt, results),
+            signal,
+            cwd,
+            stepId: step.id,
+            providerId,
+          }),
+        ),
+      );
+      results.set(step.id, children.map((c) => c.text).join("\n\n"));
+      return children;
+    }
+    // conditional：确定性求值 → 走 then/else 子链（递归 runStep；空分支 = 无操作继续）
+    const pass = evalWorkflowCondition(step.rules, step.logic, results);
+    const branch = pass ? step.thenSteps : (step.elseSteps ?? []);
+    const children: SubagentResult[] = [];
+    for (const s of branch) {
+      children.push(
+        ...(await this.runStep(taskId, cwd, s, userPrompt, results, signal, providerId)),
+      );
+    }
+    results.set(step.id, children.map((c) => c.text).join("\n\n"));
+    return children;
   }
 
   /** 提示词模板替换：{user} → 触发消息；{{stepId.result}} → 前步输出 */

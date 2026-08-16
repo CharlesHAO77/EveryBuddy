@@ -17,6 +17,7 @@
     "@everybuddy/api-gateway": "*",
     "@everybuddy/ipc-contract": "*",
     "@modelcontextprotocol/sdk": "^1.30.0",
+    "@xyflow/react": "^12.11.3",
     "cron-parser": "^5.8.1",
     "cross-spawn": "^7.0.6",
     "electron-store": "^10.0.0",

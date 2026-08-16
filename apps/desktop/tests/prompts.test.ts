@@ -2,7 +2,11 @@
  * 系统提示词 builder 单元测试 -- 验证按模式 + 激活工具动态拼装。
  */
 import { describe, expect, it } from "vitest";
-import { getModeSystemPrompt, TOOL_SNIPPETS } from "../src/main/prompts/index";
+import {
+  buildActiveToolsBlock,
+  getModeSystemPrompt,
+  TOOL_SNIPPETS,
+} from "../src/main/prompts/index";
 
 describe("getModeSystemPrompt", () => {
   it("daily 模式产出办公助理角色与工具清单", () => {
@@ -37,5 +41,17 @@ describe("getModeSystemPrompt", () => {
 
   it("TOOL_SNIPPETS 包含 todo 条目", () => {
     expect(TOOL_SNIPPETS.todo).toBeTruthy();
+  });
+});
+
+describe("buildActiveToolsBlock", () => {
+  it("列出激活工具 + 显式「未列出不可用」约束", () => {
+    const block = buildActiveToolsBlock(["parse_attachment"]);
+    expect(block).toContain("parse_attachment");
+    expect(block).toContain("未列出的一律不可用");
+  });
+
+  it("无工具时输出 (无工具)", () => {
+    expect(buildActiveToolsBlock([])).toContain("(无工具)");
   });
 });

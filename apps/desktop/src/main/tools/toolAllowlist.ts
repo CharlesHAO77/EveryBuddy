@@ -17,6 +17,14 @@ export function buildToolAllowlist(
   return mergeToolAllowlist(platformTools, [...(cfgTools ?? []), ...CUSTOM_TOOL_NAMES]);
 }
 
+/**
+ * 自定义专家显式限定的工具集：仅保留选中工具 + 基础附件解析（parse_attachment），
+ * 不并入平台全量工具与恒注册视觉/生图工具——用户「没选工具」就该是精简工具集。
+ */
+export function buildRestrictedToolAllowlist(cfgTools: readonly string[] | undefined): string[] {
+  return mergeToolAllowlist(["parse_attachment"], [...(cfgTools ?? [])]);
+}
+
 /** 去重保序合并（与 agentRuntime 原 mergeToolAllowlist 语义一致） */
 function mergeToolAllowlist(base: readonly string[], extra: string[]): string[] {
   return Array.from(new Set([...base, ...extra]));

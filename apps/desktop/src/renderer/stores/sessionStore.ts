@@ -128,7 +128,7 @@ export interface WorkflowStepState {
   stepId: string;
   expertIds: string[];
   prompt: string;
-  kind: "serial" | "parallel";
+  kind: "serial" | "parallel" | "conditional";
   status: "pending" | "running" | "ok" | "error";
   /** 该步骤下所有子 agent 的 subagentId（展开步骤面板用） */
   subagentIds: string[];
@@ -247,7 +247,12 @@ interface SessionState {
   ) => void;
   workflowStepStart: (
     taskId: string,
-    payload: { stepId: string; expertIds: string[]; prompt: string; kind: "serial" | "parallel" },
+    payload: {
+      stepId: string;
+      expertIds: string[];
+      prompt: string;
+      kind: "serial" | "parallel" | "conditional";
+    },
   ) => void;
   workflowStepEnd: (
     taskId: string,

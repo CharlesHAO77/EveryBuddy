@@ -5,7 +5,7 @@
  * 中止级联 / 模板替换 / 默认 workflow 生成。
  */
 
-import type { Expert, ExpertTeam, TaskMeta } from "@everybuddy/ipc-contract";
+import type { Expert, ExpertTeam, TaskMeta, WorkflowStep } from "@everybuddy/ipc-contract";
 import { describe, expect, it } from "vitest";
 import type { CodingAgentSDK } from "../src/main/sessionBuilder";
 import { TeamRuntime, type TeamRuntimeDeps } from "../src/main/teamRuntime";
@@ -299,6 +299,32 @@ describe("TeamRuntime workflow", () => {
     return { runtime, events, sessions };
   }
 
+  /** 自定义团队 + 自定义子代理输出脚本（按创建序取，缺省「产出-N」） */
+  function makeWfRuntimeWith(teamOverride: ExpertTeam, scripts: string[] = []) {
+    const sessions: FakeChildSession[] = [];
+    const { runtime, events } = makeRuntime({
+      getTask: () => task,
+      getTeam: () => teamOverride,
+      findExpert: (id) => experts[id],
+    });
+    runtime.setSessionFactory(async () => {
+      const out = scripts[sessions.length] ?? `产出-${sessions.length + 1}`;
+      const s = new FakeChildSession(makeScript(out));
+      sessions.push(s);
+      return { session: s as never, dispose: () => {} };
+    });
+    return { runtime, events, sessions };
+  }
+
+  const condStep = (): WorkflowStep => ({
+    kind: "conditional",
+    id: "gate",
+    logic: "and",
+    rules: [{ var: "s1", op: "contains", value: "通过" }],
+    thenSteps: [{ kind: "serial", id: "pub", expertId: "e2", prompt: "基于 {{s1.result}} 发布" }],
+    elseSteps: [{ kind: "serial", id: "fix", expertId: "e3", prompt: "基于 {{s1.result}} 修复" }],
+  });
+
   it("串行执行步骤 + 模板替换 + 事件时序 + 汇总", async () => {
     const { runtime, events, sessions } = makeWfRuntime();
     await runtime.runWorkflow("task1", "team-test", "写一个工具", "prov");
@@ -354,5 +380,214 @@ describe("TeamRuntime workflow", () => {
     const { runtime } = makeRuntime();
     expect(runtime.coordinatorExpertId({ ...team, leadExpertId: "e3" })).toBe("e3");
     expect(runtime.coordinatorExpertId(team)).toBe("e1");
+  });
+
+  it("条件为真 → 走 then 子链，事件带 pass=true，模板替换正确", async () => {
+    const teamCond: ExpertTeam = {
+      ...team,
+      id: "team-cond",
+      workflow: {
+        id: "wf-cond",
+        name: "条件流程",
+        steps: [{ kind: "serial", id: "s1", expertId: "e1", prompt: "分析：{user}" }, condStep()],
+        summarizerExpertId: "e1",
+      },
+    };
+    // s1 输出「评审通过」→ 规则命中 → 走 then（pub），不走 else（fix）
+    const { runtime, events, sessions } = makeWfRuntimeWith(teamCond, ["评审通过", "发布结果"]);
+    await runtime.runWorkflow("task1", "team-cond", "写个工具", "prov");
+
+    expect(sessions[1]?.lastPrompt).toContain("基于 评审通过 发布");
+    expect(sessions.some((s) => s.lastPrompt.includes("修复"))).toBe(false);
+    const gateStart = events.find(
+      (e) =>
+        e.type === "workflow_step_start" && (e.payload as { stepId?: string })?.stepId === "gate",
+    );
+    expect(gateStart?.payload).toMatchObject({ kind: "conditional", pass: true });
+    const gateEnd = events.find(
+      (e) =>
+        e.type === "workflow_step_end" && (e.payload as { stepId?: string })?.stepId === "gate",
+    );
+    expect(gateEnd?.payload).toMatchObject({ pass: true });
+  });
+
+  it("条件为假 → 走 else 子链，step_start 带 pass=false", async () => {
+    const teamCond: ExpertTeam = {
+      ...team,
+      id: "team-cond2",
+      workflow: {
+        id: "wf-cond2",
+        name: "条件流程2",
+        steps: [{ kind: "serial", id: "s1", expertId: "e1", prompt: "分析" }, condStep()],
+        summarizerExpertId: "e1",
+      },
+    };
+    // s1 输出「评审失败」→ 未命中 → 走 else（fix）
+    const { runtime, sessions } = makeWfRuntimeWith(teamCond, ["评审失败", "修复结果"]);
+    await runtime.runWorkflow("task1", "team-cond2", "写个工具", "prov");
+
+    expect(sessions[1]?.lastPrompt).toContain("基于 评审失败 修复");
+    expect(sessions.some((s) => s.lastPrompt.includes("发布"))).toBe(false);
+  });
+
+  it("条件分支为空 → 无操作继续（gate 不产生子代理）", async () => {
+    const teamEmpty: ExpertTeam = {
+      ...team,
+      id: "team-empty",
+      expertIds: [], // 无汇总步骤
+      workflow: {
+        id: "wf-empty",
+        name: "空分支",
+        steps: [
+          { kind: "serial", id: "s1", expertId: "e1", prompt: "分析" },
+          { kind: "conditional", id: "gate", logic: "and", rules: [], thenSteps: [] },
+        ],
+      },
+    };
+    const { runtime, events, sessions } = makeWfRuntimeWith(teamEmpty, ["产出-A"]);
+    await runtime.runWorkflow("task1", "team-empty", "hi", "prov");
+
+    expect(sessions.length).toBe(1); // 只有 s1，gate 空分支不建子代理
+    const gateEnd = events.find(
+      (e) =>
+        e.type === "workflow_step_end" && (e.payload as { stepId?: string })?.stepId === "gate",
+    );
+    expect(gateEnd?.payload).toMatchObject({ ok: true, pass: true }); // 空规则恒真
+  });
+
+  it("嵌套条件：then 分支内再条件，递归执行", async () => {
+    const teamNest: ExpertTeam = {
+      ...team,
+      id: "team-nest",
+      workflow: {
+        id: "wf-nest",
+        name: "嵌套",
+        steps: [
+          { kind: "serial", id: "s1", expertId: "e1", prompt: "分析" },
+          {
+            kind: "conditional",
+            id: "gate1",
+            logic: "and",
+            rules: [{ var: "s1", op: "contains", value: "通过" }],
+            thenSteps: [
+              {
+                kind: "conditional",
+                id: "gate2",
+                logic: "and",
+                rules: [{ var: "s1", op: "contains", value: "OK" }],
+                thenSteps: [
+                  { kind: "serial", id: "inner", expertId: "e2", prompt: "内层：{{s1.result}}" },
+                ],
+                elseSteps: [],
+              },
+            ],
+            elseSteps: [{ kind: "serial", id: "fix", expertId: "e3", prompt: "修复" }],
+          },
+        ],
+        summarizerExpertId: "e1",
+      },
+    };
+    // s1 输出「通过OK」→ gate1 then → gate2 then → inner 执行
+    const { runtime, sessions } = makeWfRuntimeWith(teamNest, ["通过OK", "内层结果"]);
+    await runtime.runWorkflow("task1", "team-nest", "hi", "prov");
+
+    expect(sessions[1]?.lastPrompt).toContain("内层：通过OK");
+    expect(sessions.some((s) => s.lastPrompt.includes("修复"))).toBe(false);
+  });
+
+  it("并行步骤：并发子代理 + 结果拼接 + {{group.result}} 替换", async () => {
+    const teamPara: ExpertTeam = {
+      ...team,
+      id: "team-para",
+      workflow: {
+        id: "wf-para",
+        name: "并行",
+        steps: [
+          { kind: "serial", id: "s1", expertId: "e1", prompt: "分析" },
+          {
+            kind: "parallel",
+            id: "p1",
+            steps: [
+              { id: "pa", expertId: "e2", prompt: "做A基于 {{s1.result}}" },
+              { id: "pb", expertId: "e3", prompt: "做B基于 {{s1.result}}" },
+            ],
+          },
+          { kind: "serial", id: "s2", expertId: "e1", prompt: "汇总 {{p1.result}}" },
+        ],
+        summarizerExpertId: "e1",
+      },
+    };
+    const { runtime, events, sessions } = makeWfRuntimeWith(teamPara, [
+      "第一步",
+      "A输出",
+      "B输出",
+      "汇总之作",
+    ]);
+    await runtime.runWorkflow("task1", "team-para", "hi", "prov");
+
+    // p1 两成员并发，模板各拿到 s1 输出
+    expect(sessions[1]?.lastPrompt).toContain("基于 第一步");
+    expect(sessions[2]?.lastPrompt).toContain("基于 第一步");
+    // s2 收到 p1 拼接结果（A输出\n\nB输出）
+    expect(sessions[3]?.lastPrompt).toContain("A输出\n\nB输出");
+    const p1Start = events.find(
+      (e) =>
+        e.type === "workflow_step_start" && (e.payload as { stepId?: string })?.stepId === "p1",
+    );
+    expect(p1Start?.payload).toMatchObject({ kind: "parallel", expertIds: ["e2", "e3"] });
+    // 两个 p1 子代理 end 先于 s2 的 start（组内并发、整体等待）
+    const paEnd = events.findIndex(
+      (e) => e.type === "subagent_end" && (e.payload as { stepId?: string })?.stepId === "p1",
+    );
+    const s2Start = events.findIndex(
+      (e) =>
+        e.type === "workflow_step_start" && (e.payload as { stepId?: string })?.stepId === "s2",
+    );
+    expect(paEnd).toBeGreaterThan(-1);
+    expect(s2Start).toBeGreaterThan(paEnd);
+  });
+
+  it("并行组成员并发启动（hang 证明并发）", async () => {
+    const teamHang: ExpertTeam = {
+      ...team,
+      id: "team-hang",
+      expertIds: [], // 无汇总步骤
+      workflow: {
+        id: "wf-hang",
+        name: "并发",
+        steps: [
+          {
+            kind: "parallel",
+            id: "p1",
+            steps: [
+              { id: "pa", expertId: "e2", prompt: "A" },
+              { id: "pb", expertId: "e3", prompt: "B" },
+            ],
+          },
+        ],
+      },
+    };
+    const sessions: FakeChildSession[] = [];
+    const { runtime, events } = makeRuntime({
+      getTask: () => task,
+      getTeam: () => teamHang,
+      findExpert: (id) => experts[id],
+    });
+    runtime.setSessionFactory(async () => {
+      const s = new FakeChildSession([]);
+      s.hang = true; // 挂起，证明两个 runSubagent 同时进入
+      sessions.push(s);
+      return { session: s as never, dispose: () => {} };
+    });
+
+    const run = runtime.runWorkflow("task1", "team-hang", "hi", "prov");
+    await sleep(20);
+    expect(sessions.length).toBe(2); // 两个成员都已创建（并发），未完成
+    runtime.abortForTask("task1"); // 级联中止 → 两个挂起子会话经 abortChild 放行
+    await run;
+    const p1End = events.find(
+      (e) => e.type === "workflow_step_end" && (e.payload as { stepId?: string })?.stepId === "p1",
+    );
+    expect(p1End?.payload).toMatchObject({ ok: false }); // 两个子代理均 aborted → 步骤 error
   });
 });

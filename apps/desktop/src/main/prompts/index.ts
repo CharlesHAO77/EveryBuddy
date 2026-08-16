@@ -40,3 +40,13 @@ export const TOOL_SNIPPETS: Record<string, string> = {
 export function getModeSystemPrompt(mode: AgentMode, ctx: PromptCtx): string {
   return mode === "coding" ? buildCodingPrompt(ctx) : buildDailyPrompt(ctx);
 }
+
+/**
+ * 按当前激活工具生成「可用工具」清单（含"未列出的一律不可用"约束）。
+ * 用于自定义专家：其身份提示词不含工具清单，模型会按通用认知臆测内置 read/bash/联网等，
+ * 显式清单可让模型准确自述能力。
+ */
+export function buildActiveToolsBlock(activeTools: readonly string[]): string {
+  const lines = activeTools.map((n) => `- ${n}：${TOOL_SNIPPETS[n] ?? "自定义工具"}`).join("\n");
+  return `当前可用工具（仅下列工具可调用，未列出的一律不可用）：\n${lines || "(无工具)"}`;
+}

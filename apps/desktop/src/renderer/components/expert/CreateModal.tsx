@@ -2,12 +2,18 @@
  * CreateModal - 各 tab 的新建弹层（专家/专家团/技能/连接器）。
  */
 
-import type { AgentMode, ConnectorType, TeamRoutingStrategy } from "@everybuddy/ipc-contract";
-import { useState } from "react";
+import type {
+  AgentMode,
+  ConnectorType,
+  TeamRoutingStrategy,
+  TeamWorkflow,
+} from "@everybuddy/ipc-contract";
+import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useExpertCenterStore } from "../../stores/expertCenterStore";
-import { ModalShell } from "./DetailModal";
+import { EditableTags, ModalShell } from "./DetailModal";
 import { IconCheck, IconClose, IconPlus } from "./icons";
+import { ExtensionMultiSelect, ToolMultiSelect } from "./PickList";
 import {
   AgentRoleRows,
   btnGhost,
@@ -18,6 +24,8 @@ import {
   TextArea,
   TextInput,
 } from "./ui";
+import { WorkflowCanvas } from "./WorkflowCanvas";
+import { workflowStepsValid } from "./workflowGraph";
 
 type TabId = "expert" | "team" | "skill" | "connector";
 
@@ -61,6 +69,11 @@ export function CreateModal({ kind, onClose }: { kind: TabId; onClose: () => voi
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [mode, setMode] = useState<AgentMode>("daily");
+  // 自定义专家绑定字段（新建即可绑定系统提示词/工具/扩展，不再只能创建后编辑）
+  const [systemPrompt, setSystemPrompt] = useState("");
+  const [appendPrompt, setAppendPrompt] = useState("");
+  const [tools, setTools] = useState<string[]>([]);
+  const [extensions, setExtensions] = useState<string[]>([]);
   const [type, setType] = useState<ConnectorType>("mcp");
   const [content, setContent] = useState("");
   // MCP 传输（新建连接器时即可选 STDIO / Streamable HTTP）
@@ -73,6 +86,28 @@ export function CreateModal({ kind, onClose }: { kind: TabId; onClose: () => voi
   const [leadExpertId, setLeadExpertId] = useState<string | null>(null);
   const [roles, setRoles] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
+  // workflow 草稿（strategy=workflow 时渲染画布设计）
+  const [wf, setWf] = useState<TeamWorkflow | null>(null);
+
+  // 工具/扩展选择目录（同 ExpertForm：catalog 未加载时降级自由文本 chips）
+  const catalog = useExpertCenterStore((s) => s.catalog);
+  // 已连接 MCP 工具（工具选择列表的「已连接 MCP 工具」分组）
+  const mcpToolNames = useMemo(() => {
+    const s = new Set<string>();
+    for (const c of store.connectors) {
+      if (c.type === "mcp" && c.enabled && c.status === "connected") {
+        for (const t of c.lastTools ?? []) s.add(t);
+      }
+    }
+    return [...s];
+  }, [store.connectors]);
+
+  /** 多行追加提示词 → string[]（空 → 清除） */
+  const parseAppendLines = (raw: string): string[] =>
+    raw
+      .split("\n")
+      .map((l) => l.trim())
+      .filter(Boolean);
 
   const isTeam = kind === "team";
   const expertById = (id: string) => store.experts.find((e) => e.id === id);
@@ -85,6 +120,19 @@ export function CreateModal({ kind, onClose }: { kind: TabId; onClose: () => voi
     const e = expertById(id);
     if (e) roleAgents.push(e);
   }
+
+  // 画布可选专家 = 团队成员（auto 含主 agent）；workflow 草稿 + 校验
+  const memberOptions = [
+    ...(strategy === "auto" && leadExpertId ? [leadExpertId] : []),
+    ...expertIds,
+  ].map((id) => ({ id, name: expertById(id)?.name ?? id }));
+  const wfDraft: TeamWorkflow = wf ?? {
+    id: "wf-new",
+    name: `${name || "流程"}`,
+    steps: [],
+    summarizerExpertId: expertIds.at(-1),
+  };
+  const wfOk = strategy !== "workflow" || workflowStepsValid(wfDraft.steps).ok;
 
   // 选主 agent：与成员互斥（若已在成员中则移除）
   const onChangeLead = (v: string) => {
@@ -104,7 +152,17 @@ export function CreateModal({ kind, onClose }: { kind: TabId; onClose: () => voi
     if (!name.trim()) return;
     setBusy(true);
     try {
-      if (kind === "expert") await store.createExpert({ name, description, mode });
+      if (kind === "expert")
+        await store.createExpert({
+          name,
+          description,
+          mode,
+          // 空系统提示词 → undefined → 主进程自动按名称+描述生成身份提示词
+          systemPrompt: systemPrompt.trim() ? systemPrompt : undefined,
+          appendSystemPrompt: parseAppendLines(appendPrompt),
+          tools,
+          extensions,
+        });
       else if (kind === "team")
         await store.createTeam({
           name,
@@ -113,6 +171,10 @@ export function CreateModal({ kind, onClose }: { kind: TabId; onClose: () => voi
           expertIds,
           leadExpertId: strategy === "auto" ? (leadExpertId ?? undefined) : undefined,
           roles: Object.keys(roles).length > 0 ? roles : undefined,
+          workflow:
+            strategy === "workflow"
+              ? { ...wfDraft, id: `wf-${crypto.randomUUID()}`, name: `${name} 流程` }
+              : undefined,
         });
       else if (kind === "skill") await store.createSkill({ name, description, content });
       else if (kind === "connector") {
@@ -131,7 +193,7 @@ export function CreateModal({ kind, onClose }: { kind: TabId; onClose: () => voi
   };
 
   return (
-    <ModalShell onClose={onClose}>
+    <ModalShell onClose={onClose} wide={isTeam && strategy === "workflow"}>
       <div className="flex shrink-0 items-center gap-[14px] border-b border-line px-[24px] py-[20px]">
         <div className="min-w-0 flex-1">
           <div className="text-[20px] font-bold text-ink">{t(TITLES[kind])}</div>
@@ -257,19 +319,73 @@ export function CreateModal({ kind, onClose }: { kind: TabId; onClose: () => voi
                 </Field>
               </div>
             ) : null}
+
+            {/* workflow 画布设计器（策略=Workflow 编排时） */}
+            {strategy === "workflow" ? (
+              <div className="mt-[16px]">
+                <Field label={t("expert.workflow.title")} hint={t("expert.workflow.chainNote")}>
+                  <WorkflowCanvas workflow={wfDraft} onChange={setWf} members={memberOptions} />
+                </Field>
+              </div>
+            ) : null}
           </>
         ) : null}
         {kind === "expert" ? (
-          <Field label={t("expert.create.modeLabel")}>
-            <Select
-              value={mode}
-              onChange={(v) => setMode(v as AgentMode)}
-              options={[
-                { value: "daily", label: t("expert.create.modeDaily") },
-                { value: "coding", label: t("expert.create.modeCoding") },
-              ]}
-            />
-          </Field>
+          <>
+            <Field label={t("expert.create.modeLabel")}>
+              <Select
+                value={mode}
+                onChange={(v) => setMode(v as AgentMode)}
+                options={[
+                  { value: "daily", label: t("expert.create.modeDaily") },
+                  { value: "coding", label: t("expert.create.modeCoding") },
+                ]}
+              />
+            </Field>
+            <Field
+              label={t("expert.form.systemPromptLabel")}
+              hint={t("expert.form.systemPromptHintCustom")}
+            >
+              <TextArea value={systemPrompt} onChange={setSystemPrompt} rows={6} mono />
+            </Field>
+            <Field
+              label={t("expert.form.appendPromptLabel")}
+              hint={t("expert.form.appendPromptHint")}
+            >
+              <TextArea value={appendPrompt} onChange={setAppendPrompt} rows={2} />
+            </Field>
+            <Field label={t("expert.form.toolsLabel")} hint={t("expert.form.toolsHintCustom")}>
+              {catalog ? (
+                <ToolMultiSelect
+                  value={tools}
+                  onChange={setTools}
+                  catalog={catalog}
+                  mcpTools={mcpToolNames}
+                />
+              ) : (
+                <EditableTags
+                  value={tools}
+                  onChange={setTools}
+                  placeholder={t("expert.form.toolExample")}
+                />
+              )}
+            </Field>
+            <Field label={t("expert.form.extensionsLabel")}>
+              {catalog ? (
+                <ExtensionMultiSelect
+                  value={extensions}
+                  onChange={setExtensions}
+                  options={catalog.extensions}
+                />
+              ) : (
+                <EditableTags
+                  value={extensions}
+                  onChange={setExtensions}
+                  placeholder={t("expert.form.extExample")}
+                />
+              )}
+            </Field>
+          </>
         ) : null}
         {kind === "connector" ? (
           <>
@@ -343,8 +459,8 @@ export function CreateModal({ kind, onClose }: { kind: TabId; onClose: () => voi
         <button
           type="button"
           onClick={() => void submit()}
-          disabled={busy || !name.trim()}
-          className={`${btnPrimary} ${!name.trim() ? "cursor-not-allowed opacity-50" : ""}`}
+          disabled={busy || !name.trim() || !wfOk}
+          className={`${btnPrimary} ${!name.trim() || !wfOk ? "cursor-not-allowed opacity-50" : ""}`}
         >
           <IconPlus size={16} />
           {t("common.create")}

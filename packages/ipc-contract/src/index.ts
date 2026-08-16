@@ -248,7 +248,14 @@ export type AgentEvent =
   | {
       streamId: string;
       type: "workflow_step_start";
-      payload: { stepId: string; expertIds: string[]; prompt: string; kind: "serial" | "parallel" };
+      payload: {
+        stepId: string;
+        expertIds: string[];
+        prompt: string;
+        kind: "serial" | "parallel" | "conditional";
+        /** 条件节点判定结果（满足走 then） */
+        pass?: boolean;
+      };
     }
   | {
       streamId: string;
@@ -259,6 +266,8 @@ export type AgentEvent =
         output?: string;
         error?: string;
         usage?: MessageUsage;
+        /** 条件节点判定结果（与 start 同步） */
+        pass?: boolean;
       };
     }
   | {
@@ -650,17 +659,57 @@ export interface WorkflowStepRef {
   prompt: string;
 }
 
-/** 工作流步骤：串行单专家，或并行专家组（同依赖并发） */
+/** 条件规则运算符（确定性本地求值，见 main/workflowCondition.ts，零 token） */
+export type WorkflowConditionOp =
+  | "contains"
+  | "not_contains"
+  | "is_empty"
+  | "is_not_empty"
+  | "equals"
+  | "not_equals"
+  | "starts_with"
+  | "ends_with"
+  | "len_gt"
+  | "len_lt";
+
+/** 条件节点单条规则：引用前序步骤输出 + 运算符 + 值 */
+export interface WorkflowConditionRule {
+  /** 引用步骤 id（`{{stepId.result}}` 或裸 stepId） */
+  var: string;
+  op: WorkflowConditionOp;
+  value?: string;
+}
+
+/** 工作流步骤：串行单专家、并行专家组（同依赖并发）、或条件分支（then/else 嵌套子链） */
 export type WorkflowStep =
   | ({ kind: "serial" } & WorkflowStepRef)
-  | { kind: "parallel"; id: string; steps: WorkflowStepRef[] };
+  | { kind: "parallel"; id: string; steps: WorkflowStepRef[] }
+  | {
+      kind: "conditional";
+      id: string;
+      /** 多条规则间的组合：and 全真 / or 任一真 */
+      logic: "and" | "or";
+      rules: WorkflowConditionRule[];
+      /** 满足分支子链（可空：视为无操作继续） */
+      thenSteps: WorkflowStep[];
+      /** 否则分支子链（可空） */
+      elseSteps?: WorkflowStep[];
+    };
 
-/** 代码定义的工作流（本轮无可视化编辑器，由代码/种子构造，UI 只读展示） */
+/** 节点画布坐标（仅设计器 UI 用，引擎忽略；执行序仍由 steps 数组序决定） */
+export interface WorkflowNodeLayout {
+  x: number;
+  y: number;
+}
+
+/** 结构化画布设计的工作流（序列化到团队 workflow，渲染层画布展示 + 右侧面板编辑） */
 export interface TeamWorkflow {
   id: string;
   name: string;
   description?: string;
   steps: WorkflowStep[];
+  /** 节点画布坐标：stepId -> {x,y}（仅 UI 用，引擎忽略） */
+  layout?: Record<string, WorkflowNodeLayout>;
   /** 最终汇总专家（缺省 team.expertIds 末位） */
   summarizerExpertId?: string;
 }
@@ -697,7 +746,7 @@ export interface SubAgentRunRecord {
 export interface WorkflowStepRecord {
   stepId: string;
   expertIds: string[];
-  kind: "serial" | "parallel";
+  kind: "serial" | "parallel" | "conditional";
   status: "pending" | "running" | "ok" | "error";
   /** 该步最终输出（子 agent 文本拼接） */
   output?: string;
@@ -1107,26 +1156,61 @@ export const workflowStepRefSchema = z.object({
 });
 export type WorkflowStepRefZ = z.infer<typeof workflowStepRefSchema>;
 
-export const workflowStepSchema = z.discriminatedUnion("kind", [
-  z.object({
-    kind: z.literal("serial"),
-    id: z.string().min(1, "errors.paramMissing"),
-    expertId: z.string().min(1, "errors.paramMissing"),
-    prompt: z.string().min(1, "errors.promptRequired"),
-  }),
-  z.object({
-    kind: z.literal("parallel"),
-    id: z.string().min(1, "errors.paramMissing"),
-    steps: z.array(workflowStepRefSchema).min(1, "errors.stepsRequired"),
-  }),
-]);
+export const workflowConditionRuleSchema = z.object({
+  var: z.string().min(1, "errors.paramMissing"),
+  op: z.enum([
+    "contains",
+    "not_contains",
+    "is_empty",
+    "is_not_empty",
+    "equals",
+    "not_equals",
+    "starts_with",
+    "ends_with",
+    "len_gt",
+    "len_lt",
+  ]),
+  value: z.string().optional(),
+});
+export type WorkflowConditionRuleZ = z.infer<typeof workflowConditionRuleSchema>;
+
+/** 递归 workflow 步骤 schema：条件节点内 thenSteps/elseSteps 再引用自身 */
+export const workflowStepSchema: z.ZodType<WorkflowStep> = z.lazy(() =>
+  z.discriminatedUnion("kind", [
+    z.object({
+      kind: z.literal("serial"),
+      id: z.string().min(1, "errors.paramMissing"),
+      expertId: z.string().min(1, "errors.paramMissing"),
+      prompt: z.string().min(1, "errors.promptRequired"),
+    }),
+    z.object({
+      kind: z.literal("parallel"),
+      id: z.string().min(1, "errors.paramMissing"),
+      steps: z.array(workflowStepRefSchema).min(1, "errors.stepsRequired"),
+    }),
+    z.object({
+      kind: z.literal("conditional"),
+      id: z.string().min(1, "errors.paramMissing"),
+      logic: z.enum(["and", "or"]),
+      rules: z.array(workflowConditionRuleSchema),
+      thenSteps: z.array(workflowStepSchema),
+      elseSteps: z.array(workflowStepSchema).optional(),
+    }),
+  ]),
+);
 export type WorkflowStepZ = z.infer<typeof workflowStepSchema>;
+
+export const workflowNodeLayoutSchema = z.object({
+  x: z.number(),
+  y: z.number(),
+});
 
 export const teamWorkflowSchema = z.object({
   id: z.string().min(1, "errors.paramMissing"),
   name: z.string().min(1, "errors.nameRequired"),
   description: z.string().optional(),
   steps: z.array(workflowStepSchema).min(1, "errors.stepsRequired"),
+  layout: z.record(workflowNodeLayoutSchema).optional(),
   summarizerExpertId: z.string().optional(),
 });
 export type TeamWorkflowZ = z.infer<typeof teamWorkflowSchema>;

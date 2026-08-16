@@ -42,6 +42,7 @@ import {
   TypeBadge,
   teamMemberCount,
 } from "./ui";
+import { WorkflowCanvas } from "./WorkflowCanvas";
 
 type TabId = "expert" | "team" | "skill" | "connector";
 
@@ -88,16 +89,26 @@ export function DetailModal({
 
   if (!body) return null;
 
-  return <ModalShell onClose={onClose}>{body}</ModalShell>;
+  // 自定义 workflow 团队用加宽弹层容纳画布设计器
+  const wide =
+    kind === "team" && !!team && team.source !== "builtin" && team.routingStrategy === "workflow";
+
+  return (
+    <ModalShell onClose={onClose} wide={wide}>
+      {body}
+    </ModalShell>
+  );
 }
 
-/** 弹层骨架：遮罩（点击关闭）+ 居中面板 + 关闭按钮 */
+/** 弹层骨架：遮罩（点击关闭）+ 居中面板 + 关闭按钮；wide = 工作流画布用加宽弹层 */
 export function ModalShell({
   onClose,
   children,
+  wide = false,
 }: {
   onClose: () => void;
   children: React.ReactNode;
+  wide?: boolean;
 }) {
   return (
     // biome-ignore lint/a11y/noStaticElementInteractions: 遮罩点击关闭是 Modal 通用模式，键盘侧由 Escape 处理
@@ -107,7 +118,11 @@ export function ModalShell({
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      <div className="flex max-h-[86vh] w-full max-w-[640px] flex-col overflow-hidden rounded-[18px] bg-card shadow-modal">
+      <div
+        className={`flex max-h-[86vh] w-full flex-col overflow-hidden rounded-[18px] bg-card shadow-modal ${
+          wide ? "max-w-[1200px]" : "max-w-[640px]"
+        }`}
+      >
         {children}
       </div>
     </div>
@@ -312,7 +327,10 @@ function ExpertForm({
         <Field label={t("expert.form.appendPromptLabel")} hint={t("expert.form.appendPromptHint")}>
           <TextArea value={appendPrompt} onChange={setAppendPrompt} rows={2} />
         </Field>
-        <Field label={t("expert.form.toolsLabel")}>
+        <Field
+          label={t("expert.form.toolsLabel")}
+          hint={!builtin ? t("expert.form.toolsHintCustom") : undefined}
+        >
           {catalog ? (
             <ToolMultiSelect
               value={tools}
@@ -406,10 +424,24 @@ function TeamForm({ team, onClose }: { team: ExpertTeam; onClose: () => void }) 
   const store = useExpertCenterStore();
   const builtin = team.source === "builtin";
   const auto = team.routingStrategy === "auto";
+  const workflowMode = team.routingStrategy === "workflow";
   const [expertIds, setExpertIds] = useState<string[]>(team.expertIds);
   const [leadExpertId, setLeadExpertId] = useState<string | null>(team.leadExpertId ?? null);
   const [roles, setRoles] = useState<Record<string, string>>(team.roles ?? {});
   const [busy, setBusy] = useState(false);
+  // workflow 草稿：无自带 workflow 的 workflow 团队从空开始（画布设计）
+  const [wf, setWf] = useState<TeamWorkflow | null>(
+    () =>
+      team.workflow ??
+      (workflowMode
+        ? {
+            id: `wf-${crypto.randomUUID()}`,
+            name: `${team.name} 流程`,
+            steps: [],
+            summarizerExpertId: team.expertIds.at(-1),
+          }
+        : null),
+  );
 
   const save = async () => {
     setBusy(true);
@@ -419,6 +451,7 @@ function TeamForm({ team, onClose }: { team: ExpertTeam; onClose: () => void }) 
         expertIds,
         leadExpertId: auto ? leadExpertId : undefined,
         roles: Object.keys(roles).length > 0 ? roles : undefined,
+        workflow: workflowMode && wf ? wf : undefined,
       });
       onClose();
     } finally {
@@ -443,6 +476,11 @@ function TeamForm({ team, onClose }: { team: ExpertTeam; onClose: () => void }) 
 
   const expertById = (id: string) => store.experts.find((e) => e.id === id);
   const leadExpert = leadExpertId ? expertById(leadExpertId) : undefined;
+  // 画布可选的专家 = 团队成员（主 agent + 成员）
+  const memberOptions = [...(leadExpertId ? [leadExpertId] : []), ...expertIds].map((id) => ({
+    id,
+    name: expertById(id)?.name ?? id,
+  }));
 
   // 选主 agent：若该专家已在成员中则从成员移除（主 agent 与成员互斥）
   const onChangeLead = (v: string) => {
@@ -554,8 +592,14 @@ function TeamForm({ team, onClose }: { team: ExpertTeam; onClose: () => void }) 
           </div>
         ) : null}
 
-        {/* workflow 只读展示 */}
-        {team.workflow ? (
+        {/* workflow：自定义团队 → 画布设计器；内置示例 → 只读链式展示 */}
+        {workflowMode && !builtin && wf ? (
+          <div className="mt-[20px]">
+            <Field label={t("expert.workflow.title")}>
+              <WorkflowCanvas workflow={wf} onChange={setWf} members={memberOptions} />
+            </Field>
+          </div>
+        ) : team.workflow ? (
           <div className="mt-[20px]">
             <Field
               label={`${t("expert.team.workflowReadonlyTitle")} · ${team.workflow.name}`}
@@ -632,6 +676,14 @@ function StepChip({
       <div className="flex flex-col items-center gap-[3px] rounded-[9px] border border-line bg-paper px-[10px] py-[7px]">
         <span className="text-[11px] font-semibold text-ink">{step.id}</span>
         <span className="text-[10.5px] text-ink-3">{e?.name ?? step.expertId}</span>
+      </div>
+    );
+  }
+  if (step.kind === "conditional") {
+    return (
+      <div className="flex flex-col items-center gap-[3px] rounded-[9px] border border-purple-line bg-purple-tint px-[10px] py-[7px]">
+        <span className="text-[11px] font-semibold text-ink">{step.id}</span>
+        <span className="text-[10.5px] text-purple">条件</span>
       </div>
     );
   }
@@ -1083,7 +1135,7 @@ function McpConfigForm({
 
 /* ════════════ 可编辑 chips（增删字符串列表） ════════════ */
 
-function EditableTags({
+export function EditableTags({
   value,
   onChange,
   placeholder,

@@ -1,0 +1,536 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Workflow 设计器 v2 · 链式节点 + 条件分支 · UI 预览</title>
+<style>
+  :root {
+    --paper: #faf8f4; --paper-deep: #f4f0e9; --card: #ffffff;
+    --hover: #f1ede4; --active: #eae4d8;
+    --ink: #1f1c18; --ink-2: #57534b; --ink-3: #a39e93;
+    --line: #e9e4da; --line-strong: #dcd5c7;
+    --accent: #0d7a5f; --accent-strong: #0a6450; --accent-tint: #e7f2ee; --accent-line: #bcddd2;
+    --danger: #b4453a;
+    --warn: #b8862f; --warn-tint: #fbf3e2; --warn-line: #ecd9b6;
+    --info: #3a6b8a; --info-tint: #eaf1f6; --info-line: #c6dae6;
+    --purple: #6d5b8a; --purple-tint: #f0edf5; --purple-line: #d8cfe3;
+    --shadow-card: 0 1px 2px rgb(31 28 24 / .04), 0 1px 6px rgb(31 28 24 / .03);
+    --shadow-modal: 0 12px 40px rgb(31 28 24 / .16), 0 2px 8px rgb(31 28 24 / .08);
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue",
+      Arial, "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+    font-size: 15px; font-weight: 500; line-height: 1.5; color: var(--ink); background: var(--paper);
+    -webkit-font-smoothing: antialiased;
+  }
+  .mono { font-family: ui-monospace, "SF Mono", "Cascadia Code", Consolas, monospace; }
+
+  .pagebar {
+    max-width: 900px; margin: 24px auto 16px; padding: 10px 16px;
+    border: 1px solid var(--warn); background: var(--warn-tint); color: #7a5d16;
+    border-radius: 10px; font-size: 12.5px; line-height: 1.65;
+  }
+  .pagebar b { color: #6b4f10; }
+
+  /* 弹层（更宽，容纳链条） */
+  .overlay { position: fixed; inset: 0; z-index: 50; display: flex; align-items: center;
+    justify-content: center; background: rgba(31,28,24,.35); backdrop-filter: blur(3px); padding: 24px; }
+  .modal { display: flex; flex-direction: column; overflow: hidden; width: 900px; max-width: 100%;
+    max-height: 90vh; background: var(--card); border-radius: 18px; box-shadow: var(--shadow-modal); }
+  .modal-head { display: flex; align-items: center; gap: 14px; flex-shrink: 0; padding: 18px 24px;
+    border-bottom: 1px solid var(--line); }
+  .modal-title { font-size: 20px; font-weight: 700; }
+  .modal-sub { margin-top: 3px; font-size: 13.5px; color: var(--ink-2); }
+  .close { margin-left: auto; width: 34px; height: 34px; flex-shrink: 0; display: flex;
+    align-items: center; justify-content: center; border: none; border-radius: 8px;
+    background: transparent; color: var(--ink-3); cursor: pointer; }
+  .close:hover { background: var(--hover); color: var(--ink); }
+
+  .modal-body { flex: 1; min-height: 0; overflow-y: auto; padding: 20px 24px; }
+  .modal-foot { display: flex; justify-content: flex-end; gap: 10px; flex-shrink: 0;
+    padding: 13px 24px; border-top: 1px solid var(--line); background: var(--paper); }
+
+  .field-label { display: block; margin-bottom: 6px; font-size: 12px; font-weight: 600;
+    letter-spacing: .04em; color: var(--ink-2); }
+  .field-hint { margin: 6px 0 0; font-size: 11.5px; line-height: 1.55; color: var(--ink-3); }
+  .input, .select, .textarea { width: 100%; border: 1px solid var(--line); background: var(--card);
+    border-radius: 9px; padding: 8px 12px; font-size: 13px; color: var(--ink); outline: none;
+    transition: border-color .15s, box-shadow .15s; }
+  .input:focus, .select:focus, .textarea:focus { border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-tint); }
+  .textarea { resize: vertical; line-height: 1.6; }
+  .select { appearance: none; cursor: pointer; }
+
+  .btn { border-radius: 8px; padding: 7px 14px; font-size: 13px; font-weight: 600; cursor: pointer;
+    transition: background .15s, color .15s, border-color .15s; }
+  .btn-primary { border: none; background: var(--accent); color: #fff; }
+  .btn-primary:hover { background: var(--accent-strong); }
+  .btn-ghost { border: 1px solid var(--line); background: transparent; color: var(--ink-2); }
+  .btn-ghost:hover { background: var(--hover); color: var(--ink); }
+  .btn-add { border: 1px dashed var(--line-strong); background: transparent; color: var(--ink-3);
+    border-radius: 999px; padding: 3px 11px; font-size: 12.5px; cursor: pointer;
+    transition: border-color .15s, color .15s; }
+  .btn-add:hover { border-color: var(--accent-line); color: var(--accent); }
+  .btn-add.solid { border-style: solid; }
+
+  /* 元信息行 */
+  .meta-row { display: flex; gap: 12px; margin-bottom: 16px; }
+  .meta-row .grow { flex: 1; min-width: 0; }
+
+  /* 节点调色板 */
+  .palette { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 10px 12px;
+    border: 1px solid var(--line); border-radius: 10px; background: var(--paper); }
+  .palette-label { font-size: 12px; font-weight: 600; color: var(--ink-3); margin-right: 2px; }
+
+  /* 链条 */
+  .chain { display: flex; flex-direction: column; margin-top: 12px; }
+  .arrow { display: flex; align-items: center; justify-content: center; height: 22px; color: var(--ink-3); font-size: 14px; }
+  .arrow::before { content: "↓"; }
+
+  /* 节点卡片 */
+  .node-card { border: 1px solid var(--line); background: var(--card); border-radius: 11px;
+    box-shadow: var(--shadow-card); overflow: hidden; }
+  .node-head { display: flex; align-items: center; gap: 8px; padding: 9px 12px; background: var(--paper);
+    border-bottom: 1px solid transparent; cursor: pointer; }
+  .node-head.open { border-bottom-color: var(--line); }
+  .node-seq { width: 20px; height: 20px; display: inline-flex; align-items: center; justify-content: center;
+    border-radius: 6px; background: var(--active); color: var(--ink-3); font-size: 11px; font-weight: 700; }
+  .node-kind { border-radius: 6px; padding: 2px 9px; font-size: 10.5px; font-weight: 700; letter-spacing: .03em; }
+  .nk-task { background: var(--active); color: var(--ink-2); }
+  .nk-parallel { background: var(--accent-tint); color: var(--accent-strong); }
+  .nk-conditional { background: var(--purple-tint); color: var(--purple); }
+  .nk-summary { background: var(--warn-tint); color: var(--warn); }
+  .node-id { width: 96px; border: 1px solid transparent; background: transparent; font-family: ui-monospace,
+    Consolas, monospace; font-size: 12.5px; font-weight: 600; padding: 3px 6px; border-radius: 6px; outline: none; }
+  .node-id:hover { background: var(--card); }
+  .node-id:focus { border-color: var(--accent); background: var(--card); }
+  .node-summary { flex: 1; min-width: 0; display: flex; align-items: center; gap: 6px; overflow: hidden; }
+  .node-summary .brief { flex: 1; min-width: 0; font-size: 12px; color: var(--ink-2);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .node-actions { display: flex; align-items: center; gap: 2px; }
+  .icon-btn { width: 24px; height: 24px; display: inline-flex; align-items: center; justify-content: center;
+    border: none; border-radius: 6px; background: transparent; color: var(--ink-3); cursor: pointer;
+    font-size: 12px; transition: background .15s, color .15s; }
+  .icon-btn:hover:not(:disabled) { background: var(--hover); color: var(--ink); }
+  .icon-btn:disabled { opacity: .3; cursor: default; }
+  .icon-btn.danger:hover { background: #fbeae8; color: var(--danger); }
+  .expand { font-size: 10px; }
+
+  .node-body { display: none; padding: 12px; background: var(--card); }
+  .node-body.open { display: block; }
+  .node-body .field { margin-bottom: 10px; }
+
+  .sub-row { display: flex; gap: 8px; align-items: flex-start; margin-bottom: 8px;
+    background: var(--paper); border: 1px solid var(--line); border-radius: 9px; padding: 8px; }
+  .sub-row .grow { flex: 1; min-width: 0; }
+  .sub-row .textarea { background: var(--card); }
+
+  /* 条件节点 */
+  .rule-row { display: flex; align-items: center; gap: 8px; background: var(--paper);
+    border: 1px solid var(--line); border-radius: 9px; padding: 7px 9px; margin-bottom: 8px; }
+  .rule-row .input, .rule-row .select { width: auto; flex: 1; }
+  .rule-row .op { max-width: 130px; }
+  .rule-row .val { max-width: 160px; }
+  .logic-row { display: flex; align-items: center; gap: 6px; margin: 2px 0 10px; font-size: 12px; color: var(--ink-2); }
+  .logic-chip { border-radius: 999px; padding: 2px 12px; font-size: 11.5px; font-weight: 700; cursor: pointer;
+    border: 1px solid var(--line); background: var(--card); color: var(--ink-3); }
+  .logic-chip.on { border-color: var(--accent); background: var(--accent-tint); color: var(--accent-strong); }
+
+  /* 分支容器 */
+  .branch { margin-top: 10px; border: 1px solid var(--line); border-radius: 10px; padding: 10px;
+    background: var(--paper); }
+  .branch.then { border-color: var(--accent-line); background: var(--accent-tint); }
+  .branch.else { border-color: var(--warn-line); background: var(--warn-tint); }
+  .branch-head { display: flex; align-items: center; gap: 7px; margin-bottom: 8px; font-size: 12px;
+    font-weight: 700; }
+  .branch.then .branch-head { color: var(--accent-strong); }
+  .branch.else .branch-head { color: var(--warn); }
+  .branch .chain { margin-top: 4px; }
+  .branch .arrow { height: 18px; }
+
+  .tmpl { display: flex; align-items: center; flex-wrap: wrap; gap: 5px; margin-top: 5px;
+    font-size: 11px; color: var(--ink-3); }
+  .chip { border: 1px solid var(--line); background: var(--card); color: var(--ink-2);
+    border-radius: 999px; padding: 1px 8px; font-family: ui-monospace, Consolas, monospace;
+    font-size: 10px; cursor: pointer; }
+  .chip:hover { border-color: var(--accent-line); color: var(--accent-strong); }
+
+  .end-card { display: flex; align-items: center; gap: 8px; margin-top: 2px; padding: 10px 12px;
+    border: 1px dashed var(--line-strong); border-radius: 11px; background: var(--paper); }
+  .end-card .label { font-size: 12px; font-weight: 700; color: var(--ink-2); }
+  .end-card .select { max-width: 220px; }
+
+  .empty { padding: 14px; text-align: center; font-size: 13px; color: var(--ink-3);
+    border: 1px dashed var(--line-strong); border-radius: 10px; background: var(--paper); }
+</style>
+</head>
+<body>
+
+<div class="pagebar">
+  <b>Workflow 设计器 v2 · 链式节点 + 条件分支（UI 预览）</b>
+  思路：专家配置在「专家中心」修改，这里只编排流程、引用系统专家。节点类型：<b>任务（串行）/ 并行 / 条件（if/else）/ 汇总</b>。
+  条件用<b>确定性规则</b>（如「{{review.result}} 包含『通过』」），本地判断，不消耗 token。可交互：点节点展开编辑、加/移节点、条件内嵌分支链递归添加节点。
+  <span class="mono">（本页为静态演示；真正实现走 React 组件 + 引擎支持 conditional 节点）</span>
+</div>
+
+<div class="overlay">
+  <div class="modal">
+    <div class="modal-head">
+      <div>
+        <div class="modal-title">流程设计</div>
+        <div class="modal-sub">专家团「软件研发」· 基于系统专家编排 · 节点化流程</div>
+      </div>
+      <button class="close">✕</button>
+    </div>
+
+    <div class="modal-body">
+      <!-- 元信息 -->
+      <div class="meta-row">
+        <div class="grow">
+          <label class="field-label">流程名称</label>
+          <input id="wfName" class="input" value="需求 → 开发 → 质量门禁 → 发布" />
+        </div>
+        <div class="grow">
+          <label class="field-label">描述</label>
+          <input id="wfDesc" class="input" value="串行分析 → 并行开发 → 评审门禁 → 通过发布 / 否则修复 → 汇总" />
+        </div>
+      </div>
+
+      <!-- 调色板 -->
+      <div class="palette">
+        <span class="palette-label">添加节点</span>
+        <button class="btn-add solid" onclick="addNode('', 'task')">＋ 任务（串行）</button>
+        <button class="btn-add solid" onclick="addNode('', 'parallel')">＋ 并行</button>
+        <button class="btn-add solid" onclick="addNode('', 'conditional')">＋ 条件 if/else</button>
+      </div>
+
+      <!-- 节点链条 -->
+      <div id="chain" class="chain"></div>
+
+      <!-- 结束汇总 -->
+      <div class="end-card">
+        <span class="label">🏁 结束 · 汇总</span>
+        <select id="summarizer" class="select"></select>
+        <span class="field-hint" style="margin:0;">全部步骤完成后，由该专家输出结构化总结（缺省末位成员）。</span>
+      </div>
+    </div>
+
+    <div class="modal-foot">
+      <button class="btn btn-ghost">取消</button>
+      <button class="btn btn-primary">保存流程</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  const MEMBERS = [
+    { id: "daily",  name: "办公助理" },
+    { id: "coding", name: "编码助手" },
+    { id: "doc",    name: "文档专家" },
+    { id: "ops",    name: "发布专家" },
+  ];
+  const nameOf = (id) => MEMBERS.find((m) => m.id === id)?.name ?? id;
+
+  const OPS = [
+    { id: "contains",      label: "包含" },
+    { id: "not_contains",  label: "不包含" },
+    { id: "is_empty",      label: "为空" },
+    { id: "is_not_empty",  label: "不为空" },
+    { id: "equals",        label: "等于" },
+    { id: "not_equals",    label: "不等于" },
+    { id: "starts_with",   label: "以…开头" },
+    { id: "ends_with",     label: "以…结尾" },
+    { id: "len_gt",        label: "长度 >" },
+    { id: "len_lt",        label: "长度 <" },
+  ];
+  const needsValue = (op) => !["is_empty", "is_not_empty"].includes(op);
+
+  let expanded = new Set();
+  let state = {
+    nodes: [
+      { type: "task", id: "analysis", expertId: "daily",
+        prompt: "你是需求分析师：针对「{user}」澄清需求并输出需求要点与验收标准。" },
+      { type: "parallel", id: "dev", refs: [
+        { expertId: "coding", prompt: "你是方案设计师：基于 {{analysis.result}} 输出技术方案、模块划分与任务拆解。" },
+        { expertId: "doc",    prompt: "你是文档专家：基于 {{analysis.result}} 输出用户文档与使用说明。" },
+      ] },
+      { type: "task", id: "review", expertId: "daily",
+        prompt: "你是质量评审：审查 {{dev.result}} 的产出，给出问题清单与改进建议，并在末尾明确是否「通过」。" },
+      { type: "conditional", id: "gate", logic: "and",
+        rules: [{ var: "review", op: "contains", value: "通过" }],
+        thenNodes: [
+          { type: "task", id: "publish", expertId: "ops",
+            prompt: "你是发布专家：根据 {{review.result}} 执行发布，输出发布清单与验证步骤。" },
+        ],
+        elseNodes: [
+          { type: "task", id: "fix", expertId: "coding",
+            prompt: "你是修复专家：根据 {{review.result}} 的问题清单修复缺陷，输出改动说明。" },
+        ] },
+      { type: "summary", id: "final", expertId: "daily",
+        prompt: "综合以上各步产出，输出最终结构化总结与后续建议。" },
+    ],
+  };
+
+  /* ── 路径工具（''=根；'3.then.0' = 第3节点 then 分支第0项）── */
+  const parse = (p) => (p ? p.split(".").filter(Boolean).map((s) => (/^\d+$/.test(s) ? +s : s)) : []);
+  const parentOf = (p) => { const seg = parse(p); return { list: getList(seg.slice(0, -1)), i: seg[seg.length - 1] }; };
+  function getList(seg) {
+    let cur = state.nodes, i = 0;
+    while (i < seg.length) {
+      cur = cur[seg[i]]; i++;
+      if (i < seg.length) { cur = cur[seg[i] === "then" ? "thenNodes" : "elseNodes"]; i++; }
+    }
+    return cur;
+  }
+
+  /* ── 渲染 ── */
+  let seqMap = new Map();
+  function buildSeqMap() {
+    const m = new Map();
+    let c = 0;
+    (function walk(list, prefix) {
+      list.forEach((n, i) => {
+        const p = prefix ? `${prefix}.${i}` : String(i);
+        m.set(p, ++c);
+        if (n.type === "conditional") { walk(n.thenNodes, p + ".then"); walk(n.elseNodes, p + ".else"); }
+      });
+    })(state.nodes, "");
+    return m;
+  }
+  function render() {
+    seqMap = buildSeqMap();
+    renderChain(document.getElementById("chain"), state.nodes, "");
+    renderSummarizer();
+  }
+  function renderChain(el, list, prefix) {
+    el.innerHTML = "";
+    if (list.length === 0) { el.innerHTML = `<div class="empty">该位置还没有节点 —— 用上方「添加节点」加入任务 / 并行 / 条件。</div>`; return; }
+    list.forEach((node, i) => {
+      const p = prefix ? `${prefix}.${i}` : String(i);
+      el.appendChild(renderNode(node, p, i, list.length));
+      if (i < list.length - 1) el.appendChild(makeArrow());
+    });
+  }
+  function makeArrow() { const d = document.createElement("div"); d.className = "arrow"; return d; }
+
+  const KIND_META = {
+    task:        { label: "任务",     cls: "nk-task",        brief: (n) => `${nameOf(n.expertId)} · ${(n.prompt || "").slice(0, 28)}` },
+    parallel:    { label: "并行",     cls: "nk-parallel",    brief: (n) => n.refs.map((r) => nameOf(r.expertId)).join(" + ") },
+    conditional: { label: "条件",     cls: "nk-conditional", brief: (n) => `如果 ${n.rules.map((r) => `{{${r.var}.result}} ${opLabel(r.op)} ${needsValue(r.op) ? `"${r.value ?? ""}"` : ""}`).join(" 且 ")}` },
+    summary:     { label: "汇总",     cls: "nk-summary",     brief: (n) => `由 ${nameOf(n.expertId)} 输出最终总结` },
+  };
+  const opLabel = (id) => OPS.find((o) => o.id === id)?.label ?? id;
+
+  function renderNode(node, p, i, len) {
+    const meta = KIND_META[node.type];
+    const card = document.createElement("div");
+    card.className = "node-card";
+
+    const head = document.createElement("div");
+    head.className = "node-head" + (expanded.has(p) ? " open" : "");
+    head.innerHTML = `
+      <span class="node-seq">${seqMap.get(p)}</span>
+      <span class="node-kind ${meta.cls}">${meta.label}</span>
+      <input class="node-id mono" value="${node.id}" title="步骤 ID（供 {{id.result}} 引用）" />
+      <span class="node-summary"><span class="brief">${meta.brief(node)}</span></span>
+      <span class="node-actions">
+        <button class="icon-btn expand" title="展开/收起">${expanded.has(p) ? "▾" : "▸"}</button>
+        <button class="icon-btn" title="上移" ${i === 0 ? "disabled" : ""}>↑</button>
+        <button class="icon-btn" title="下移" ${i === len - 1 ? "disabled" : ""}>↓</button>
+        <button class="icon-btn" title="复制">⧉</button>
+        <button class="icon-btn danger" title="删除">✕</button>
+      </span>`;
+    card.appendChild(head);
+
+    const body = document.createElement("div");
+    body.className = "node-body" + (expanded.has(p) ? " open" : "");
+    body.appendChild(renderEditor(node, p));
+    card.appendChild(body);
+
+    /* 事件绑定 */
+    const idInput = head.querySelector(".node-id");
+    idInput.addEventListener("input", (e) => { node.id = e.target.value; });
+    head.querySelector(".expand").addEventListener("click", () => { toggle(p); });
+    const acts = head.querySelectorAll(".node-actions .icon-btn");
+    acts[1].addEventListener("click", () => moveNode(p, -1));
+    acts[2].addEventListener("click", () => moveNode(p, 1));
+    acts[3].addEventListener("click", () => duplicateNode(p));
+    acts[4].addEventListener("click", () => removeNode(p));
+
+    return card;
+  }
+
+  function toggle(p) { expanded.has(p) ? expanded.delete(p) : expanded.add(p); render(); }
+
+  function renderEditor(node, p) {
+    const wrap = document.createElement("div");
+    if (node.type === "task" || node.type === "summary") {
+      wrap.appendChild(field("执行专家", select(MEMBERS, node.expertId, (v) => (node.expertId = v))));
+      wrap.appendChild(field(node.type === "summary" ? "汇总提示词" : "任务提示词", textarea(node, "prompt")));
+      wrap.appendChild(tmplHint(node));
+    } else if (node.type === "parallel") {
+      node.refs.forEach((r, ri) => {
+        const row = document.createElement("div"); row.className = "sub-row";
+        const grow = document.createElement("div"); grow.className = "grow";
+        grow.appendChild(field("成员专家", select(MEMBERS, r.expertId, (v) => (r.expertId = v))));
+        grow.appendChild(field("成员任务", textarea(r, "prompt")));
+        row.appendChild(grow);
+        const del = iconBtn("✕", "移除该成员", node.refs.length <= 1, () => { node.refs.splice(ri, 1); render(); });
+        row.appendChild(del);
+        wrap.appendChild(row);
+      });
+      const add = document.createElement("button");
+      add.className = "btn-add"; add.textContent = "＋ 添加成员";
+      add.onclick = () => { node.refs.push({ expertId: "daily", prompt: "你是" + nameOf("daily") + "：针对「{user}」完成你的部分。" }); render(); };
+      wrap.appendChild(add);
+    } else if (node.type === "conditional") {
+      wrap.appendChild(field("分支条件（满足即走 ✓ 分支）", renderRules(node)));
+      wrap.appendChild(logicRow(node));
+      wrap.appendChild(branch("then", "✓ 满足条件", node.thenNodes, p));
+      wrap.appendChild(branch("else", "✗ 否则", node.elseNodes, p));
+    }
+    return wrap;
+  }
+
+  function renderRules(node) {
+    const box = document.createElement("div");
+    node.rules.forEach((r, ri) => {
+      const row = document.createElement("div"); row.className = "rule-row";
+      const v = document.createElement("input"); v.className = "input mono"; v.value = "{{" + r.var + ".result}}";
+      v.title = "引用前序步骤输出变量";
+      v.addEventListener("input", (e) => { const m = e.target.value.match(/\{\{([\w-]+)\.result\}\}/); r.var = m ? m[1] : e.target.value; });
+      const op = select(OPS.map((o) => ({ id: o.id, name: o.label })), r.op, (val) => { r.op = val; render(); });
+      op.classList.add("op");
+      const val = document.createElement("input");
+      val.className = "input mono val"; val.value = r.value ?? "";
+      val.placeholder = needsValue(r.op) ? "值" : "—";
+      val.disabled = !needsValue(r.op);
+      val.addEventListener("input", (e) => (r.value = e.target.value));
+      const del = iconBtn("✕", "删除该规则", node.rules.length <= 1, () => { node.rules.splice(ri, 1); render(); });
+      row.append(v, op, val, del);
+      box.appendChild(row);
+    });
+    const add = document.createElement("button");
+    add.className = "btn-add"; add.textContent = "＋ 添加规则";
+    add.onclick = () => { node.rules.push({ var: "review", op: "contains", value: "" }); render(); };
+    box.appendChild(add);
+    return box;
+  }
+
+  function logicRow(node) {
+    const row = document.createElement("div"); row.className = "logic-row";
+    row.textContent = "多条规则之间：";
+    ["and", "or"].forEach((lg) => {
+      const c = document.createElement("span");
+      c.className = "logic-chip" + (node.logic === lg ? " on" : "");
+      c.textContent = lg === "and" ? "全部满足（与）" : "任一满足（或）";
+      c.onclick = () => { node.logic = lg; render(); };
+      row.appendChild(c);
+    });
+    return row;
+  }
+
+  function branch(kind, label, list, parentP) {
+    const b = document.createElement("div");
+    b.className = "branch " + kind;
+    const head = document.createElement("div");
+    head.className = "branch-head";
+    head.innerHTML = `<span>${label}</span>`;
+    b.appendChild(head);
+    const chain = document.createElement("div"); chain.className = "chain";
+    renderChain(chain, list, `${parentP}.${kind}`);
+    b.appendChild(chain);
+    const addRow = document.createElement("div");
+    addRow.style.cssText = "display:flex;gap:6px;margin-top:8px;";
+    ["task", "parallel", "conditional"].forEach((t) => {
+      const btn = document.createElement("button");
+      btn.className = "btn-add"; btn.textContent = "＋ " + (t === "task" ? "任务" : t === "parallel" ? "并行" : "条件");
+      btn.onclick = () => addNode(`${parentP}.${kind}`, t);
+      addRow.appendChild(btn);
+    });
+    b.appendChild(addRow);
+    return b;
+  }
+
+  function field(label, control) {
+    const wrap = document.createElement("div"); wrap.className = "field";
+    const l = document.createElement("label"); l.className = "field-label"; l.textContent = label;
+    wrap.appendChild(l); wrap.appendChild(control);
+    return wrap;
+  }
+  function select(options, value, onChange) {
+    const sel = document.createElement("select"); sel.className = "select";
+    options.forEach((o) => { const opt = document.createElement("option"); opt.value = o.id;
+      opt.textContent = o.name; if (o.id === value) opt.selected = true; sel.appendChild(opt); });
+    sel.addEventListener("change", () => onChange(sel.value));
+    return sel;
+  }
+  function textarea(node, key) {
+    const ta = document.createElement("textarea"); ta.className = "textarea mono"; ta.rows = 2;
+    ta.value = node[key] ?? "";
+    ta.placeholder = "支持 {user} 与 {{步骤ID.result}} 引用前步输出";
+    ta.addEventListener("input", (e) => (node[key] = e.target.value));
+    return ta;
+  }
+  function iconBtn(symbol, title, disabled, onClick) {
+    const b = document.createElement("button"); b.className = "icon-btn danger";
+    b.textContent = symbol; b.title = title; b.disabled = disabled; b.addEventListener("click", onClick);
+    return b;
+  }
+  function tmplHint(node) {
+    const d = document.createElement("div"); d.className = "tmpl";
+    const t = document.createElement("span"); t.textContent = "可引用：";
+    d.appendChild(t);
+    const ids = allIds().filter((id) => id !== node.id);
+    if (ids.length === 0) { const s = document.createElement("span"); s.textContent = "（无前序步骤）"; d.appendChild(s); }
+    ids.forEach((id) => { const c = document.createElement("span"); c.className = "chip";
+      c.textContent = "{{" + id + ".result}}";
+      c.onclick = () => { const cur = node.prompt || ""; node.prompt = cur + (cur ? "\n" : "") + `基于 {{${id}.result}} 完成。`; render(); };
+      d.appendChild(c); });
+    return d;
+  }
+  function allIds() {
+    const ids = [];
+    (function walk(l) { l.forEach((n) => { ids.push(n.id); if (n.type === "conditional") { walk(n.thenNodes); walk(n.elseNodes); } }); })(state.nodes);
+    return ids;
+  }
+
+  function renderSummarizer() {
+    const sel = document.getElementById("summarizer");
+    sel.innerHTML = "";
+    MEMBERS.forEach((m, i) => { const o = document.createElement("option"); o.value = m.id;
+      o.textContent = m.name + (i === MEMBERS.length - 1 ? "（末位成员 · 默认）" : "");
+      if (i === MEMBERS.length - 1) o.selected = true; sel.appendChild(o); });
+  }
+
+  /* ── 增删改 ── */
+  function newStepId(kind) {
+    const prefix = kind === "conditional" ? "gate" : kind === "parallel" ? "dev" : "step";
+    let n = 1; const used = new Set(allIds());
+    while (used.has(prefix + "-" + n)) n++;
+    return prefix + "-" + n;
+  }
+  function addNode(prefix, type) {
+    const list = getList(parse(prefix));
+    const id = newStepId(type);
+    if (type === "task") list.push({ type, id, expertId: "daily", prompt: "你是" + nameOf("daily") + "：针对「{user}」完成你的部分。" });
+    else if (type === "parallel") list.push({ type, id, refs: [{ expertId: "coding", prompt: "你是" + nameOf("coding") + "：针对「{user}」完成你的部分。" }, { expertId: "doc", prompt: "你是" + nameOf("doc") + "：针对「{user}」完成你的部分。" }] });
+    else list.push({ type, id, logic: "and", rules: [{ var: "review", op: "contains", value: "通过" }], thenNodes: [], elseNodes: [] });
+    const p = prefix ? `${prefix}.${list.length - 1}` : String(list.length - 1);
+    expanded.add(p);
+    render();
+  }
+  function removeNode(p) { const { list, i } = parentOf(p); list.splice(i, 1); render(); }
+  function moveNode(p, d) { const { list, i } = parentOf(p); const t = list[i + d]; list[i + d] = list[i]; list[i] = t; render(); }
+  function duplicateNode(p) {
+    const { list, i } = parentOf(p);
+    const src = list[i]; const cp = JSON.parse(JSON.stringify(src));
+    cp.id = newStepId(cp.type); list.splice(i + 1, 0, cp); render();
+  }
+
+  render();
+</script>
+</body>
+</html>

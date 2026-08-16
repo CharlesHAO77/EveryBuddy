@@ -34,12 +34,12 @@ import {
   getVisionModel,
   isChatModelProviderId,
 } from "./modelStore";
-import { getModeSystemPrompt } from "./prompts";
+import { buildActiveToolsBlock, getModeSystemPrompt } from "./prompts";
 import { skillStore } from "./skillStore";
 import { createFindOperations } from "./tools/findTool";
 import { createGenerateImageToolDefinition } from "./tools/generateImageTool";
 import { createGrepToolDefinition } from "./tools/grepTool";
-import { buildToolAllowlist } from "./tools/toolAllowlist";
+import { buildRestrictedToolAllowlist, buildToolAllowlist } from "./tools/toolAllowlist";
 import { buildToolPlan, type ToolAvailability } from "./tools/toolAvailability";
 import { createUnderstandImageToolDefinition } from "./tools/understandImageTool";
 import { type DescribeImageRuntime, describeImage } from "./vision";
@@ -200,18 +200,23 @@ export async function buildSessionConfig(
     tools: extTools,
   } = buildExtensionFactories(extensions, emit, { getMode }, { includePermission: !opts.headless });
 
-  // tools allowlist 过滤所有工具（含 customTools / 扩展注册工具），必须显式并入
-  const toolAllowlist = buildToolAllowlist(plan.tools, [
-    ...(cfg.tools ?? []),
-    ...extTools,
-    ...(opts.extraToolNames ?? []),
-  ]);
+  // tools allowlist 过滤所有工具（含 customTools / 扩展注册工具），必须显式并入。
+  // 自定义专家显式选定工具 → 权威集合（空 = 精简）；否则平台全量 ∪ 配置/扩展/额外
+  const baseTools = [...(cfg.tools ?? []), ...extTools, ...(opts.extraToolNames ?? [])];
+  const toolAllowlist = cfg.restrictTools
+    ? buildRestrictedToolAllowlist(baseTools)
+    : buildToolAllowlist(plan.tools, baseTools);
 
   // 模式级 system prompt：systemPromptOverride（coordinator）→ cfg.systemPrompt → 模式默认 builder
-  const systemPrompt =
+  let systemPrompt =
     opts.systemPromptOverride ??
     cfg.systemPrompt ??
     getModeSystemPrompt(mode, { activeTools: toolAllowlist });
+  // 自定义专家用身份提示词（不含工具清单）→ 显式附上可用工具 + "未列出不可用"约束，
+  // 防止模型按通用认知臆测内置 read/bash/联网等能力
+  if (opts.expert?.source === "custom") {
+    systemPrompt = `${systemPrompt}\n\n${buildActiveToolsBlock(toolAllowlist)}`;
+  }
 
   // 技能注入：把启用的 EveryBuddy 技能并入 SDK 自动发现的技能（skillsOverride 单一注入点）
   const managedSkills = skillStore.listEnabled();

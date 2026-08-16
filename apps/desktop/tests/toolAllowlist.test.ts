@@ -5,6 +5,7 @@
  */
 import { describe, expect, it } from "vitest";
 import {
+  buildRestrictedToolAllowlist,
   buildToolAllowlist,
   CUSTOM_TOOL_NAMES,
 } from "../src/main/tools/toolAllowlist";
@@ -30,5 +31,18 @@ describe("buildToolAllowlist", () => {
       "my_tool",
       "generate_image",
     ]);
+  });
+});
+
+describe("buildRestrictedToolAllowlist", () => {
+  it("自定义专家显式限定：仅选中工具 + parse_attachment 兜底，不并入平台全量/视觉生图", () => {
+    expect(buildRestrictedToolAllowlist(["read", "grep"])).toEqual([
+      "parse_attachment",
+      "read",
+      "grep",
+    ]);
+    expect(buildRestrictedToolAllowlist(undefined)).toEqual(["parse_attachment"]);
+    // 未选工具 → 精简为仅基础附件解析
+    expect(buildRestrictedToolAllowlist([])).toEqual(["parse_attachment"]);
   });
 });

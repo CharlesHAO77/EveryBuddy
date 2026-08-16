@@ -14,6 +14,7 @@ import type { CreateExpertRequest, Expert, UpdateExpertRequest } from "@everybud
 import type { AgentConfig } from "./agentConfigStore";
 import { APP_ROOT, ensureAppDirs } from "./configStore";
 import { uiError } from "./errors";
+import { buildExpertIdentityPrompt } from "./expertPrompt";
 
 export const EXPERTS_PATH = path.join(APP_ROOT, "experts.json");
 
@@ -75,8 +76,21 @@ export function expertToAgentConfig(expert: Expert, base: AgentConfig): AgentCon
   const cfg: AgentConfig = { ...base };
   if (expert.systemPrompt) cfg.systemPrompt = expert.systemPrompt;
   if (expert.appendSystemPrompt?.length) cfg.appendSystemPrompt = expert.appendSystemPrompt;
-  if (expert.tools?.length) cfg.tools = [...(base.tools ?? []), ...expert.tools];
-  if (expert.extensions?.length) cfg.extensions = expert.extensions;
+  // 自定义专家：显式工具选择即权威工具集（空 = 仅保留基础附件解析），不再追加平台全量；
+  // 内置专家保持「模式默认 ∪ override 追加」的既有语义
+  if (expert.source === "custom" && expert.tools !== undefined) {
+    cfg.tools = expert.tools;
+    cfg.restrictTools = true;
+  } else if (expert.tools?.length) {
+    cfg.tools = [...(base.tools ?? []), ...expert.tools];
+  }
+  // 扩展同工具：自定义专家显式选择即权威（空 = 不加载 plan-mode/todo 等，避免其注册工具）；
+  // 内置专家保持「undefined → 模式默认扩展」的既有语义
+  if (expert.source === "custom" && expert.extensions !== undefined) {
+    cfg.extensions = expert.extensions;
+  } else if (expert.extensions?.length) {
+    cfg.extensions = expert.extensions;
+  }
   if (expert.defaultModelProviderId) cfg.defaultModelProviderId = expert.defaultModelProviderId;
   if (expert.visionModelProviderId) cfg.visionModelProviderId = expert.visionModelProviderId;
   if (expert.imageGenModelProviderId) cfg.imageGenModelProviderId = expert.imageGenModelProviderId;
@@ -162,13 +176,15 @@ export class ExpertStore {
   create(req: CreateExpertRequest): Expert {
     this.load();
     const now = new Date().toISOString();
+    // 自定义专家：未填系统提示词（或纯空白）→ 按名称+描述自动生成人格提示词，不再静默回落模式默认
+    const sys = req.systemPrompt?.trim();
     const expert: Expert = {
       id: randomUUID(),
       name: req.name,
       icon: req.icon ?? "briefcase",
       description: req.description ?? "",
       mode: req.mode ?? "daily",
-      systemPrompt: req.systemPrompt,
+      systemPrompt: sys ? sys : buildExpertIdentityPrompt(req.name, req.description ?? ""),
       appendSystemPrompt: req.appendSystemPrompt,
       tools: req.tools,
       extensions: req.extensions,
@@ -219,6 +235,21 @@ export class ExpertStore {
       tags: req.tags ?? existing.tags,
       updatedAt: new Date().toISOString(),
     };
+    // 自定义专家：名称/描述变更且 systemPrompt 仍是「自动生成的人格提示词」→ 随之重新生成；
+    // 用户显式编辑过提示词（≠ 旧自动文案）则不覆盖，尊重用户内容。
+    if (existing.source === "custom") {
+      const oldAuto = buildExpertIdentityPrompt(existing.name, existing.description ?? "");
+      const stillAuto = !existing.systemPrompt || existing.systemPrompt === oldAuto;
+      const promptUnchanged = req.systemPrompt === undefined || req.systemPrompt === oldAuto;
+      const nameChanged = req.name !== undefined && req.name !== existing.name;
+      const descChanged = req.description !== undefined && req.description !== existing.description;
+      if (stillAuto && promptUnchanged && (nameChanged || descChanged)) {
+        merged.systemPrompt = buildExpertIdentityPrompt(
+          req.name ?? existing.name,
+          req.description ?? existing.description ?? "",
+        );
+      }
+    }
     this.data.experts[idx] = merged;
     this.save();
     return merged;

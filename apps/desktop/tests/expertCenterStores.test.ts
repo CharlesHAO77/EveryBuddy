@@ -9,6 +9,7 @@ import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { AgentConfig } from "../src/main/agentConfigStore";
 import { ConnectorStore } from "../src/main/connectorStore";
+import { buildExpertIdentityPrompt } from "../src/main/expertPrompt";
 import { ExpertStore, expertToAgentConfig } from "../src/main/expertStore";
 import { buildSkillMd, parseSkillFrontmatter, SkillStore } from "../src/main/skillStore";
 import { BUILTIN_TEAMS, TeamStore } from "../src/main/teamStore";
@@ -104,7 +105,7 @@ describe("ExpertStore", () => {
     expect(store.list().some((x) => x.id === e.id)).toBe(false);
   });
 
-  it("expertToAgentConfig 覆盖叠加、保留基础 tools", () => {
+  it("expertToAgentConfig 自定义专家显式工具集为权威（不再叠加 base）", () => {
     const base: AgentConfig = { tools: ["bash"], defaultModelProviderId: "base" };
     const cfg = expertToAgentConfig(
       {
@@ -123,9 +124,151 @@ describe("ExpertStore", () => {
       },
       base,
     );
-    expect(cfg.tools).toEqual(["bash", "understand_image"]);
+    expect(cfg.tools).toEqual(["understand_image"]); // 权威集，不并入 base.tools
+    expect(cfg.restrictTools).toBe(true);
     expect(cfg.defaultModelProviderId).toBe("override");
     expect(base.defaultModelProviderId).toBe("base"); // 不改动 base
+  });
+
+  it("expertToAgentConfig 自定义专家未选工具 → 精简集（空 tools + restrictTools + 空扩展）", () => {
+    const cfg = expertToAgentConfig(
+      {
+        id: "x",
+        name: "x",
+        icon: "briefcase",
+        description: "",
+        mode: "daily",
+        tools: [],
+        extensions: [],
+        tags: [],
+        source: "custom",
+        createdAt: "",
+        updatedAt: "",
+      },
+      {},
+    );
+    expect(cfg.tools).toEqual([]);
+    expect(cfg.restrictTools).toBe(true);
+    // 扩展同样权威：空 = 不加载 plan-mode/todo，避免其注册 todo 工具
+    expect(cfg.extensions).toEqual([]);
+  });
+
+  it("expertToAgentConfig 自定义专家 extensions 权威（空=不回落模式默认扩展）", () => {
+    const cfg = expertToAgentConfig(
+      {
+        id: "x",
+        name: "x",
+        icon: "briefcase",
+        description: "",
+        mode: "daily",
+        extensions: [],
+        tags: [],
+        source: "custom",
+        createdAt: "",
+        updatedAt: "",
+      },
+      { extensions: ["plan-mode"] }, // base 模式默认，不应被采用
+    );
+    expect(cfg.extensions).toEqual([]);
+  });
+
+  it("expertToAgentConfig 内置专家保持追加语义、不限定工具", () => {
+    const cfg = expertToAgentConfig(
+      {
+        id: "daily",
+        name: "办公助理",
+        icon: "briefcase",
+        description: "",
+        mode: "daily",
+        tools: ["understand_image"],
+        tags: [],
+        source: "builtin",
+        createdAt: "",
+        updatedAt: "",
+      },
+      { tools: ["bash"] },
+    );
+    expect(cfg.tools).toEqual(["bash", "understand_image"]);
+    expect(cfg.restrictTools).toBeUndefined();
+  });
+
+  it("create 空 systemPrompt 自动生成人格提示词；显式填写则保留", () => {
+    const store = new ExpertStore(path.join(dir, "experts.json"));
+    const auto = store.create({ name: "产品经理", description: "需求拆解" });
+    expect(auto.systemPrompt).toBe(buildExpertIdentityPrompt("产品经理", "需求拆解"));
+    expect(auto.systemPrompt).toContain("「产品经理」");
+    const explicit = store.create({ name: "定制", systemPrompt: "自定义内容" });
+    expect(explicit.systemPrompt).toBe("自定义内容");
+    const blank = store.create({ name: "空白", systemPrompt: "   " });
+    expect(blank.systemPrompt).toContain("「空白」"); // 纯空白 → 自动生成
+  });
+
+  it("buildExpertIdentityPrompt 确定性、含名称/描述、无描述也非空", () => {
+    const a = buildExpertIdentityPrompt("翻译助手", "中英互译");
+    expect(a).toBe(buildExpertIdentityPrompt("翻译助手", "中英互译"));
+    expect(a).toContain("翻译助手");
+    expect(a).toContain("中英互译");
+    expect(buildExpertIdentityPrompt("极简").trim().length).toBeGreaterThan(0);
+  });
+
+  it("update 改名且提示词仍为自动 → 重新生成", () => {
+    const store = new ExpertStore(path.join(dir, "experts.json"));
+    const e = store.create({ name: "旧名", description: "定位" });
+    const updated = store.update({ id: e.id, name: "新名" });
+    expect(updated?.systemPrompt).toBe(buildExpertIdentityPrompt("新名", "定位"));
+  });
+
+  it("update 改名但提示词被用户编辑过 → 不重新生成", () => {
+    const store = new ExpertStore(path.join(dir, "experts.json"));
+    const e = store.create({ name: "旧名", description: "定位" });
+    store.update({ id: e.id, systemPrompt: "手工内容" });
+    const renamed = store.update({ id: e.id, name: "新名" });
+    expect(renamed?.systemPrompt).toBe("手工内容");
+  });
+
+  it("update 仅改描述且提示词仍为自动 → 重新生成", () => {
+    const store = new ExpertStore(path.join(dir, "experts.json"));
+    const e = store.create({ name: "专家", description: "旧定位" });
+    const updated = store.update({ id: e.id, description: "新定位" });
+    expect(updated?.systemPrompt).toContain("新定位");
+  });
+
+  it("update 无名称/描述变更 → 提示词不动", () => {
+    const store = new ExpertStore(path.join(dir, "experts.json"));
+    const e = store.create({ name: "专家", description: "定位" });
+    const before = e.systemPrompt;
+    const updated = store.update({ id: e.id, tags: ["x"] });
+    expect(updated?.systemPrompt).toBe(before);
+  });
+
+  it("update 旧版空提示词自定义专家改名 → 补齐人格（legacy backfill）", () => {
+    const file = path.join(dir, "experts.json");
+    writeFileSync(
+      file,
+      JSON.stringify({
+        experts: [
+          {
+            id: "legacy",
+            name: "旧专家",
+            mode: "daily",
+            source: "custom",
+            tags: [],
+            createdAt: "",
+            updatedAt: "",
+          },
+        ],
+        overrides: {},
+      }),
+    );
+    const s2 = new ExpertStore(file);
+    const updated = s2.update({ id: "legacy", name: "新专家" });
+    expect(updated?.systemPrompt).toContain("新专家");
+  });
+
+  it("update 内置专家不受影响（不生成身份提示词）", () => {
+    const store = new ExpertStore(path.join(dir, "experts.json"));
+    store.update({ id: "daily", description: "新描述" });
+    expect(store.getBuiltinMerged("daily")?.systemPrompt).toBeUndefined();
   });
 });
 
@@ -194,6 +337,42 @@ describe("TeamStore", () => {
     expect(dispatcher?.roles?.["project-coordinator"]).toBe("协调者");
     // 团队人数 = 成员 2 + 主 agent 1 = 3
     expect((dispatcher?.expertIds.length ?? 0) + (dispatcher?.leadExpertId ? 1 : 0)).toBe(3);
+  });
+
+  it("workflow（含 conditional）create/update 往返 + layout 持久化 + 清除", () => {
+    const store = new TeamStore(path.join(dir, "teams.json"));
+    const wf = {
+      id: "wf-1",
+      name: "门禁流程",
+      steps: [
+        { kind: "serial", id: "analysis", expertId: "daily", prompt: "分析 {user}" },
+        {
+          kind: "conditional",
+          id: "gate",
+          logic: "and",
+          rules: [{ var: "analysis", op: "contains", value: "通过" }],
+          thenSteps: [{ kind: "serial", id: "publish", expertId: "coding", prompt: "发布" }],
+          elseSteps: [{ kind: "serial", id: "fix", expertId: "coding", prompt: "修复" }],
+        },
+      ],
+      layout: { analysis: { x: 10, y: 20 } },
+      summarizerExpertId: "daily",
+    };
+    const t = store.create({ name: "研发团", routingStrategy: "workflow", workflow: wf });
+    expect(t.workflow?.steps[1]).toMatchObject({ kind: "conditional", logic: "and" });
+    expect(t.workflow?.layout?.analysis).toEqual({ x: 10, y: 20 });
+
+    const updated = store.update({
+      id: t.id,
+      workflow: {
+        ...wf,
+        steps: [{ kind: "serial", id: "only", expertId: "daily", prompt: "x" }],
+      },
+    });
+    expect(updated?.workflow?.steps).toHaveLength(1);
+
+    const cleared = store.update({ id: t.id, workflow: null });
+    expect(cleared?.workflow).toBeUndefined(); // null 清除 → 回退运行时默认
   });
 });
 
