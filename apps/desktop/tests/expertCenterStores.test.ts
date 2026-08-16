@@ -7,12 +7,12 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import type { AgentConfig } from "../src/main/agentConfigStore";
-import { ConnectorStore } from "../src/main/connectorStore";
-import { buildExpertIdentityPrompt } from "../src/main/expertPrompt";
-import { ExpertStore, expertToAgentConfig } from "../src/main/expertStore";
-import { buildSkillMd, parseSkillFrontmatter, SkillStore } from "../src/main/skillStore";
-import { BUILTIN_TEAMS, TeamStore } from "../src/main/teamStore";
+import type { AgentConfig } from "../src/main/stores/agentConfigStore";
+import { ConnectorStore } from "../src/main/stores/connectorStore";
+import { buildExpertIdentityPrompt } from "../src/main/services/expertPrompt";
+import { ExpertStore, expertToAgentConfig } from "../src/main/stores/expertStore";
+import { buildSkillMd, parseSkillFrontmatter, SkillStore } from "../src/main/stores/skillStore";
+import { BUILTIN_TEAMS, TeamStore } from "../src/main/stores/teamStore";
 
 let dir: string;
 

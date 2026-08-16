@@ -10,7 +10,7 @@ import { existsSync } from "node:fs";
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type { ToolDefinition } from "@earendil-works/pi-coding-agent";
-import { type FetchLike, httpGenerateImage } from "../imageGeneration";
+import { type FetchLike, httpGenerateImage } from "../services/imageGeneration";
 
 /** 生图 provider 的运行时描述（agentRuntime 从 models.json 解析） */
 export interface ImageGenProviderRef {

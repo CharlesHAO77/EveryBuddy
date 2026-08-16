@@ -5,7 +5,7 @@ import { mkdtempSync, readdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import type { FetchLike } from "../src/main/imageGeneration";
+import type { FetchLike } from "../src/main/services/imageGeneration";
 import {
   createGenerateImageToolDefinition,
   type ImageGenProviderRef,

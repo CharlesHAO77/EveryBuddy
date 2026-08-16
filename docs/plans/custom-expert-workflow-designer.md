@@ -6,13 +6,13 @@
 
 用户反馈两个问题：
 
-1. **自定义专家跑成了"办公助理"**。路由本身没丢——`expertId` 从欢迎页输入框一路写入 `TaskMeta` 并在 [agentRuntime.ts:208](apps/desktop/src/main/agentRuntime.ts#L208) 解析。真正原因是双重的：
+1. **自定义专家跑成了"办公助理"**。路由本身没丢——`expertId` 从欢迎页输入框一路写入 `TaskMeta` 并在 [agentRuntime.ts:208](apps/desktop/src/main/runtime/agentRuntime.ts#L208) 解析。真正原因是双重的：
    - 新建弹窗 [CreateModal.tsx:107](apps/desktop/src/renderer/components/expert/CreateModal.tsx#L107) 只存 `{ name, description, mode }`，创建时无法绑定系统提示词/工具/扩展（绑定 UI 只存在于编辑弹窗 `ExpertForm`）。
-   - [expertStore.ts:74-84](apps/desktop/src/main/expertStore.ts#L74-L84) `expertToAgentConfig` 仅在字段非空时叠加——空配置专家回落到模式基础配置，`mode:"daily"` 恰好就是"办公助理"。
+   - [expertStore.ts:74-84](apps/desktop/src/main/stores/expertStore.ts#L74-L84) `expertToAgentConfig` 仅在字段非空时叠加——空配置专家回落到模式基础配置，`mode:"daily"` 恰好就是"办公助理"。
 
    用户决定：① 创建弹窗补上绑定字段；② 自定义专家未写系统提示词时，自动按"名称+描述"生成一条身份提示词，让它立刻有独立人格而非静默变成办公助理。
 
-2. **workflow 需要真正可设计，且以画布形态呈现**。引擎已存在（专家团 `routingStrategy:"workflow"`，[teamRuntime.ts:417](apps/desktop/src/main/teamRuntime.ts#L417) `runWorkflow`，串行/并行、`{{stepId.result}}` 模板、末尾汇总），但无 UI 编辑入口、并行无测试。经多轮设计评审，用户最终确定：**专家配置留在专家中心改，设计器只编排流程、引用系统专家**；UI 用**画布形式（React Flow：可拖动节点、连线可视化、缩放、minimap、右侧编辑面板）**；节点类型支持 **任务（串行）/ 并行 / 条件（if/else）**；条件用**确定性规则**（对齐 Dify/Coze/n8n 主流，避免把引擎做重）。
+2. **workflow 需要真正可设计，且以画布形态呈现**。引擎已存在（专家团 `routingStrategy:"workflow"`，[teamRuntime.ts:417](apps/desktop/src/main/runtime/teamRuntime.ts#L417) `runWorkflow`，串行/并行、`{{stepId.result}}` 模板、末尾汇总），但无 UI 编辑入口、并行无测试。经多轮设计评审，用户最终确定：**专家配置留在专家中心改，设计器只编排流程、引用系统专家**；UI 用**画布形式（React Flow：可拖动节点、连线可视化、缩放、minimap、右侧编辑面板）**；节点类型支持 **任务（串行）/ 并行 / 条件（if/else）**；条件用**确定性规则**（对齐 Dify/Coze/n8n 主流，避免把引擎做重）。
 
 **已确认的设计取舍**：
 - 条件节点 = 结构化确定性规则（`{{stepId.result}} 包含/为空/长度>n`…，与/或组合），本地字符串求值，零 token、可单测。不做 LLM 路由。
@@ -26,7 +26,7 @@
 
 ## Feature 1 — 自定义专家身份提示词
 
-### 1.1 新建 `apps/desktop/src/main/expertPrompt.ts`
+### 1.1 新建 `apps/desktop/src/main/services/expertPrompt.ts`
 
 确定性、中文的身份提示词生成器（数据内容保持中文）：
 
@@ -87,7 +87,7 @@ export type WorkflowStep =
 - `TeamWorkflow`（index.ts:658-666）增加可选 `layout?: Record<string, { x: number; y: number }>`（节点画布坐标，仅 UI 用，引擎忽略；执行序仍由 `steps` 数组序决定）。
 - `summarizerExpertId` 保留（隐式收尾）。
 
-### 2.2 条件求值（新 `apps/desktop/src/main/workflowCondition.ts`）
+### 2.2 条件求值（新 `apps/desktop/src/main/runtime/workflowCondition.ts`）
 
 ```ts
 export function evalWorkflowCondition(
@@ -159,10 +159,10 @@ if (step.kind === "conditional") {
 | 文件 | 动作 |
 |---|---|
 | `apps/desktop/package.json` | **新增依赖** `@xyflow/react` |
-| `apps/desktop/src/main/expertPrompt.ts` | **新增**：`buildExpertIdentityPrompt` |
-| `apps/desktop/src/main/workflowCondition.ts` | **新增**：`evalWorkflowCondition` |
-| `apps/desktop/src/main/expertStore.ts` | create/update 应用身份提示词 |
-| `apps/desktop/src/main/teamRuntime.ts` | `runStep` 加 conditional 递归分支 |
+| `apps/desktop/src/main/services/expertPrompt.ts` | **新增**：`buildExpertIdentityPrompt` |
+| `apps/desktop/src/main/runtime/workflowCondition.ts` | **新增**：`evalWorkflowCondition` |
+| `apps/desktop/src/main/stores/expertStore.ts` | create/update 应用身份提示词 |
+| `apps/desktop/src/main/runtime/teamRuntime.ts` | `runStep` 加 conditional 递归分支 |
 | `packages/ipc-contract/src/index.ts` | `WorkflowConditionRule` + `WorkflowStep` 加 conditional（递归 Zod）+ `TeamWorkflow.layout` |
 | `apps/desktop/src/renderer/components/expert/WorkflowCanvas.tsx` | **新增**：React Flow 画布设计器 + `workflowToGraph`/`graphToWorkflow` |
 | `apps/desktop/src/renderer/components/expert/CreateModal.tsx` | 专家绑定字段 + 画布接线 |

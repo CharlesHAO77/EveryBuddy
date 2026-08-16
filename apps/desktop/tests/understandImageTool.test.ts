@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createUnderstandImageToolDefinition } from "../src/main/tools/understandImageTool";
-import type { DescribeImageModel } from "../src/main/vision";
+import type { DescribeImageModel } from "../src/main/services/vision";
 
 const PNG_1PX_B64 =
   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";

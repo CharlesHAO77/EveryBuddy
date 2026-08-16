@@ -35,8 +35,8 @@ import {
   type SessionManagerInstance,
   type WithoutStreamId,
 } from "./sessionBuilder";
-import { teamRunStore } from "./teamRunStore";
-import type { ToolAvailability } from "./tools/toolAvailability";
+import { teamRunStore } from "../stores/teamRunStore";
+import type { ToolAvailability } from "../tools/toolAvailability";
 import { evalWorkflowCondition } from "./workflowCondition";
 
 // ────────────────────────────────────────────────

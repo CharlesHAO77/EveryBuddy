@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import type { ScheduledRun, ScheduledTask } from "@everybuddy/ipc-contract";
 import { beforeEach, describe, expect, it } from "vitest";
-import { MAX_RUNS_PER_TASK, SchedulerStore } from "../src/main/schedulerStore";
+import { MAX_RUNS_PER_TASK, SchedulerStore } from "../src/main/stores/schedulerStore";
 
 let dir: string;
 let store: SchedulerStore;

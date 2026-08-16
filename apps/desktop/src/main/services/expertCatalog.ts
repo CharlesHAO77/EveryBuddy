@@ -7,8 +7,8 @@
  */
 
 import type { AgentMode, ExpertCatalog } from "@everybuddy/ipc-contract";
-import { DEFAULT_EXTENSIONS, EXTENSION_CATALOG } from "./extensions";
-import { getModeSystemPrompt, TOOL_SNIPPETS } from "./prompts";
+import { DEFAULT_EXTENSIONS, EXTENSION_CATALOG } from "../extensions";
+import { getModeSystemPrompt, TOOL_SNIPPETS } from "../prompts";
 
 /** 默认工具集：覆盖 TOOL_SNIPPETS 全部（平台 + 自定义工具，与运行时 allowlist 主流一致） */
 const DEFAULT_PREVIEW_TOOLS = Object.keys(TOOL_SNIPPETS);

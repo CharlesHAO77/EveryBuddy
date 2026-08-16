@@ -27,11 +27,11 @@ import type {
 } from "@everybuddy/ipc-contract";
 import { CronExpressionParser } from "cron-parser";
 import type { agentRuntime } from "./agentRuntime";
-import { configStore, SESSIONS_DIR, WORK_SPACES_DIR } from "./configStore";
-import { rmIfDirectChild } from "./dirCleanup";
-import { uiError } from "./errors";
-import { type SchedulerStore, schedulerStore } from "./schedulerStore";
-import { resolveSessionLocation } from "./sessionDirs";
+import { configStore, SESSIONS_DIR, WORK_SPACES_DIR } from "../stores/configStore";
+import { rmIfDirectChild } from "../services/dirCleanup";
+import { uiError } from "../services/errors";
+import { type SchedulerStore, schedulerStore } from "../stores/schedulerStore";
+import { resolveSessionLocation } from "../services/sessionDirs";
 
 /** 单次运行最长时间（看门狗，超时 abort 防饿死队列） */
 const MAX_RUN_MS = 60 * 60 * 1000;

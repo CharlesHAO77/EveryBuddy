@@ -3,8 +3,8 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import type { AgentEvent, MessageUsage, ScheduledTask, TaskMeta } from "@everybuddy/ipc-contract";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { addUsage, Scheduler, truncate } from "../src/main/scheduler";
-import { SchedulerStore } from "../src/main/schedulerStore";
+import { addUsage, Scheduler, truncate } from "../src/main/runtime/scheduler";
+import { SchedulerStore } from "../src/main/stores/schedulerStore";
 
 /** 记录调用并按需异步回放 AgentEvent 的假运行时 */
 class FakeRuntime {

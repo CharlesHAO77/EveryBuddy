@@ -19,8 +19,8 @@ import type {
   UpdateConnectorRequest,
 } from "@everybuddy/ipc-contract";
 import { APP_ROOT, ensureAppDirs } from "./configStore";
-import { uiError } from "./errors";
-import { probeMcpConnector } from "./mcpTools";
+import { uiError } from "../services/errors";
+import { probeMcpConnector } from "../services/mcpTools";
 
 export const CONNECTORS_PATH = path.join(APP_ROOT, "connectors.json");
 

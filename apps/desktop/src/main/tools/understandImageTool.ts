@@ -10,8 +10,8 @@
 
 import path from "node:path";
 import type { ToolDefinition } from "@earendil-works/pi-coding-agent";
-import { parseFileContent, resolveInUploads } from "../fileParser";
-import type { DescribeImageModel, ImageInput } from "../vision";
+import { parseFileContent, resolveInUploads } from "../services/fileParser";
+import type { DescribeImageModel, ImageInput } from "../services/vision";
 
 /** understand_image 工具的运行时依赖（agentRuntime 注入，测试可 fake） */
 export interface UnderstandImageToolDeps {

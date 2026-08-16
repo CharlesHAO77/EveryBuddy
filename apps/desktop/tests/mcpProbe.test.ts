@@ -4,7 +4,7 @@
  *  - GitHub MCP 托管安装端到端（npm install + spawn）需要网络，设 MCP_E2E=1 才跑。
  */
 import { describe, expect, it } from "vitest";
-import { probeMcpConnector } from "../src/main/mcpTools";
+import { probeMcpConnector } from "../src/main/services/mcpTools";
 
 describe("probeMcpConnector 配置校验（传输按 JSON 自动判断：有 url → HTTP，否则 stdio）", () => {
   it("transport 字段不影响判断：无 url 一律按 stdio，缺命令报错", async () => {

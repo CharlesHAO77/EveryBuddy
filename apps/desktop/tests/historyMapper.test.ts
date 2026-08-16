@@ -4,7 +4,7 @@
  */
 import type { SessionEntry } from "@earendil-works/pi-coding-agent";
 import { describe, expect, it } from "vitest";
-import { buildFullPath, entriesToHistory, type FullPathProvider } from "../src/main/historyMapper";
+import { buildFullPath, entriesToHistory, type FullPathProvider } from "../src/main/services/historyMapper";
 
 interface EntryLike {
   type: string;

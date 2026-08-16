@@ -21,7 +21,7 @@ import type {
   SaveModelRequest,
 } from "@everybuddy/ipc-contract";
 import { APP_ROOT, CONFIG_PATH } from "./configStore";
-import { uiError } from "./errors";
+import { uiError } from "../services/errors";
 
 export const MODELS_JSON_PATH = path.join(APP_ROOT, "models.json");
 export const AUTH_PATH = path.join(APP_ROOT, "auth.json");

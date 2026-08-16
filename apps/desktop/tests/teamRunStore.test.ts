@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import type { SubAgentRunRecord, WorkflowRunRecord } from "@everybuddy/ipc-contract";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { TeamRunStore } from "../src/main/teamRunStore";
+import { TeamRunStore } from "../src/main/stores/teamRunStore";
 
 let dir: string;
 

@@ -46,7 +46,7 @@ EveryBuddy（Electron + React，agent 由 `@earendil-works/pi-coding-agent` 0.83
 **事件流**（`apps/desktop/src/renderer/hooks/useAgentStream.ts`）：
 - `message_start` 传 sdkTimestamp；`message_end` 若 `stopReason === "aborted"` → `markMessageCancelled`，并 `setMessageMeta`；`message_entry_ids` → `markMessageEntryIds`；`queue_update` → 存 `queuedMessages`。
 
-**主进程**（`apps/desktop/src/main/agentRuntime.ts`）——补一个关键缺口：abort 发生在工具执行中时，`message_end` 早已发过（stopReason "stop"），不会再收到 "aborted"。实现：`abortRequested` 每任务标志，`abort(taskId)` 置位；收到 `stopReason==="aborted"` 的 message_end 清除；`agent_end` 时若标志仍在 → 合成一条 `message_end { stopReason: "aborted" }` 再清除。渲染层复用同一 handler，两种 abort 路径统一。
+**主进程**（`apps/desktop/src/main/runtime/agentRuntime.ts`）——补一个关键缺口：abort 发生在工具执行中时，`message_end` 早已发过（stopReason "stop"），不会再收到 "aborted"。实现：`abortRequested` 每任务标志，`abort(taskId)` 置位；收到 `stopReason==="aborted"` 的 message_end 清除；`agent_end` 时若标志仍在 → 合成一条 `message_end { stopReason: "aborted" }` 再清除。渲染层复用同一 handler，两种 abort 路径统一。
 
 **渲染**（`apps/desktop/src/renderer/components/MessageBubble.tsx` `AssistantGroup`）：
 - `cancelled = lastMsg.cancelled || lastMsg.stopReason === "aborted"` 且非流式 → 平铺展示所有块（保留部分内容）+ 危险色「已取消」pill，**不渲染**「任务已完成」折叠卡。
@@ -118,10 +118,10 @@ EveryBuddy（Electron + React，agent 由 `@earendil-works/pi-coding-agent` 0.83
 ## 关键文件
 
 - `packages/ipc-contract/src/index.ts`（契约）
-- `apps/desktop/src/main/agentRuntime.ts`（steerMessage / branchTask / emitEntryIds / 合成 abort / message_end 元数据）
+- `apps/desktop/src/main/runtime/agentRuntime.ts`（steerMessage / branchTask / emitEntryIds / 合成 abort / message_end 元数据）
 - `apps/desktop/src/main/ipcRouter.ts` + `apps/desktop/src/preload/index.ts`（新通道）
-- `apps/desktop/src/main/vision.ts` / `imageGeneration.ts` / `tools/understandImageTool.ts` / `tools/generateImageTool.ts`（signal）
-- `apps/desktop/src/main/historyMapper.ts`（usage/model/provider/stopReason 映射）
+- `apps/desktop/src/main/services/vision.ts` / `imageGeneration.ts` / `tools/understandImageTool.ts` / `tools/generateImageTool.ts`（signal）
+- `apps/desktop/src/main/services/historyMapper.ts`（usage/model/provider/stopReason 映射）
 - `apps/desktop/src/renderer/stores/sessionStore.ts`（cancelled/pending/sdkTimestamp/entryId/meta/feedback/channel）
 - `apps/desktop/src/renderer/hooks/useAgentStream.ts` / `useSlashCommands.ts`
 - `apps/desktop/src/renderer/components/MessageBubble.tsx`（AssistantGroup 已取消/运行中/footer）、新 `MessageFooter.tsx`、`RunningIndicator.tsx`、`MainView.tsx`

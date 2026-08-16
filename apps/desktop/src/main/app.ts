@@ -1,13 +1,13 @@
 import path from "node:path";
 import { app, BrowserWindow, Menu, Notification } from "electron";
-import { agentRuntime } from "./agentRuntime";
-import { ensureAppDirs } from "./configStore";
+import { agentRuntime } from "./runtime/agentRuntime";
+import { ensureAppDirs } from "./stores/configStore";
 import { registerIpcHandlers } from "./ipcRouter";
-import { closeAllMcpClients } from "./mcpTools";
-import { migrateFromLegacyConfig } from "./modelStore";
-import { scheduler } from "./scheduler";
-import { teamRuntime } from "./teamRuntime";
-import { createMainWindow } from "./windowManager";
+import { closeAllMcpClients } from "./services/mcpTools";
+import { migrateFromLegacyConfig } from "./stores/modelStore";
+import { scheduler } from "./runtime/scheduler";
+import { teamRuntime } from "./runtime/teamRuntime";
+import { createMainWindow } from "./windows/windowManager";
 
 /**
  * 应用生命周期（见 docs/architecture.md §5.2）。

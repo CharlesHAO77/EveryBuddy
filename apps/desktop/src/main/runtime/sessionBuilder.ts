@@ -20,29 +20,29 @@ import type {
   ToolDefinition,
 } from "@earendil-works/pi-coding-agent";
 import type { AgentEvent, AgentMode, ExecutionMode, Expert } from "@everybuddy/ipc-contract";
-import { type AgentConfig, getAgentConfig } from "./agentConfigStore";
-import { connectorStore } from "./connectorStore";
-import { uiError } from "./errors";
-import { expertToAgentConfig } from "./expertStore";
-import { buildExtensionFactories, DEFAULT_EXTENSIONS } from "./extensions";
-import { parseFileContent, resolveInUploads } from "./fileParser";
-import { buildMcpTools } from "./mcpTools";
+import { type AgentConfig, getAgentConfig } from "../stores/agentConfigStore";
+import { connectorStore } from "../stores/connectorStore";
+import { uiError } from "../services/errors";
+import { expertToAgentConfig } from "../stores/expertStore";
+import { buildExtensionFactories, DEFAULT_EXTENSIONS } from "../extensions";
+import { parseFileContent, resolveInUploads } from "../services/fileParser";
+import { buildMcpTools } from "../services/mcpTools";
 import {
   getApiKey,
   getImageGenModel,
   getProvider,
   getVisionModel,
   isChatModelProviderId,
-} from "./modelStore";
-import { buildActiveToolsBlock, getModeSystemPrompt } from "./prompts";
-import { skillStore } from "./skillStore";
-import { createFindOperations } from "./tools/findTool";
-import { createGenerateImageToolDefinition } from "./tools/generateImageTool";
-import { createGrepToolDefinition } from "./tools/grepTool";
-import { buildRestrictedToolAllowlist, buildToolAllowlist } from "./tools/toolAllowlist";
-import { buildToolPlan, type ToolAvailability } from "./tools/toolAvailability";
-import { createUnderstandImageToolDefinition } from "./tools/understandImageTool";
-import { type DescribeImageRuntime, describeImage } from "./vision";
+} from "../stores/modelStore";
+import { buildActiveToolsBlock, getModeSystemPrompt } from "../prompts";
+import { skillStore } from "../stores/skillStore";
+import { createFindOperations } from "../tools/findTool";
+import { createGenerateImageToolDefinition } from "../tools/generateImageTool";
+import { createGrepToolDefinition } from "../tools/grepTool";
+import { buildRestrictedToolAllowlist, buildToolAllowlist } from "../tools/toolAllowlist";
+import { buildToolPlan, type ToolAvailability } from "../tools/toolAvailability";
+import { createUnderstandImageToolDefinition } from "../tools/understandImageTool";
+import { type DescribeImageRuntime, describeImage } from "../services/vision";
 
 // ────────────────────────────────────────────────
 // 类型别名（编译期擦除；运行时通过动态 import() 加载 ESM 包）

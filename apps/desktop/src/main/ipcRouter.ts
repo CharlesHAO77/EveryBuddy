@@ -51,19 +51,19 @@ import {
 } from "@everybuddy/ipc-contract";
 import { type BrowserWindow, ipcMain, shell } from "electron";
 import { ZodError } from "zod";
-import { agentRuntime } from "./agentRuntime";
-import { configStore, SESSIONS_DIR, WORK_SPACES_DIR } from "./configStore";
-import { connectorStore } from "./connectorStore";
-import { rmIfDirectChild } from "./dirCleanup";
-import { uiError } from "./errors";
-import { buildExpertCatalog } from "./expertCatalog";
-import { expertStore } from "./expertStore";
-import * as modelStore from "./modelStore";
-import { scheduler } from "./scheduler";
-import { skillStore } from "./skillStore";
-import { teamRunStore } from "./teamRunStore";
-import { teamRuntime } from "./teamRuntime";
-import { teamStore } from "./teamStore";
+import { agentRuntime } from "./runtime/agentRuntime";
+import { configStore, SESSIONS_DIR, WORK_SPACES_DIR } from "./stores/configStore";
+import { connectorStore } from "./stores/connectorStore";
+import { rmIfDirectChild } from "./services/dirCleanup";
+import { uiError } from "./services/errors";
+import { buildExpertCatalog } from "./services/expertCatalog";
+import { expertStore } from "./stores/expertStore";
+import * as modelStore from "./stores/modelStore";
+import { scheduler } from "./runtime/scheduler";
+import { skillStore } from "./stores/skillStore";
+import { teamRunStore } from "./stores/teamRunStore";
+import { teamRuntime } from "./runtime/teamRuntime";
+import { teamStore } from "./stores/teamStore";
 import {
   createNamedWorkspace,
   createWorkspace,
@@ -73,7 +73,7 @@ import {
   resolveSessionLocation,
   revealInFolder,
   selectDirectory,
-} from "./workspaceManager";
+} from "./services/workspaceManager";
 
 /** 校验入参，失败抛错；Zod 拒绝时归一化为首条 issue 的 message（即 i18n key），渲染层经 translateError 翻译 */
 function validate<T>(schema: { parse: (v: unknown) => T }, value: unknown): T {

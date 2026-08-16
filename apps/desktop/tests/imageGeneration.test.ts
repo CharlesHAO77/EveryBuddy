@@ -2,7 +2,7 @@
  * imageGeneration 原语单元测试——stub fetch，覆盖 b64_json/url 双分支与错误路径。
  */
 import { describe, expect, it } from "vitest";
-import { type FetchLike, httpGenerateImage } from "../src/main/imageGeneration";
+import { type FetchLike, httpGenerateImage } from "../src/main/services/imageGeneration";
 
 const PNG_1PX_B64 =
   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";

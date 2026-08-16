@@ -26,7 +26,7 @@ import { homedir } from "node:os";
 import path from "node:path";
 import type { CreateSkillRequest, SkillEntry, UpdateSkillRequest } from "@everybuddy/ipc-contract";
 import { APP_ROOT, ensureAppDirs } from "./configStore";
-import { uiError } from "./errors";
+import { uiError } from "../services/errors";
 
 /** EveryBuddy 管理的技能目录 ~/EveryBuddy/skills/ */
 export const SKILLS_DIR = path.join(APP_ROOT, "skills");

@@ -62,8 +62,8 @@ EveryBuddy/
 | ------ | ---------- | ------ |
 | 跨进程类型 / Zod schema / IPC 通道名 | `packages/ipc-contract/src/index.ts` | `PromptRequest`、`AgentEvent`、`TaskMeta` 等；每个 IPC 通道恰好一个 schema |
 | 渲染层消息模型 | 从 `ipc-contract` 类型**派生** | `ChatMessage` 基于 `HistoryMessage` 扩展，不重写平行接口 |
-| 应用路径 / 默认目录 | `apps/desktop/src/main/configStore.ts` | `APP_ROOT` / `SESSIONS_DIR`（仅会话 JSONL）/ `WORK_SPACES_DIR`（用户空间落盘 + 临时任务工作目录），其它文件 import |
-| SDK→AgentEvent 事件归一化 | `apps/desktop/src/main/agentRuntime.ts` | `translateAndEmit` 是唯一映射点 |
+| 应用路径 / 默认目录 | `apps/desktop/src/main/stores/configStore.ts` | `APP_ROOT` / `SESSIONS_DIR`（仅会话 JSONL）/ `WORK_SPACES_DIR`（用户空间落盘 + 临时任务工作目录），其它文件 import |
+| SDK→AgentEvent 事件归一化 | `apps/desktop/src/main/runtime/agentRuntime.ts` | `translateAndEmit` 是唯一映射点 |
 | 跨服务业务逻辑 | `packages/api-gateway/src/handlers/*` | 默认模型选择、会话/空间/任务操作等，未来多端共用 |
 
 ### 4.3 长期维护规则

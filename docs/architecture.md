@@ -135,20 +135,27 @@ everyBuddy/
         ├── package.json
         ├── src/
         │   ├── main/
-        │   │   ├── index.ts              # Electron 入口
+        │   │   ├── index.ts              # Electron 入口（forge 构建锚点）
         │   │   ├── app.ts                # 应用生命周期、单实例锁
-        │   │   ├── windowManager.ts      # BrowserWindow 工厂
         │   │   ├── ipcRouter.ts          # IPC 路由与校验
-        │   │   ├── agentRuntime.ts       # pi-coding-agent 运行时集成
+        │   │   ├── stores/               # JSON 持久化数据存取
+        │   │   │   ├── configStore.ts    # 非敏感配置（workspaces + tasks）
+        │   │   │   ├── modelStore.ts     # 模型维护唯一模块（models.json + auth.json，SDK 原生格式）
+        │   │   │   └── agentConfigStore / connectorStore / expertStore / schedulerStore / skillStore / teamStore / teamRunStore
+        │   │   ├── runtime/              # 会话运行引擎
+        │   │   │   ├── agentRuntime.ts   # pi-coding-agent 运行时集成
+        │   │   │   └── teamRuntime / sessionBuilder / scheduler / workflowCondition
+        │   │   ├── services/             # 能力服务
+        │   │   │   ├── fileParser / historyMapper / vision / imageGeneration / mcpTools
+        │   │   │   └── workspaceManager / sessionDirs / dirCleanup / expertCatalog / expertPrompt / errors
+        │   │   ├── windows/
+        │   │   │   └── windowManager.ts  # BrowserWindow 工厂
         │   │   ├── tools/                # 平台化工具配置（见 §5.1）
         │   │   │   ├── toolAvailability.ts # 探测 bash（真实 Git Bash）/ rg / fd，组装动态工具清单
         │   │   │   ├── grepTool.ts       # 纯 Node grep 兜底（rg 缺失时覆盖内置）
         │   │   │   └── findTool.ts       # 纯 Node find 兜底（fd 缺失时覆盖内置）
-        │   │   ├── modelStore.ts         # 模型维护唯一模块（models.json + auth.json，SDK 原生格式）
-        │   │   ├── apiGatewayBridge.ts   # 主进程 ↔ API Gateway 桥接
-        │   │   ├── configStore.ts        # 非敏感配置（workspaces + tasks）
-        │   │   ├── apiKeyDialog.ts       # 原生 API Key 输入对话框
-        │   │   └── toolConfirmDialog.ts  # 工具确认弹窗
+        │   │   ├── prompts/              # 系统提示词构建
+        │   │   └── extensions/           # 会话扩展（permission / todo / plan-mode）
         │   ├── preload/
         │   │   └── index.ts              # contextBridge 暴露 API
         │   ├── renderer/
@@ -184,14 +191,14 @@ AgentRuntime 是对 `@earendil-works/pi-coding-agent` SDK 的封装层，职责�
 
 1. 初始化并管理 pi-coding-agent 实例，复用其内置的 TUI、SessionManager、AuthStorage。
 2. 将 pi-coding-agent 事件转换为统一 `AgentEvent` 供渲染进程消费。
-3. 拦截破坏性工具，调用 `toolConfirmDialog` 请求用户确认。
+3. 拦截破坏性工具，通过 `extensions/permission.ts` 扩展请求用户确认（原生 `toolConfirmDialog` 弹窗规划中，未实现）。
 4. 会话持久化（pi-coding-agent 的 JSONL tree 格式）。
 5. 通过 API Gateway 暴露统一接口，供主进程内部及未来 IM Bot 调用。
 
 **集成方式：**
 
 ```ts
-// apps/desktop/src/main/agentRuntime.ts
+// apps/desktop/src/main/runtime/agentRuntime.ts
 import { CodingAgent } from “@earendil-works/pi-coding-agent”;
 
 export class AgentRuntime {
@@ -270,15 +277,15 @@ Electron 主进程职责：
 | 模块 | 职责 |
 |------|------|
 | `app.ts` | 应用生命周期、单实例锁、托盘菜单 |
-| `windowManager.ts` | BrowserWindow 创建、显示/隐藏、平台适配 |
+| `windows/windowManager.ts` | BrowserWindow 创建、显示/隐藏、平台适配 |
 | `ipcRouter.ts` | IPC channel 注册、Zod 校验、错误统一处理 |
-| `agentRuntime.ts` | pi-coding-agent 运行时封装，直接调用 |
+| `runtime/agentRuntime.ts` | pi-coding-agent 运行时封装，直接调用 |
 | `tools/toolAvailability.ts` | 探测 bash（真实 Git Bash）/ rg / fd，生成动态工具清单 |
 | `tools/grepTool.ts` | 纯 Node grep 兜底（rg 缺失时覆盖内置，见 §5.1） |
 | `tools/findTool.ts` | 纯 Node find 兜底（fd 缺失时覆盖内置，见 §5.1） |
-| `apiGatewayBridge.ts` | 将 API Gateway 请求路由到 AgentRuntime |
-| `apiKeyDialog.ts` | 调用 Electron 原生 dialog 输入 API Key，委托 AuthStorage 存储 |
-| `toolConfirmDialog.ts` | 调用 Electron dialog 展示工具确认 |
+| `apiGatewayBridge.ts`（规划中，未实现） | 将 API Gateway 请求路由到 AgentRuntime |
+| `apiKeyDialog.ts`（规划中，未实现） | 调用 Electron 原生 dialog 输入 API Key，委托 AuthStorage 存储 |
+| `toolConfirmDialog.ts`（规划中，未实现） | 调用 Electron dialog 展示工具确认（当前确认走 `extensions/permission.ts`） |
 
 ### 5.3 渲染进程 React UI
 
@@ -483,7 +490,7 @@ MVP 阶段所有 UI 逻辑集中在 `apps/desktop/src/renderer/` 中，未来新
     → pi-coding-agent LLM 流式生成
     → 触发 tool_execution_start
       → Tool Gatekeeper 拦截
-        → 主进程 toolConfirmDialog（原生弹窗）
+        → 主进程 toolConfirmDialog（原生弹窗，规划中）
         → 用户确认 → 放行
       → 执行工具
     → tool_execution_end

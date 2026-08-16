@@ -10,7 +10,7 @@ import {
   type AgentConfigPaths,
   getAgentConfig,
   saveAgentConfig,
-} from "../src/main/agentConfigStore";
+} from "../src/main/stores/agentConfigStore";
 
 let tmpDir: string;
 let paths: AgentConfigPaths;

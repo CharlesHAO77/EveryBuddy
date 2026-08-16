@@ -23,7 +23,7 @@ import {
   setActiveModel,
   setApiKey,
   typeFromCapabilities,
-} from "../src/main/modelStore";
+} from "../src/main/stores/modelStore";
 
 /** 无能力标签的完整 SaveModelRequest（贴近旧测试语义） */
 const LLM_REQ = {

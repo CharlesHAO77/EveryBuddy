@@ -15,7 +15,7 @@ import { readFile, stat } from "node:fs/promises";
 import path from "node:path";
 import type { ReadFileResult, TaskMeta, Workspace } from "@everybuddy/ipc-contract";
 import { type BrowserWindow, dialog, shell } from "electron";
-import { APP_ROOT, configStore, WORK_SPACES_DIR } from "./configStore";
+import { APP_ROOT, configStore, WORK_SPACES_DIR } from "../stores/configStore";
 import { uiError } from "./errors";
 import { detectImageMimeType } from "./fileParser";
 

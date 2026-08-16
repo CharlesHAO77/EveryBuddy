@@ -7,8 +7,8 @@
 
 import type { Expert, ExpertTeam, TaskMeta, WorkflowStep } from "@everybuddy/ipc-contract";
 import { describe, expect, it } from "vitest";
-import type { CodingAgentSDK } from "../src/main/sessionBuilder";
-import { TeamRuntime, type TeamRuntimeDeps } from "../src/main/teamRuntime";
+import type { CodingAgentSDK } from "../src/main/runtime/sessionBuilder";
+import { TeamRuntime, type TeamRuntimeDeps } from "../src/main/runtime/teamRuntime";
 import type { ToolAvailability } from "../src/main/tools/toolAvailability";
 
 type PlainEvent = { type: string; [k: string]: unknown };

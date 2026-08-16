@@ -295,12 +295,12 @@ class TeamRuntime {
 | 改动 | 路径 |
 |---|---|
 | 契约（类型/schema/ElectronAPI） | `packages/ipc-contract/src/index.ts` |
-| 共享会话构建器（新） | `apps/desktop/src/main/sessionBuilder.ts` |
-| 团队运行时（新） | `apps/desktop/src/main/teamRuntime.ts` |
-| 运行时接线（auto/workflow 分流、delegate 注入、abort 级联） | `apps/desktop/src/main/agentRuntime.ts` |
+| 共享会话构建器（新） | `apps/desktop/src/main/runtime/sessionBuilder.ts` |
+| 团队运行时（新） | `apps/desktop/src/main/runtime/teamRuntime.ts` |
+| 运行时接线（auto/workflow 分流、delegate 注入、abort 级联） | `apps/desktop/src/main/runtime/agentRuntime.ts` |
 | 扩展工厂开关 | `apps/desktop/src/main/extensions/index.ts` |
 | IPC 路由 + preload + app 接线 | `apps/desktop/src/main/ipcRouter.ts` · `src/preload/index.ts` · `src/main/app.ts` |
-| 团队 store（workflow 字段持久化 + BUILTIN_TEAMS 内置示例 + 复制为自定义） | `apps/desktop/src/main/teamStore.ts` |
+| 团队 store（workflow 字段持久化 + BUILTIN_TEAMS 内置示例 + 复制为自定义） | `apps/desktop/src/main/stores/teamStore.ts` |
 | 渲染层状态 + 事件流 | `apps/desktop/src/renderer/stores/sessionStore.ts` · `hooks/useAgentStream.ts` |
 | 欢迎页/菜单团队选择 + 首消息分流 | `apps/desktop/src/renderer/components/MainView.tsx` · `expert/PlusMenu.tsx` |
 | 团队详情（策略选择 + workflow 只读展示） | `apps/desktop/src/renderer/components/expert/DetailModal.tsx` · `ExpertView.tsx` |

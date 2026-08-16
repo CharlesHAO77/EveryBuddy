@@ -23,24 +23,24 @@ import type {
   HistoryMessage,
   TaskMeta,
 } from "@everybuddy/ipc-contract";
-import { getAgentConfig } from "./agentConfigStore";
-import { configStore } from "./configStore";
-import { uiError } from "./errors";
-import { findExpert } from "./expertStore";
+import { getAgentConfig } from "../stores/agentConfigStore";
+import { configStore } from "../stores/configStore";
+import { uiError } from "../services/errors";
+import { findExpert } from "../stores/expertStore";
 import {
   buildImageDescriptionBlock,
   buildManifestText,
   parseFileContent,
   stageAttachments,
-} from "./fileParser";
-import { buildFullPath, entriesToHistory } from "./historyMapper";
+} from "../services/fileParser";
+import { buildFullPath, entriesToHistory } from "../services/historyMapper";
 import {
   AUTH_PATH,
   getProvider,
   getVisionModel,
   isChatModelProviderId,
   MODELS_JSON_PATH,
-} from "./modelStore";
+} from "../stores/modelStore";
 import {
   buildSessionConfig,
   type CodingAgentSDK,
@@ -50,10 +50,10 @@ import {
   type WithoutStreamId,
 } from "./sessionBuilder";
 import { type TeamRuntimeDeps, teamRuntime } from "./teamRuntime";
-import { teamStore } from "./teamStore";
-import { detectToolAvailability, type ToolAvailability } from "./tools/toolAvailability";
-import { type DescribeImageRuntime, describeImage } from "./vision";
-import { getTaskCwd, resolveSessionLocation } from "./workspaceManager";
+import { teamStore } from "../stores/teamStore";
+import { detectToolAvailability, type ToolAvailability } from "../tools/toolAvailability";
+import { type DescribeImageRuntime, describeImage } from "../services/vision";
+import { getTaskCwd, resolveSessionLocation } from "../services/workspaceManager";
 
 /** 本地扩展的 SDK AgentSession 类型（运行时通过动态 import() 加载 ESM 包，见 load()） */
 type AgentSession = (CodingAgentSDK["AgentSession"] extends new (

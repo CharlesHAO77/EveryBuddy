@@ -2,7 +2,7 @@
  * vision 原语单元测试——fake modelRuntime，断言发送的 context 形状与返回值。
  */
 import { describe, expect, it } from "vitest";
-import { type DescribeImageRuntime, describeImage, extractTextContent } from "../src/main/vision";
+import { type DescribeImageRuntime, describeImage, extractTextContent } from "../src/main/services/vision";
 
 function fakeRuntime(resultContent: unknown): DescribeImageRuntime & {
   calls: Array<{ model: unknown; context: unknown }>;

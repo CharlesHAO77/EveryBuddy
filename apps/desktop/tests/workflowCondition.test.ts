@@ -4,7 +4,7 @@
 
 import type { WorkflowConditionRule } from "@everybuddy/ipc-contract";
 import { describe, expect, it } from "vitest";
-import { evalRule, evalWorkflowCondition, resolveRuleVar } from "../src/main/workflowCondition";
+import { evalRule, evalWorkflowCondition, resolveRuleVar } from "../src/main/runtime/workflowCondition";
 
 const rule = (op: WorkflowConditionRule["op"], value?: string): WorkflowConditionRule => ({
   var: "s1",

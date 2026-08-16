@@ -13,8 +13,8 @@ import path from "node:path";
 import type { CreateExpertRequest, Expert, UpdateExpertRequest } from "@everybuddy/ipc-contract";
 import type { AgentConfig } from "./agentConfigStore";
 import { APP_ROOT, ensureAppDirs } from "./configStore";
-import { uiError } from "./errors";
-import { buildExpertIdentityPrompt } from "./expertPrompt";
+import { uiError } from "../services/errors";
+import { buildExpertIdentityPrompt } from "../services/expertPrompt";
 
 export const EXPERTS_PATH = path.join(APP_ROOT, "experts.json");
 

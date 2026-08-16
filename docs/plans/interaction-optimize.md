@@ -55,7 +55,7 @@
 ## 关键文件
 
 - `packages/ipc-contract/src/index.ts`（agent.clearQueue）
-- `apps/desktop/src/main/agentRuntime.ts`（steerMessage 原生 steer、clearQueue）
+- `apps/desktop/src/main/runtime/agentRuntime.ts`（steerMessage 原生 steer、clearQueue）
 - `apps/desktop/src/main/ipcRouter.ts` + `apps/desktop/src/preload/index.ts`（agent:clearQueue）
 - `apps/desktop/src/renderer/stores/sessionStore.ts`（pendingFollowUps / clearingQueues / sendMessage / handleQueueUpdate / cancelFollowUpItem / markStreamRedirected / clearOldestSteerPending / 删除 finally-finalize）
 - 新 `apps/desktop/src/renderer/queue.ts`（diffDeliveredFollowUps / buildUserBlocks）、新 `apps/desktop/src/renderer/components/PendingQueueBar.tsx`

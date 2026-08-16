@@ -10,7 +10,7 @@ import { randomUUID } from "node:crypto";
 import { existsSync, mkdirSync } from "node:fs";
 import path from "node:path";
 import type { TaskType, Workspace } from "@everybuddy/ipc-contract";
-import { SESSIONS_DIR, WORK_SPACES_DIR } from "./configStore";
+import { SESSIONS_DIR, WORK_SPACES_DIR } from "../stores/configStore";
 
 /** 格式化日期时间为目录名：2026-08-05_143020-a1b2 */
 function datetimeDir(): string {

@@ -25,7 +25,7 @@ import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js"
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import spawn from "cross-spawn";
 import type { TSchema } from "typebox";
-import { APP_ROOT, ensureAppDirs } from "./configStore";
+import { APP_ROOT, ensureAppDirs } from "../stores/configStore";
 import { uiError } from "./errors";
 
 /** 异步执行子进程（用 cross-spawn：Windows 下解析 npm → npm.cmd 并走 cmd.exe，绕开原生 execFile 对 .cmd 的 ENOENT/EINVAL） */
