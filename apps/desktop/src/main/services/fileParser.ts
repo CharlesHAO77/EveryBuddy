@@ -293,18 +293,6 @@ export function buildManifestText(staged: StagedFile[], options?: ManifestOption
   return lines.join("\n");
 }
 
-/** 由视觉模型生成的图片描述构建注入文本块（主模型无视觉时自动调度用） */
-export function buildImageDescriptionBlock(
-  descs: Array<{ name: string; description: string }>,
-): string {
-  if (descs.length === 0) return "";
-  return descs
-    .map(
-      (d) => `<image-description name="uploads/${d.name}">\n${d.description}\n</image-description>`,
-    )
-    .join("\n\n");
-}
-
 // ────────────────────────────────────────────────
 // 按需解析（parseFileContent）
 // ────────────────────────────────────────────────

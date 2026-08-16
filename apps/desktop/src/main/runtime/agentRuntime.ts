@@ -25,22 +25,14 @@ import type {
   TaskMeta,
 } from "@everybuddy/ipc-contract";
 import { uiError } from "../services/errors";
-import {
-  buildImageDescriptionBlock,
-  buildManifestText,
-  parseFileContent,
-  stageAttachments,
-} from "../services/fileParser";
+import { buildManifestText, stageAttachments } from "../services/fileParser";
 import { buildFullPath, entriesToHistory } from "../services/historyMapper";
-import { type DescribeImageRuntime, describeImage } from "../services/vision";
 import { getTaskCwd, resolveSessionLocation } from "../services/workspaceManager";
-import { getAgentConfig } from "../stores/agentConfigStore";
 import { configStore } from "../stores/configStore";
 import { findExpert } from "../stores/expertStore";
 import {
   AUTH_PATH,
   getProvider,
-  getVisionModel,
   isChatModelProviderId,
   MODELS_JSON_PATH,
 } from "../stores/modelStore";
@@ -331,58 +323,18 @@ class AgentRuntime {
         return null;
       }
 
-      // 视觉自动调度：当前模型无视觉 + 图片附件 → 用视觉模型描述并注入文本，不把裸图发给非视觉模型
+      // 原生 agent 模式：不预分析图片、不注入描述，由 agent 自主决定——
+      // 视觉模型可直接看到裸图；非视觉模型经 manifest 提示用内置 understand_image 工具理解（真实工具卡可见）
       const providerIdEffective = providerId ?? task.providerId;
       const currentModel = providerIdEffective ? this.resolveModel(providerIdEffective) : undefined;
       const supportsVision = Boolean(currentModel?.input?.includes("image"));
-      const imageFiles = staged.filter((s) => !s.skipped && s.category === "image");
+      const manifest = buildManifestText(staged, {
+        imageHint: supportsVision
+          ? undefined
+          : "当前模型不支持视觉，图片请用 understand_image 工具调用视觉模型理解",
+      });
 
-      let manifest: string;
-      let descBlock = "";
-      if (imageFiles.length > 0 && !supportsVision) {
-        const visionProviderId =
-          getAgentConfig(task.mode ?? "daily").visionModelProviderId ?? getVisionModel();
-        const visionModel = visionProviderId ? this.resolveModel(visionProviderId) : undefined;
-        if (!visionModel) {
-          this.emitError(
-            taskId,
-            "当前模型不支持图片，且未配置视觉理解模型。请在模型设置中为视觉模型勾选「视觉理解」，或切换支持视觉的模型。",
-          );
-          return null;
-        }
-        // 逐张图片：解析（缩放）→ 视觉模型描述
-        const descs: Array<{ name: string; description: string }> = [];
-        for (const f of imageFiles) {
-          const { content } = await parseFileContent(f.uploadPath, { resizeImages: true });
-          const img = content.find(
-            (c): c is { type: "image"; data: string; mimeType: string } => c.type === "image",
-          );
-          if (img) {
-            const description = await describeImage(
-              this.modelRuntime as unknown as DescribeImageRuntime,
-              visionModel,
-              img,
-            );
-            descs.push({ name: f.uploadName, description });
-          }
-        }
-        manifest = buildManifestText(staged, {
-          imageHint:
-            "图片已由视觉理解模型自动分析，内容见下方 <image-description> 块（如需针对图片追问，可用 understand_image 工具）",
-        });
-        descBlock = buildImageDescriptionBlock(descs);
-        // 把这次隐藏的视觉分析暴露给渲染层：紧随的 assistant 消息将附一张「视觉理解」工具卡
-        this.emit(taskId, {
-          type: "image_analysis",
-          payload: { images: descs },
-        });
-      } else {
-        manifest = buildManifestText(staged);
-      }
-
-      return text.trim()
-        ? `${text}\n\n${manifest}${descBlock ? `\n\n${descBlock}` : ""}`
-        : `${manifest}${descBlock ? `\n\n${descBlock}` : ""}`;
+      return text.trim() ? `${text}\n\n${manifest}` : manifest;
     } catch (err) {
       this.emitError(
         taskId,

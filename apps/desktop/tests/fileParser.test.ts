@@ -7,7 +7,6 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
-  buildImageDescriptionBlock,
   buildManifestText,
   categoryFromName,
   parseFileContent,
@@ -278,26 +277,11 @@ describe("buildManifestText + splitFileMarkers", () => {
       root,
     );
     const manifest = buildManifestText(staged, {
-      imageHint: "图片已由视觉理解模型自动分析，内容见 <image-description> 块",
+      imageHint: "当前模型不支持视觉，图片请用 understand_image 工具调用视觉模型理解",
     });
-    expect(manifest).toContain("图片已由视觉理解模型自动分析");
+    expect(manifest).toContain("当前模型不支持视觉");
     expect(manifest).not.toContain("会以视觉方式展示");
     // 其余提示保留
     expect(manifest).toContain("文本文件可用 read");
-  });
-
-  it("buildImageDescriptionBlock 生成 <image-description> 块", () => {
-    const block = buildImageDescriptionBlock([
-      { name: "a.png", description: "柱状图，Q2 营收 12 万" },
-      { name: "b.png", description: "折线图" },
-    ]);
-    expect(block).toContain('<image-description name="uploads/a.png">');
-    expect(block).toContain("柱状图，Q2 营收 12 万");
-    expect(block).toContain('<image-description name="uploads/b.png">');
-    expect(block).toContain("折线图");
-  });
-
-  it("buildImageDescriptionBlock 空数组 → 空串", () => {
-    expect(buildImageDescriptionBlock([])).toBe("");
   });
 });

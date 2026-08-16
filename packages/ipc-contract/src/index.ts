@@ -206,15 +206,6 @@ export type AgentEvent =
       type: "extension_notify";
       payload: { message: string; level?: "info" | "warn" | "error" };
     }
-  // 非视觉模型收到图片时，主进程 buildPromptText 直连视觉模型做了隐藏分析——
-  // 渲染层收到后把结果作为「视觉理解」工具卡附到紧随的 assistant 消息上（否则分析过程不可见）
-  | {
-      streamId: string;
-      type: "image_analysis";
-      payload: {
-        images: Array<{ name: string; description: string }>;
-      };
-    }
   // 子 Agent 事件（专家团 auto 调度的 delegate 工具 / workflow 步骤触发；streamId = 父任务 taskId）
   | {
       streamId: string;

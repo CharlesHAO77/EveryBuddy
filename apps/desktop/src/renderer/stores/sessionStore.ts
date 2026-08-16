@@ -303,12 +303,6 @@ interface SessionState {
 
   // 流式块操作
   startAssistantMessage: (taskId: string, sdkTimestamp?: number) => void;
-  /** 待附到下一 assistant 消息的「视觉理解」分析（非视觉模型收到图片时主进程直连视觉模型，image_analysis 事件缓冲于此） */
-  pendingVisionAnalyses: Record<string, Array<{ name: string; description: string }> | null>;
-  setPendingVisionAnalyses: (
-    taskId: string,
-    images: Array<{ name: string; description: string }>,
-  ) => void;
   startBlock: (
     taskId: string,
     contentIndex: number,
@@ -406,7 +400,6 @@ export const useSessionStore = create<SessionState>((set, get) => ({
   alwaysAllowedTools: {},
   chatNotices: {},
   welcomeHint: null,
-  pendingVisionAnalyses: {},
   queues: {},
   pendingFollowUps: {},
   clearingQueues: {},
@@ -1064,24 +1057,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
 
   // ── 流式块操作 ────────────────────────────
 
-  startAssistantMessage: (taskId, sdkTimestamp) => {
-    // 主进程直连视觉模型做的隐藏分析 → 作为「视觉理解」工具卡附到本条消息开头（一次性，附后清除缓冲）
-    const pending = get().pendingVisionAnalyses[taskId] ?? null;
-    const visionBlocks: ToolBlock[] =
-      pending && pending.length > 0
-        ? pending.map((v) => ({
-            id: `vision-${genId()}`,
-            kind: "tool" as const,
-            toolCallId: `vision-${genId()}`,
-            toolName: "视觉理解",
-            args: { file: v.name },
-            argDelta: "",
-            status: "success" as const,
-            output: { content: [{ type: "text" as const, text: v.description }] },
-            outputDelta: "",
-            done: true,
-          }))
-        : [];
+  startAssistantMessage: (taskId, sdkTimestamp) =>
     set((state) => ({
       tasks: state.tasks.map((t) => {
         if (t.id !== taskId) return t;
@@ -1089,7 +1065,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
         const msg: ChatMessage = {
           id: msgId,
           role: "assistant",
-          blocks: [...visionBlocks],
+          blocks: [],
           timestamp: Date.now(),
           isStreaming: true,
           sdkTimestamp,
@@ -1103,15 +1079,6 @@ export const useSessionStore = create<SessionState>((set, get) => ({
           pending: false,
         };
       }),
-      pendingVisionAnalyses: pending
-        ? { ...state.pendingVisionAnalyses, [taskId]: null }
-        : state.pendingVisionAnalyses,
-    }));
-  },
-
-  setPendingVisionAnalyses: (taskId, images) =>
-    set((state) => ({
-      pendingVisionAnalyses: { ...state.pendingVisionAnalyses, [taskId]: images },
     })),
 
   startBlock: (taskId, contentIndex, kind, toolCallId) =>
